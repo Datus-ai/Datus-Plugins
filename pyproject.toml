@@ -1,0 +1,4 @@
+# Virtual workspace root — not an installable package.
+# Each datus-*-plugin/ member is versioned and published independently.
+[tool.uv.workspace]
+members = ["datus-*-plugin"]
