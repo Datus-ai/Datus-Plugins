@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datus-mwaa-plugin"
+version = "0.1.0"
+description = "Datus plugin: inspect Amazon MWAA environments, mint web-login/CLI tokens, and run the Airflow CLI over REST from `datus mwaa`"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Datus" }]
+keywords = ["datus", "aws", "mwaa", "airflow", "plugin", "cli"]
+dependencies = [
+    "datus-aws-common>=0.1",
+    "requests>=2.28",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."datus.plugins"]
+mwaa = "datus_mwaa_plugin.plugin:MwaaPlugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datus_mwaa_plugin"]
+
+[tool.uv.sources]
+datus-aws-common = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
