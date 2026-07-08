@@ -8,6 +8,17 @@ an entry point in the `datus.plugins` group.
 | Plugin | Command | Description |
 |---|---|---|
 | [datus-airflow-plugin](datus-airflow-plugin/) | `datus airflow` | Drive remote Apache Airflow 3.x over the REST API v2, with DAG deploy to S3 or a dags folder |
+| [datus-glue-plugin](datus-glue-plugin/) | `datus glue` | Browse the Glue Data Catalog and run/monitor Glue crawlers and ETL jobs (with logs) |
+| [datus-s3-plugin](datus-s3-plugin/) | `datus s3` | Browse and move S3 data (ls/stat/cat/cp/sync/rm/presign) and run S3 Select SQL |
+| [datus-cloudwatch-plugin](datus-cloudwatch-plugin/) | `datus cloudwatch` | Query CloudWatch logs (incl. Logs Insights), metrics, alarms and dashboards |
+| [datus-emr-plugin](datus-emr-plugin/) | `datus emr` | Submit/monitor steps on existing EMR (on EC2) clusters and read step logs |
+| [datus-emr-serverless-plugin](datus-emr-serverless-plugin/) | `datus emr-serverless` | Operate EMR Serverless applications and run/monitor Spark job runs |
+| [datus-ecs-plugin](datus-ecs-plugin/) | `datus ecs` | Run/monitor tasks on existing ECS/Fargate clusters, scale services, read task logs |
+| [datus-quicksight-plugin](datus-quicksight-plugin/) | `datus quicksight` | Browse QuickSight datasets/dashboards/analyses and refresh SPICE ingestions |
+| [datus-iam-plugin](datus-iam-plugin/) | `datus iam` | Read-only IAM inspection and permission simulation (the `AccessDenied` diagnostic) |
+| [datus-mwaa-plugin](datus-mwaa-plugin/) | `datus mwaa` | Inspect MWAA environments, mint tokens, and run the Airflow CLI over REST |
+
+AWS plugins share [datus-aws-common](datus-aws-common/) (boto3 session/AssumeRole, config, error mapping, output rendering, CLI helpers).
 
 ## Layout & conventions
 

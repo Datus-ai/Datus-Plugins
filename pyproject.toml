@@ -1,4 +1,5 @@
 # Virtual workspace root — not an installable package.
-# Each datus-*-plugin/ member is versioned and published independently.
+# Each datus-*-plugin/ member is versioned and published independently;
+# datus-aws-common is the shared library the AWS plugins depend on.
 [tool.uv.workspace]
-members = ["datus-*-plugin"]
+members = ["datus-*-plugin", "datus-aws-common"]
