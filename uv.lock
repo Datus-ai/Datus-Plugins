@@ -15,6 +15,7 @@ members = [
     "datus-mwaa-plugin",
     "datus-quicksight-plugin",
     "datus-s3-plugin",
+    "datus-statsig-plugin",
 ]
 
 [[package]]
@@ -355,6 +356,28 @@ dev = [
 requires-dist = [
     { name = "datus-aws-common", editable = "datus-aws-common" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "datus-statsig-plugin"
+version = "0.1.0"
+source = { editable = "datus-statsig-plugin" }
+dependencies = [
+    { name = "pyyaml" },
+    { name = "requests" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+    { name = "requests", specifier = ">=2.28" },
 ]
 provides-extras = ["dev"]
 

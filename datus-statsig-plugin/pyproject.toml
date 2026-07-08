@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datus-statsig-plugin"
+version = "0.1.0"
+description = "Datus plugin: read Statsig metrics & experiment results, author warehouse-native metric SQL, and drive ETL ingestion from `datus statsig` (Console API v20240601)"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Datus" }]
+keywords = ["datus", "statsig", "plugin", "cli", "metrics", "experiments"]
+dependencies = [
+    "requests>=2.28",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."datus.plugins"]
+statsig = "datus_statsig_plugin.plugin:StatsigPlugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datus_statsig_plugin"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
