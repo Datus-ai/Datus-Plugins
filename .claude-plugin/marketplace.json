@@ -1,0 +1,15 @@
+{
+  "name": "datus-plugin",
+  "description": "Tooling for building Datus plugins — install alongside the Datus-Plugins monorepo",
+  "owner": {
+    "name": "Datus-ai"
+  },
+  "plugins": [
+    {
+      "name": "datus-plugin-development",
+      "source": "./",
+      "description": "Wrap an SDK / REST API / docs into an installable Datus plugin (design-draft-first workflow)",
+      "category": "development"
+    }
+  ]
+}
