@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from datus_aws_common import summarize_aws_profile
+from datus_aws_common import aws_config_schema, summarize_aws_profile, validate_aws_profile
 
 
 class QuickSightPlugin:
@@ -20,6 +20,22 @@ class QuickSightPlugin:
     @classmethod
     def skills_dir(cls) -> str:
         return str(Path(__file__).parent / "skills")
+
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """Profile fields for the `/plugins` TUI form (shared AWS keys + QuickSight extras)."""
+        return aws_config_schema(extra_fields=[
+            {"name": "aws_account_id", "description": "AWS account ID that owns the QuickSight resources (needed by every command)"},
+            {"name": "namespace", "description": "QuickSight namespace", "default": "default"},
+            {"name": "identity_region", "description": "Region of the QuickSight identity store (users/groups/namespaces)"},
+        ])
+
+    @classmethod
+    def validate_profile(cls, profile: Dict[str, Any]) -> List[str]:
+        """Shape-check a candidate profile before it is saved (${VAR} left opaque)."""
+        return validate_aws_profile(
+            profile, extra_keys=("aws_account_id", "namespace", "identity_region")
+        )
 
     @classmethod
     def cli_permissions(cls) -> Dict[str, Dict[str, List[str]]]:

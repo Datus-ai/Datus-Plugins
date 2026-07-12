@@ -83,6 +83,30 @@ def test_system_prompt_lists_environments_without_secrets():
     assert "another-secret" not in text
 
 
+def test_config_schema_lists_fields():
+    schema = StatsigPlugin.config_schema()
+    assert isinstance(schema, list) and schema
+    for field in schema:
+        assert field.get("name") and field.get("description")
+    names = {f["name"] for f in schema}
+    assert "api_key" in names
+    # api_key is the only required field and is a masked secret
+    assert any(f["name"] == "api_key" and f.get("required") and f.get("secret") for f in schema)
+
+
+def test_validate_profile_shape_checks():
+    # api_key is required
+    errs = StatsigPlugin.validate_profile({})
+    assert errs and "api_key" in errs[0]
+    # ${ENV_VAR} placeholders are opaque; every declared field is accepted
+    assert StatsigPlugin.validate_profile({"api_key": "${STATSIG_KEY}"}) == []
+    assert StatsigPlugin.validate_profile(
+        {f["name"]: "${X}" for f in StatsigPlugin.config_schema()}
+    ) == []
+    # a malformed base URL is caught
+    assert StatsigPlugin.validate_profile({"api_key": "${K}", "api_base_url": "ftp://x"})
+
+
 # ----------------------------------------------------------- cli_permissions
 
 

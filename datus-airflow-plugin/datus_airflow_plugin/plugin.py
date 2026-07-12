@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .config import DEFAULT_CACHE_DIR, DEFAULT_TIMEOUT
+
 
 class AirflowPlugin:
     def __init__(self, profile: Optional[Dict[str, Any]] = None) -> None:
@@ -23,6 +25,52 @@ class AirflowPlugin:
     @classmethod
     def skills_dir(cls) -> str:
         return str(Path(__file__).parent / "skills")
+
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """Profile fields for the `/plugins` TUI form.
+
+        `api_base_url` is the only required field. The nested `s3` deploy
+        mapping is intentionally omitted — it is advanced and hand-edited.
+        """
+        return [
+            {"name": "api_base_url", "description": "Airflow REST API base URL, e.g. https://airflow.example.com", "required": True},
+            {"name": "token", "description": "Bearer token for the Airflow REST API", "secret": True},
+            {"name": "username", "description": "Username for Airflow REST API auth (JWT)"},
+            {"name": "password", "description": "Password for username auth", "secret": True},
+            {"name": "auth_token_url", "description": "Override the JWT token endpoint (defaults to <base>/auth/token)"},
+            {"name": "verify_ssl", "description": "Verify TLS: true / false, or a path to a CA bundle", "default": True},
+            {"name": "timeout", "description": "Per-request timeout in seconds", "default": DEFAULT_TIMEOUT},
+            {"name": "dags_folder", "description": "Local DAGs folder used as the source for `dags deploy`"},
+            {"name": "cache_token", "description": "Cache the auth token between invocations", "default": True},
+            {"name": "cache_dir", "description": "Directory for the auth-token cache", "default": DEFAULT_CACHE_DIR},
+        ]
+
+    @classmethod
+    def validate_profile(cls, profile: Dict[str, Any]) -> List[str]:
+        """Shape-check a candidate profile before it is saved.
+
+        Sees raw (un-expanded) values, so ${ENV_VAR} placeholders are treated as
+        opaque. Mirrors `_normalize_base_url` / the timeout coercion in config.py;
+        runtime validation stays in `Settings.from_profile`.
+        """
+        errors: List[str] = []
+        data = dict(profile or {})
+
+        raw_url = data.get("api_base_url") or data.get("base_url")
+        if not raw_url or str(raw_url).strip() == "":
+            errors.append("api_base_url is required")
+        elif not str(raw_url).startswith(("http://", "https://", "${")):
+            errors.append("api_base_url must start with http:// or https://")
+
+        timeout = data.get("timeout")
+        if timeout is not None and str(timeout).strip() != "" and not str(timeout).startswith("${"):
+            try:
+                float(timeout)
+            except (TypeError, ValueError):
+                errors.append(f"timeout must be a number (got {timeout!r})")
+
+        return errors
 
     @classmethod
     def cli_permissions(cls) -> Dict[str, Dict[str, List[str]]]:

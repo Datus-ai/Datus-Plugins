@@ -10,6 +10,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .config import DEFAULT_API_VERSION, DEFAULT_BASE_URL, DEFAULT_TIMEOUT
+
 
 class StatsigPlugin:
     def __init__(self, profile: Optional[Dict[str, Any]] = None) -> None:
@@ -92,3 +94,60 @@ class StatsigPlugin:
             "composing non-trivial commands.\n"
             f"Environments ({len(profiles)}):\n{environments}"
         )
+
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """Describe the profile fields for the Datus `/plugins` TUI form.
+
+        `api_key` is the only required field and is a secret (Datus renders a
+        `${ENV_VAR}` hint and never echoes it). The rest carry sensible
+        defaults so a minimal profile is just an api_key.
+        """
+        return [
+            {
+                "name": "api_key",
+                "description": "Statsig Console API key (create at console.statsig.com/api_keys)",
+                "required": True,
+                "secret": True,
+            },
+            {
+                "name": "api_base_url",
+                "description": "Statsig API base URL",
+                "required": False,
+                "default": DEFAULT_BASE_URL,
+            },
+            {
+                "name": "api_version",
+                "description": "Statsig Console API version (YYYYMMDD)",
+                "required": False,
+                "default": DEFAULT_API_VERSION,
+            },
+            {
+                "name": "timeout",
+                "description": "HTTP request timeout in seconds",
+                "required": False,
+                "default": DEFAULT_TIMEOUT,
+            },
+        ]
+
+    @classmethod
+    def validate_profile(cls, profile: Dict[str, Any]) -> List[str]:
+        """Shape-check a candidate profile before Datus persists it.
+
+        Receives raw (unexpanded) values, so `${ENV_VAR}` placeholders are
+        treated as opaque. `Settings.from_profile` remains the runtime guard.
+        """
+        errors: List[str] = []
+        data = dict(profile or {})
+        if not (data.get("api_key") or data.get("token")):
+            errors.append("api_key is required (use a ${ENV_VAR} placeholder for the secret value).")
+        raw_url = data.get("api_base_url") or data.get("base_url")
+        if raw_url and not str(raw_url).startswith(("http://", "https://", "${")):
+            errors.append("api_base_url must start with http:// or https://")
+        timeout = data.get("timeout")
+        if timeout is not None and str(timeout).strip() and not str(timeout).startswith("${"):
+            try:
+                float(timeout)
+            except (TypeError, ValueError):
+                errors.append(f"timeout must be a number (got {timeout!r})")
+        return errors

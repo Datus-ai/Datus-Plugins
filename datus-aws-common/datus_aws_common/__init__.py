@@ -7,7 +7,13 @@ call/paginate/wait_until helpers, and CLI helpers (``AwsContext``, ``run``, ...)
 
 from __future__ import annotations
 
-from .awsconfig import AWS_KEYS, AwsSettings, validate_keys
+from .awsconfig import (
+    AWS_KEYS,
+    AwsSettings,
+    aws_config_schema,
+    validate_aws_profile,
+    validate_keys,
+)
 from .cli import (
     AwsContext,
     add_output_option,
@@ -36,6 +42,8 @@ from .session import build_client, build_session
 __all__ = [
     "AWS_KEYS",
     "AwsSettings",
+    "aws_config_schema",
+    "validate_aws_profile",
     "validate_keys",
     "AwsContext",
     "add_output_option",

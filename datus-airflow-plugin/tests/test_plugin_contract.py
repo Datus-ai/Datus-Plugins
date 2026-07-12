@@ -75,6 +75,31 @@ def test_system_prompt_lists_environments_without_secrets():
     assert "admin" not in text
 
 
+def test_config_schema_lists_fields():
+    schema = AirflowPlugin.config_schema()
+    assert isinstance(schema, list) and schema
+    for field in schema:
+        assert field.get("name") and field.get("description")
+    names = {f["name"] for f in schema}
+    assert "api_base_url" in names
+    assert any(f["name"] == "api_base_url" and f.get("required") for f in schema)
+    secret = {f["name"] for f in schema if f.get("secret")}
+    assert {"token", "password"} <= secret  # masked in the form
+
+
+def test_validate_profile_shape_checks():
+    # api_base_url is required
+    errs = AirflowPlugin.validate_profile({})
+    assert errs and "api_base_url" in errs[0]
+    # ${ENV_VAR} placeholders are opaque; every declared field is accepted
+    assert AirflowPlugin.validate_profile({"api_base_url": "${AF_URL}"}) == []
+    assert AirflowPlugin.validate_profile(
+        {f["name"]: "${X}" for f in AirflowPlugin.config_schema()}
+    ) == []
+    # a malformed base URL is caught
+    assert AirflowPlugin.validate_profile({"api_base_url": "ftp://x"})
+
+
 # ----------------------------------------------------------- cli_permissions
 
 

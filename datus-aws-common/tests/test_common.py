@@ -7,14 +7,17 @@ import pytest
 from botocore.exceptions import ClientError
 
 from datus_aws_common import (
+    AWS_KEYS,
     ApiError,
     AwsSettings,
     ConfigError,
     PluginError,
+    aws_config_schema,
     call,
     paginate,
     parse_datetime_arg,
     parse_json_arg,
+    validate_aws_profile,
     validate_keys,
     wait_until,
 )
@@ -59,6 +62,51 @@ def test_validate_keys_rejects_unknown():
     with pytest.raises(ConfigError) as exc:
         validate_keys({"regionn": "us-east-1"}, set(), "plugins.glue.<profile>")
     assert "regionn" in str(exc.value)
+
+
+def test_aws_config_schema_covers_shared_keys_and_flags_secrets():
+    schema = aws_config_schema()
+    names = [f["name"] for f in schema]
+    assert set(names) == set(AWS_KEYS)  # exactly the shared credential/session keys
+    assert names[0] == "region"  # shared keys lead the form
+    for field in schema:
+        assert field.get("name") and field.get("description")
+    secret = {f["name"] for f in schema if f.get("secret")}
+    assert secret == {"secret_access_key", "session_token"}
+    defaults = {f["name"]: f.get("default") for f in schema}
+    assert defaults["timeout"] is not None and defaults["max_attempts"] is not None
+
+
+def test_aws_config_schema_appends_extras_and_returns_copies():
+    schema = aws_config_schema(extra_fields=[{"name": "bucket", "description": "b"}])
+    assert [f["name"] for f in schema][-1] == "bucket"  # extras appended after shared keys
+    # mutating the result must not corrupt the shared template
+    schema[0]["name"] = "MUTATED"
+    assert aws_config_schema()[0]["name"] == "region"
+
+
+def test_validate_aws_profile_treats_placeholders_as_opaque():
+    assert validate_aws_profile(
+        {"secret_access_key": "${S}", "endpoint_url": "${E}", "timeout": "${T}"}
+    ) == []
+
+
+def test_validate_aws_profile_reports_problems():
+    assert validate_aws_profile({"nope": 1}) == ["unknown key(s): nope"]
+    assert validate_aws_profile({"endpoint_url": "ftp://x"}) == [
+        "endpoint_url must start with http:// or https://"
+    ]
+    assert validate_aws_profile({"timeout": "soon"})  # non-numeric caught
+
+
+def test_validate_aws_profile_honours_extra_and_required_keys():
+    # a plugin's own key is accepted once declared as extra
+    assert validate_aws_profile({"catalog_id": "1"}, extra_keys=("catalog_id",)) == []
+    # required keys are enforced (but a placeholder counts as present)
+    assert validate_aws_profile({}, required=("aws_account_id",)) == ["aws_account_id is required"]
+    assert validate_aws_profile(
+        {"aws_account_id": "${ACCT}"}, extra_keys=("aws_account_id",), required=("aws_account_id",)
+    ) == []
 
 
 # --------------------------------------------------------------- session

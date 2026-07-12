@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from datus_aws_common import summarize_aws_profile
+from datus_aws_common import aws_config_schema, summarize_aws_profile, validate_aws_profile
 
 
 class EcsPlugin:
@@ -20,6 +20,19 @@ class EcsPlugin:
     @classmethod
     def skills_dir(cls) -> str:
         return str(Path(__file__).parent / "skills")
+
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """Profile fields for the `/plugins` TUI form (shared AWS keys + ECS extras)."""
+        return aws_config_schema(extra_fields=[
+            {"name": "cluster", "description": "Default ECS cluster name or ARN"},
+            {"name": "log_group", "description": "CloudWatch log group for `tasks logs`"},
+        ])
+
+    @classmethod
+    def validate_profile(cls, profile: Dict[str, Any]) -> List[str]:
+        """Shape-check a candidate profile before it is saved (${VAR} left opaque)."""
+        return validate_aws_profile(profile, extra_keys=("cluster", "log_group"))
 
     @classmethod
     def cli_permissions(cls) -> Dict[str, Dict[str, List[str]]]:

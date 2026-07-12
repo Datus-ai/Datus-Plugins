@@ -5,7 +5,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from datus_aws_common import summarize_aws_profile
+from datus_aws_common import aws_config_schema, summarize_aws_profile, validate_aws_profile
 
 
 class S3Plugin:
@@ -20,6 +20,19 @@ class S3Plugin:
     @classmethod
     def skills_dir(cls) -> str:
         return str(Path(__file__).parent / "skills")
+
+    @classmethod
+    def config_schema(cls) -> List[Dict[str, Any]]:
+        """Profile fields for the `/plugins` TUI form (shared AWS keys + S3 extras)."""
+        return aws_config_schema(extra_fields=[
+            {"name": "bucket", "description": "Default bucket for bare-key arguments"},
+            {"name": "kms_key_id", "description": "SSE-KMS key ID for object writes"},
+        ])
+
+    @classmethod
+    def validate_profile(cls, profile: Dict[str, Any]) -> List[str]:
+        """Shape-check a candidate profile before it is saved (${VAR} left opaque)."""
+        return validate_aws_profile(profile, extra_keys=("bucket", "kms_key_id"))
 
     @classmethod
     def cli_permissions(cls) -> Dict[str, Dict[str, List[str]]]:

@@ -64,6 +64,33 @@ def test_system_prompt_lists_environments_without_secrets():
     assert "s3cr3t-key-value" not in text and "AKIAEXAMPLE" not in text
 
 
+def test_config_schema_lists_aws_and_plugin_fields():
+    schema = IamPlugin.config_schema()
+    assert isinstance(schema, list) and schema
+    for field in schema:
+        assert field.get("name") and field.get("description")
+    names = {f["name"] for f in schema}
+    assert {"region", "secret_access_key", "timeout"} <= names  # shared AWS keys
+    secret = {f["name"] for f in schema if f.get("secret")}
+    assert {"secret_access_key", "session_token"} <= secret  # masked in the form
+    assert len(names) == 11  # shared AWS keys only, no plugin extras
+
+
+def test_validate_profile_shape_checks():
+    # ${ENV_VAR} placeholders are opaque and never rejected
+    assert IamPlugin.validate_profile({"secret_access_key": "${AWS_SECRET}"}) == []
+    # every declared config_schema field is an accepted key
+    assert IamPlugin.validate_profile(
+        {f["name"]: "${X}" for f in IamPlugin.config_schema()}
+    ) == []
+    # unknown keys are reported
+    errs = IamPlugin.validate_profile({"bogus_key": 1})
+    assert errs and "bogus_key" in errs[0]
+    # a malformed endpoint URL is caught, a placeholder is not
+    assert IamPlugin.validate_profile({"endpoint_url": "ftp://x"})
+    assert IamPlugin.validate_profile({"endpoint_url": "${EP}"}) == []
+
+
 # ----------------------------------------------------------- cli_permissions
 
 
