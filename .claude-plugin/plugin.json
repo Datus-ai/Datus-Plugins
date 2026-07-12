@@ -1,0 +1,9 @@
+{
+  "name": "datus-plugin-development",
+  "description": "Wrap an SDK / REST API / docs into an installable Datus plugin (design-draft-first workflow)",
+  "version": "1.0.0",
+  "author": {
+    "name": "Datus-ai"
+  },
+  "repository": "https://github.com/Datus-ai/Datus-Plugins"
+}
