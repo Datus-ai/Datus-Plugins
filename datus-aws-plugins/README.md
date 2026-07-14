@@ -1,62 +1,73 @@
 # datus-aws-plugins
 
-The [Datus](https://datus.ai) **AWS plugin suite** — nine AWS plugins shipped as
-a single distribution over one shared boto3/session/output layer
-(`datus_aws_common`). Installing this one package registers all nine
-`datus.plugins` entry points at once.
+The [Datus](https://datus.ai) **AWS plugins** — nine independently published
+plugins plus the shared `datus-aws-common` library, grouped under this one
+directory. Unlike `datus-airflow-plugin` and `datus-statsig-plugin` (which sit at
+the repo root), the AWS plugins are collected here because they all build on the
+same boto3/session/output layer — but each is still its **own distribution** with
+its own `pyproject.toml`, version, and `datus.plugins` entry point.
+
+Install only the plugins you need:
 
 ```bash
-pip install datus-aws-plugins
+pip install datus-s3-plugin        # pulls in datus-aws-common
+pip install datus-glue-plugin
 ```
 
-Each plugin is still discovered and driven independently by the datus host via
-its own entry point and `datus <command>` — bundling only changes how the code
-is *packaged and released*, not how it is *used*.
+Each plugin depends on `datus-aws-common`, so it is installed automatically.
 
-## Plugins in this package
+## Distributions in this directory
 
-| Command | Import package | Docs |
-|---|---|---|
-| `datus s3` | `datus_s3_plugin` | [README](datus_s3_plugin/README.md) |
-| `datus glue` | `datus_glue_plugin` | [README](datus_glue_plugin/README.md) |
-| `datus iam` | `datus_iam_plugin` | [README](datus_iam_plugin/README.md) |
-| `datus emr` | `datus_emr_plugin` | [README](datus_emr_plugin/README.md) |
-| `datus emr-serverless` | `datus_emr_serverless_plugin` | [README](datus_emr_serverless_plugin/README.md) |
-| `datus ecs` | `datus_ecs_plugin` | [README](datus_ecs_plugin/README.md) |
-| `datus cloudwatch` | `datus_cloudwatch_plugin` | [README](datus_cloudwatch_plugin/README.md) |
-| `datus quicksight` | `datus_quicksight_plugin` | [README](datus_quicksight_plugin/README.md) |
-| `datus mwaa` | `datus_mwaa_plugin` | [README](datus_mwaa_plugin/README.md) |
+| Command | Distribution | Import package | Docs |
+|---|---|---|---|
+| `datus s3` | `datus-s3-plugin` | `datus_s3_plugin` | [README](datus-s3-plugin/README.md) |
+| `datus glue` | `datus-glue-plugin` | `datus_glue_plugin` | [README](datus-glue-plugin/README.md) |
+| `datus iam` | `datus-iam-plugin` | `datus_iam_plugin` | [README](datus-iam-plugin/README.md) |
+| `datus emr` | `datus-emr-plugin` | `datus_emr_plugin` | [README](datus-emr-plugin/README.md) |
+| `datus emr-serverless` | `datus-emr-serverless-plugin` | `datus_emr_serverless_plugin` | [README](datus-emr-serverless-plugin/README.md) |
+| `datus ecs` | `datus-ecs-plugin` | `datus_ecs_plugin` | [README](datus-ecs-plugin/README.md) |
+| `datus cloudwatch` | `datus-cloudwatch-plugin` | `datus_cloudwatch_plugin` | [README](datus-cloudwatch-plugin/README.md) |
+| `datus quicksight` | `datus-quicksight-plugin` | `datus_quicksight_plugin` | [README](datus-quicksight-plugin/README.md) |
+| `datus mwaa` | `datus-mwaa-plugin` | `datus_mwaa_plugin` | [README](datus-mwaa-plugin/README.md) |
 
-`datus_aws_common` (boto3 session/AssumeRole, config, error mapping, output
+`datus-aws-common` (boto3 session/AssumeRole, config, error mapping, output
 rendering, CLI helpers) is the shared **internal** library — it registers no
-entry point and is no longer published on its own. See its
-[README](datus_aws_common/README.md).
+entry point and is not a plugin, but it *is* published as its own distribution so
+the plugins can depend on it. See its [README](datus-aws-common/README.md).
 
 ## Layout
 
-Ten top-level import packages ship in one wheel:
+One directory per distribution, each following the standalone-plugin naming
+triple:
 
 ```
 datus-aws-plugins/
-├── pyproject.toml                 # one [project], nine datus.plugins entry points
-├── datus_aws_common/              # shared internal library (no entry point)
-├── datus_<service>_plugin/        # one import package per service
-│   ├── plugin.py                  # contract: run_cli / skills_dir / system_prompt / cli_permissions
-│   ├── cli/                       # one module per command group
-│   └── skills/                    # bundled agent skills (SKILL.md per skill)
-└── tests/
-    └── <service>/                 # per-service test dir (contract + command tests)
+├── datus-aws-common/                 # shared library distribution (no entry point)
+│   ├── pyproject.toml
+│   ├── datus_aws_common/             # import package
+│   └── tests/
+└── datus-<service>-plugin/           # one distribution per service
+    ├── pyproject.toml                # entry point + dependency on datus-aws-common
+    ├── README.md
+    ├── datus_<service>_plugin/       # import package
+    │   ├── plugin.py                 # contract: run_cli / skills_dir / system_prompt / cli_permissions
+    │   ├── cli/                      # one module per command group
+    │   └── skills/                   # bundled agent skills (SKILL.md per skill)
+    └── tests/                        # contract + command tests
 ```
 
 ## Development
 
-Part of the root [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/):
+Part of the root [uv workspace](https://docs.astral.sh/uv/concepts/projects/workspaces/);
+`datus-aws-common` is wired to each plugin via `[tool.uv.sources]` so the
+workspace resolves it locally:
 
 ```bash
 uv sync --all-extras
-uv run --package datus-aws-plugins pytest datus-aws-plugins
+uv run --package datus-s3-plugin pytest datus-aws-plugins/datus-s3-plugin
+uv run --package datus-aws-common pytest datus-aws-plugins/datus-aws-common
 ```
 
-Tests run under `--import-mode=importlib` so each per-service directory can
-reuse the same `conftest.py` / `test_commands.py` / `test_plugin_contract.py`
-file names without collisions.
+Run tests one distribution at a time: each has its own `tests/` dir reusing the
+same file names (`conftest.py` / `test_commands.py` / `test_plugin_contract.py`),
+so collecting them all at once from a shared root would collide.

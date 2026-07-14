@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datus-cloudwatch-plugin"
+version = "0.1.0"
+description = "Datus plugin: query AWS CloudWatch logs (incl. Logs Insights), metrics, alarms and dashboards from `datus cloudwatch`"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Datus" }]
+keywords = ["datus", "aws", "cloudwatch", "plugin", "cli"]
+dependencies = [
+    "datus-aws-common>=0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."datus.plugins"]
+cloudwatch = "datus_cloudwatch_plugin.plugin:CloudWatchPlugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datus_cloudwatch_plugin"]
+
+[tool.uv.sources]
+datus-aws-common = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
