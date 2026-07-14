@@ -39,6 +39,11 @@ appendix):
 - **A plugin never imports `datus.*`** and never depends on `datus` (or any
   shared SDK) in `pyproject.toml`. Datus is the config broker; the plugin only
   implements method names Datus calls by duck typing.
+- **One distribution ships exactly one plugin.** Each `pyproject.toml` declares a
+  single `datus.plugins` entry point — never bundle several plugins into one
+  distribution. Code shared across plugins goes into a separate **library**
+  distribution (it registers no entry point) that the plugins depend on, so every
+  plugin is versioned, released, and installed on its own.
 - **Constructor takes `profile` as a keyword argument** named exactly
   `profile` — `PluginClass(profile=...)`. Datus passes the resolved,
   `${VAR}`-expanded `agent.plugins.<name>.<profile>` dict.
@@ -347,6 +352,14 @@ The entry-point name (`hello`) alone determines the CLI command
 module names are free. Two names are **reserved** and never dispatched to
 plugins: `upgrade` and `skill`. A plugin registered under either is silently
 unreachable, and names starting with `-` cannot be dispatched at all.
+
+Declare **exactly one** `datus.plugins` entry point per `pyproject.toml` — one
+distribution, one plugin. Datus can technically load several entry points from a
+single wheel, but bundling them couples their versions and releases; keep each
+plugin as its own distribution. When several plugins share plumbing, extract it
+into a separate **library** distribution (its own `pyproject.toml`, no entry
+point) that each plugin lists in `dependencies`, rather than adding a second
+entry point here.
 
 Install and run:
 
@@ -879,6 +892,7 @@ Before publishing, verify:
 
 - [ ] The package does **not** `import datus` anywhere (`grep -rn "import datus" your_pkg/`).
 - [ ] The package does **not** depend on `datus` or a shared plugin SDK in `pyproject.toml`.
+- [ ] The `pyproject.toml` declares **exactly one** `datus.plugins` entry point (one distribution = one plugin); shared code lives in a separate library distribution.
 - [ ] `__init__` accepts the profile as a keyword argument named `profile`.
 - [ ] The entry-point name is not a reserved name (`upgrade`, `skill`) and does not start with `-`.
 - [ ] `skills_dir`, `system_prompt`, `cli_permissions`, and `tool_transformers` are class-reachable.
