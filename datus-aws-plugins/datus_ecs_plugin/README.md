@@ -6,7 +6,7 @@ one-off tasks, and read task logs. Backed by boto3. Cluster/service creation is
 out of scope (use IaC).
 
 ```bash
-pip install datus-ecs-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration

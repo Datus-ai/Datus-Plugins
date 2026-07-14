@@ -6,7 +6,7 @@ and read step logs from S3. Backed by boto3. Cluster provisioning/termination is
 out of scope (use IaC).
 
 ```bash
-pip install datus-emr-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration

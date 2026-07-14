@@ -7,7 +7,7 @@ SPICE refresh (with `--wait`) and schedules; registered & anonymous embed URLs;
 asset-bundle export/import; and account info. Backed by boto3.
 
 ```bash
-pip install datus-quicksight-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration
