@@ -14,11 +14,11 @@ keywords = ["datus", "airflow", "plugin", "cli"]
 dependencies = [
     "requests>=2.28",
     "PyYAML>=6.0",
+    "boto3>=1.28",
 ]
 
 [project.optional-dependencies]
-s3 = ["boto3>=1.28"]
-dev = ["pytest>=8.0", "boto3>=1.28"]
+dev = ["pytest>=8.0"]
 
 [project.entry-points."datus.plugins"]
 airflow = "datus_airflow_plugin.plugin:AirflowPlugin"

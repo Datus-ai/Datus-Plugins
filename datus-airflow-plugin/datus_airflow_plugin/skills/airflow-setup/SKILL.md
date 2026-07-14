@@ -54,8 +54,8 @@ agent:
      literal secret.
    - Whether they deploy DAGs through this plugin; if yes, the `dags_folder`
      target (`s3://bucket/prefix/` or a local/mounted path) and any S3
-     specifics (region, named profile, custom endpoint). For S3, boto3 must be
-     installed: `pip install 'datus-airflow-plugin[s3]'`.
+     specifics (region, named profile, custom endpoint). boto3 ships with the
+     plugin, so S3 deployment works out of the box.
 2. Write the profile into the config file named in the `## Plugins` preamble;
    mark the first profile `default: true`.
 3. Verify with a cheap read-only call: `datus airflow version` (checks

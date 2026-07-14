@@ -45,8 +45,8 @@ datus airflow dags deploy <file-or-dir>... [--dest s3://bucket/dags/ | /path/to/
     [--verify <dag_id> [--verify-timeout 120]]
 ```
 
-- `--dest` defaults to the profile's `dags_folder`. S3 targets need
-  `pip install 'datus-airflow-plugin[s3]'`.
+- `--dest` defaults to the profile's `dags_folder`. S3 targets work out of
+  the box (boto3 ships with the plugin).
 - Directories are scanned recursively for `*.py` / `*.zip`.
 - `--verify <dag_id>` waits until the scheduler re-parsed that DAG and fails
   fast when the deployed file causes an import error — prefer it, it turns a
@@ -102,4 +102,4 @@ datus airflow version | health | providers list | plugins | config list | config
 
 0 success · 1 runtime/API error (also: failed run with `--wait`, failed
 connection test, unhealthy `health`) · 2 usage error · 3 profile/config
-error · 8 missing optional dependency (e.g. boto3 for S3).
+error · 8 missing dependency (boto3, if the environment stripped it).
