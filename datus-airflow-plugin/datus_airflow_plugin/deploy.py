@@ -2,9 +2,8 @@
 
 Two target kinds are supported, selected by the destination URI:
 
-* ``s3://bucket/prefix/`` — uploaded with boto3 (optional dependency,
-  ``pip install 'datus-airflow-plugin[s3]'``). Covers MWAA-style setups and
-  any deployment that syncs its dags folder from S3.
+* ``s3://bucket/prefix/`` — uploaded with boto3 (a core dependency). Covers
+  MWAA-style setups and any deployment that syncs its dags folder from S3.
 * any other path — treated as a local/mounted dags folder and copied to.
 
 ``verify_dags`` polls the REST API after an upload until the scheduler has
@@ -93,8 +92,8 @@ class S3Target:
             import boto3
         except ImportError as exc:
             raise MissingDependencyError(
-                "boto3 is required for S3 deployment — install with "
-                "`pip install 'datus-airflow-plugin[s3]'`"
+                "boto3 is required for S3 deployment — reinstall with "
+                "`pip install datus-airflow-plugin`"
             ) from exc
         s3 = settings.s3
         session_kwargs: Dict[str, Any] = {}

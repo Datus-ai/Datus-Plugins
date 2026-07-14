@@ -8,8 +8,7 @@ Airflow CLI, plus a `dags deploy` command that ships DAG files to **S3** or a
 local/mounted dags folder and verifies the scheduler picked them up.
 
 ```bash
-pip install datus-airflow-plugin            # core (requests + PyYAML)
-pip install 'datus-airflow-plugin[s3]'      # + boto3 for S3 deployment
+pip install datus-airflow-plugin            # requests + PyYAML + boto3 (S3 deploy included)
 ```
 
 ## Configuration
@@ -109,7 +108,7 @@ datus airflow dags undeploy old_dag.py -y
 
 `0` success · `1` runtime/API error (also: run failed under `--wait`,
 connection test failed, unhealthy `health`) · `2` usage error · `3` config
-error · `8` missing optional dependency (boto3).
+error · `8` missing dependency (boto3, if the environment stripped it).
 
 ## Development
 
