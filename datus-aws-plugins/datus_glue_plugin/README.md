@@ -5,7 +5,7 @@ crawlers and ETL jobs from `datus glue ...` — browse schemas, run and monitor
 crawlers and jobs, and read job logs. Backed by boto3.
 
 ```bash
-pip install datus-glue-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration
