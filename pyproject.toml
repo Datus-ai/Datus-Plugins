@@ -1,6 +1,10 @@
 # Virtual workspace root — not an installable package.
-# datus-airflow-plugin and datus-statsig-plugin are published independently;
-# datus-aws-plugins bundles all AWS plugins + the shared datus_aws_common layer
-# into a single distribution.
+# datus-airflow-plugin and datus-statsig-plugin are published independently.
+# The AWS plugins live under datus-aws-plugins/ as one distribution per plugin,
+# all depending on the shared datus-aws-common distribution in the same directory.
 [tool.uv.workspace]
-members = ["datus-*-plugin", "datus-aws-plugins"]
+members = [
+    "datus-*-plugin",
+    "datus-aws-plugins/datus-aws-common",
+    "datus-aws-plugins/datus-*-plugin",
+]

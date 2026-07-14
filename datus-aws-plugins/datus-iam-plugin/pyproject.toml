@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datus-iam-plugin"
+version = "0.1.0"
+description = "Datus plugin: inspect AWS IAM (roles, users, policies) and simulate permissions read-only from `datus iam`"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Datus" }]
+keywords = ["datus", "aws", "iam", "plugin", "cli"]
+dependencies = [
+    "datus-aws-common>=0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[project.entry-points."datus.plugins"]
+iam = "datus_iam_plugin.plugin:IamPlugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datus_iam_plugin"]
+
+[tool.uv.sources]
+datus-aws-common = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
