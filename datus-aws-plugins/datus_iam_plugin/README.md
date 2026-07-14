@@ -6,7 +6,7 @@ permission simulation (the fastest way to diagnose a data job's `AccessDenied`).
 This plugin has **no** mutating commands by design.
 
 ```bash
-pip install datus-iam-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration

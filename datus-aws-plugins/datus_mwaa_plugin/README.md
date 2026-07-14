@@ -6,7 +6,7 @@ CLI over MWAA's REST endpoint from `datus mwaa ...`. Complements the dedicated
 `datus airflow` plugin (which drives Airflow itself).
 
 ```bash
-pip install datus-mwaa-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration

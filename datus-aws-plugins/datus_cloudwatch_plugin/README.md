@@ -6,7 +6,7 @@ queries, metric statistics, alarms and dashboards. Backed by boto3; no local
 agent needed.
 
 ```bash
-pip install datus-cloudwatch-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration

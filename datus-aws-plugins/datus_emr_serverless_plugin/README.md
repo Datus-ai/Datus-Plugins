@@ -5,7 +5,7 @@ applications and run/monitor Spark job runs from `datus emr-serverless ...`.
 Backed by boto3.
 
 ```bash
-pip install datus-emr-serverless-plugin
+pip install datus-aws-plugins
 ```
 
 ## Configuration
