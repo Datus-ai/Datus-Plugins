@@ -54,7 +54,8 @@ location and format; `jobs logs` reads the run's CloudWatch logs.
 uv run --package datus-glue-plugin pytest datus-glue-plugin
 ```
 
-Never imports `datus`; implements the plugin contract and registers the `glue`
+Never imports `datus`; declares the plugin contract in `datus-plugin.yml`
+and registers the `glue`
 entry point in `datus.plugins`. Shared boto3 plumbing lives in
 `datus-aws-common`. Bundled skills: `glue` and `glue-setup`.
 

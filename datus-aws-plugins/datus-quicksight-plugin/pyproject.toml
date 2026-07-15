@@ -16,10 +16,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "jinja2>=3.1"]
 
 [project.entry-points."datus.plugins"]
-quicksight = "datus_quicksight_plugin.plugin:QuickSightPlugin"
+quicksight = "datus_quicksight_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["datus_quicksight_plugin"]

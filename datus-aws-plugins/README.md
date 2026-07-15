@@ -50,7 +50,8 @@ datus-aws-plugins/
     ├── pyproject.toml                # entry point + dependency on datus-aws-common
     ├── README.md
     ├── datus_<service>_plugin/       # import package
-    │   ├── plugin.py                 # contract: run_cli / skills_dir / system_prompt / cli_permissions
+    │   ├── datus-plugin.yml          # the declarative plugin contract (manifest)
+    │   ├── prompts/                  # system-prompt Jinja2 template
     │   ├── cli/                      # one module per command group
     │   └── skills/                   # bundled agent skills (SKILL.md per skill)
     └── tests/                        # contract + command tests

@@ -1,0 +1,91 @@
+# The whole plugin contract for `datus ecs` — see the Datus plugin docs.
+manifest_version: 1
+description: "Run and monitor tasks on existing ECS/Fargate clusters, scale services, and read task logs from `datus ecs`."
+
+cli: datus_ecs_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+
+# Cluster/service/task inspection and logs run everywhere; scaling a service and
+# stopping a task are routine; running a task (starts billed compute) always
+# confirms. Cluster/service create/delete is out of scope.
+permissions:
+  normal:
+    allow:
+      - "clusters list:*"
+      - "clusters describe:*"
+      - "services list:*"
+      - "services describe:*"
+      - "services events:*"
+      - "tasks list:*"
+      - "tasks describe:*"
+      - "tasks logs:*"
+      - "task-defs list:*"
+      - "task-defs describe:*"
+    ask:
+      - "services scale:*"
+      - "tasks stop:*"
+      - "tasks run:*"
+  auto:
+    allow:
+      - "clusters list:*"
+      - "clusters describe:*"
+      - "services list:*"
+      - "services describe:*"
+      - "services events:*"
+      - "tasks list:*"
+      - "tasks describe:*"
+      - "tasks logs:*"
+      - "task-defs list:*"
+      - "task-defs describe:*"
+      - "services scale:*"
+      - "tasks stop:*"
+    ask:
+      - "tasks run:*"
+
+config_schema:
+  type: object
+  properties:
+    cluster:
+      type: string
+      description: "Default ECS cluster name or ARN"
+    log_group:
+      type: string
+      description: "CloudWatch log group for `tasks logs`"
+    region:
+      type: string
+      description: "AWS region"
+    profile:
+      type: string
+      description: "AWS named profile in ~/.aws/config"
+    access_key_id:
+      type: string
+      description: "Static AWS access key ID (omit to use the standard credential chain)"
+    secret_access_key:
+      type: string
+      description: "AWS secret access key"
+      x-secret: true
+    session_token:
+      type: string
+      description: "AWS session token for temporary credentials"
+      x-secret: true
+    role_arn:
+      type: string
+      description: "IAM role ARN to assume (AssumeRole)"
+    role_session_name:
+      type: string
+      description: "Session name for AssumeRole"
+    external_id:
+      type: string
+      description: "ExternalId for AssumeRole"
+    endpoint_url:
+      type: string
+      description: "Custom AWS endpoint URL (testing/VPC endpoints)"
+    timeout:
+      type: string
+      description: "HTTP timeout in seconds"
+      default: "60"
+    max_attempts:
+      type: string
+      description: "Max boto3 retry attempts"
+      default: "3"

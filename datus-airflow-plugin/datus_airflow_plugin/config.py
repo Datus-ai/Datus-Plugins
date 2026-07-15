@@ -1,8 +1,9 @@
 """Turn the profile dict handed over by Datus into validated settings.
 
 Datus resolves ``agent.plugins.airflow.<profile>`` from agent.yml, expands
-``${VAR}`` references and passes the plain dict to the plugin constructor.
-This module is the single place that interprets those keys.
+``${VAR}`` references and passes the plain dict to the ``cli`` entry function
+declared in ``datus-plugin.yml``. This module is the single place that
+interprets those keys.
 """
 
 from __future__ import annotations

@@ -117,16 +117,17 @@ pip install -e '.[dev]'
 pytest
 ```
 
-The package never imports `datus`; it only implements the plugin contract
-(`run_cli`, `skills_dir`, `system_prompt`, `cli_permissions`) and registers
-the entry point `airflow` in the `datus.plugins` group. Bundled skills:
-`airflow` (usage reference for the agent) and `airflow-setup` (guided
-configuration).
+The package never imports `datus`. The whole plugin contract is declared in
+`datus_airflow_plugin/datus-plugin.yml` (CLI entry function, bundled skills,
+system-prompt template, bash-permission rules, profile config schema); the
+entry point `airflow` in the `datus.plugins` group maps the plugin name to the
+package. Bundled skills: `airflow` (usage reference for the agent) and
+`airflow-setup` (guided configuration).
 
 ## Agent bash permissions
 
-`cli_permissions()` declares how the Datus agent may run this CLI through its
-bash tool (humans in a terminal are never affected):
+The manifest's `permissions` key declares how the Datus agent may run this
+CLI through its bash tool (humans in a terminal are never affected):
 
 - **allow everywhere** — read-only commands (`list`/`get`/`details`/`show`/
   `source`/`state`/`logs`, `connections get` masked by default,

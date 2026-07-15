@@ -49,7 +49,8 @@ datus iam roles attached glue-job
 uv run --package datus-iam-plugin pytest datus-iam-plugin
 ```
 
-Never imports `datus`; implements the plugin contract and registers the `iam`
+Never imports `datus`; declares the plugin contract in `datus-plugin.yml`
+and registers the `iam`
 entry point in `datus.plugins`. Shared boto3 plumbing lives in
 `datus-aws-common`. Bundled skills: `iam` and `iam-setup`.
 

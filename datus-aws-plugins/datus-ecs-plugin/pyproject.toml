@@ -16,10 +16,10 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+dev = ["pytest>=8.0", "jinja2>=3.1"]
 
 [project.entry-points."datus.plugins"]
-ecs = "datus_ecs_plugin.plugin:EcsPlugin"
+ecs = "datus_ecs_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["datus_ecs_plugin"]

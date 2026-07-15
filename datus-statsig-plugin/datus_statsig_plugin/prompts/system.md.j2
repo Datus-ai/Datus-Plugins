@@ -1,0 +1,13 @@
+{% if profiles %}
+## Statsig
+Query the Statsig Console API through `datus statsig <group> <subcommand>` (`--profile <env>` before the group).
+Groups: `metrics` (list/get/sql/values + create/update/reload), `metric-source` (warehouse-native SQL sources: list/get + create/update/delete), `experiments` (list/get + pulse/summary/exposures readouts, load-pulse/pulse-status), `ingestion` (ETL: get/runs/run/status/schedule-get + backfill/schedule-set), `warehouse-connections update`, `events`, `logs query`, `reports get`. `describe <group> <subcommand>` prints the JSON body template for a write command (also on `--help`). Reads run freely; every mutation confirms. Add `-o json` (default) or `--compact` for machine output. Consult the `statsig` skill before composing non-trivial commands.
+Environments ({{ profiles | length }}):
+{% for name, cfg in profiles.items() %}
+- {{ name }}: api={{ cfg.get("api_base_url") or cfg.get("base_url") or "https://statsigapi.net" }}, version={{ cfg.get("api_version") or "20240601" }}
+{% endfor %}
+{% else %}
+## Statsig (installed, not configured)
+The `datus statsig` CLI is installed but has no environment configured.
+Run the `statsig-setup` skill to configure one.
+{% endif %}

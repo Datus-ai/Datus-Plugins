@@ -1,0 +1,30 @@
+{#- One-line, secret-free summary of an AWS profile: region, named profile,
+    role ARN, whitelisted plugin fields, and the credential mode. Secret fields
+    (secret_access_key, session_token) are stripped by datus before rendering;
+    access_key_id is checked for presence only and never emitted. -#}
+{%- macro aws_summary(cfg, extra_fields=[]) -%}
+{%- set parts = [] -%}
+{%- if cfg.get("region") %}{% set _ = parts.append("region=" ~ cfg.get("region")) %}{% endif -%}
+{%- if cfg.get("profile") %}{% set _ = parts.append("aws_profile=" ~ cfg.get("profile")) %}{% endif -%}
+{%- if cfg.get("role_arn") %}{% set _ = parts.append("role=" ~ cfg.get("role_arn")) %}{% endif -%}
+{%- for field in extra_fields -%}
+{%- if cfg.get(field) %}{% set _ = parts.append(field ~ "=" ~ cfg.get(field)) %}{% endif -%}
+{%- endfor -%}
+{%- if cfg.get("access_key_id") %}{% set _ = parts.append("creds=keys") -%}
+{%- elif cfg.get("role_arn") %}{% set _ = parts.append("creds=assume-role") -%}
+{%- else %}{% set _ = parts.append("creds=chain") %}{% endif -%}
+{{- parts | join(", ") -}}
+{%- endmacro -%}
+{% if profiles %}
+## Glue
+Operate the AWS Glue Data Catalog, crawlers and ETL jobs through `datus glue <group> <subcommand>` (`--profile <env>` before the group).
+Groups: `catalog` (databases, tables, show, search, partitions, versions, stats, and create/update/delete of databases/tables/partitions), `crawlers` (list, get, status, run [--wait], stop, history, metrics, schedule-pause/resume), `jobs` (list, get, run [--wait], run-status, runs, stop, logs, bookmark-reset), `connections` (list, get). `catalog show` renders a table's schema; `jobs logs` reads the run's CloudWatch logs. Add `-o json` for machine-readable output. Consult the `glue` skill before composing non-trivial commands.
+Environments ({{ profiles | length }}):
+{% for name, cfg in profiles.items() -%}
+- {{ name }}: {{ aws_summary(cfg, ["catalog_id"]) }}
+{% endfor -%}
+{% else %}
+## Glue (installed, not configured)
+The `datus glue` CLI is installed but has no environment configured.
+Run the `glue-setup` skill to configure one.
+{% endif %}

@@ -56,7 +56,8 @@ not interactive) · `3` config error.
 uv run --package datus-s3-plugin pytest datus-s3-plugin
 ```
 
-Never imports `datus`; implements the plugin contract and registers the `s3`
+Never imports `datus`; declares the plugin contract in `datus-plugin.yml`
+and registers the `s3`
 entry point in `datus.plugins`. Shared boto3 plumbing lives in
 `datus-aws-common`. Bundled skills: `s3` and `s3-setup`.
 

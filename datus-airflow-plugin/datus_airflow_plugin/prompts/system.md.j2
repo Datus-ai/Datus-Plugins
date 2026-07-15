@@ -1,0 +1,25 @@
+{#-
+  Rendered by datus into the agent's system prompt with StrictUndefined,
+  trim_blocks and lstrip_blocks. Context: plugin_name, profiles, config_path.
+
+  `profiles` carries ONLY fields declared non-secret in the manifest's
+  config_schema (api_base_url, username, dags_folder, ...). token / password /
+  s3 are stripped structurally BEFORE rendering and must never be referenced
+  here; use cfg.get("field") for optional fields so missing keys never trip
+  StrictUndefined. Because `token` is stripped, the auth label is derived from
+  `username` presence alone: username -> username/password, otherwise token.
+-#}
+{% if profiles %}
+## Airflow
+Operate remote Apache Airflow 3.x deployments through `datus airflow <group> <subcommand>` (REST API backed; supports `--profile <env>` before the group).
+Groups: `dags` (list, details, list-runs, trigger [--wait], pause/unpause, state, clear-run, delete, show, source, next-execution, list-import-errors, and `deploy` to ship DAG files to S3 or a dags folder), `tasks` (list, state, states-for-dag-run, clear, failed-deps, logs), `variables`, `connections`, `pools` (each with list/get/set-or-add/delete/import/export), `assets` (list, details, materialize, events), `backfill` (create/list/pause/unpause/cancel), `providers list`, `plugins`, `config`, `jobs check`, `version`, `health`.
+Add `-o json` for machine-readable output. Consult the `airflow` skill for details before composing non-trivial commands.
+Environments ({{ profiles | length }}):
+{% for name, cfg in profiles.items() %}
+- {{ name }}: api={{ cfg.get("api_base_url") or "?" }}, auth={{ "username/password" if cfg.get("username") else "token" }}{{ (", dags_folder=" ~ cfg.get("dags_folder")) if cfg.get("dags_folder") else "" }}
+{% endfor %}
+{% else %}
+## Airflow (installed, not configured)
+The `datus airflow` CLI is installed but has no environment configured.
+Run the `airflow-setup` skill to configure one.
+{% endif %}

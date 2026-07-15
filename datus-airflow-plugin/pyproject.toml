@@ -18,10 +18,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# jinja2/jsonschema are test-only: they validate the datus-plugin.yml manifest
+# and render the system-prompt template the way datus does.
+dev = ["pytest>=8.0", "jinja2>=3.1", "jsonschema>=4.0"]
 
 [project.entry-points."datus.plugins"]
-airflow = "datus_airflow_plugin.plugin:AirflowPlugin"
+# The value is the PACKAGE name (declarative manifest contract) — datus reads
+# datus_airflow_plugin/datus-plugin.yml from it without importing the package.
+airflow = "datus_airflow_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["datus_airflow_plugin"]
