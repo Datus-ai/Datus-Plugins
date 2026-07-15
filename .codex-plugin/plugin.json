@@ -1,0 +1,20 @@
+{
+  "name": "datus-plugin-development",
+  "version": "1.0.0",
+  "description": "Wrap an SDK / REST API / docs into an installable Datus plugin (design-draft-first workflow)",
+  "author": {
+    "name": "Datus-ai"
+  },
+  "homepage": "https://github.com/Datus-ai/Datus-Plugins",
+  "repository": "https://github.com/Datus-ai/Datus-Plugins",
+  "license": "Apache-2.0",
+  "keywords": ["datus", "plugin", "development", "sdk", "cli"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Datus Plugin Development",
+    "shortDescription": "Scaffold an installable Datus plugin from an SDK / REST API / docs",
+    "developerName": "Datus-ai",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"]
+  }
+}
