@@ -1,0 +1,19 @@
+{
+  "name": "datus-plugin",
+  "interface": {
+    "displayName": "Datus Plugins"
+  },
+  "plugins": [
+    {
+      "name": "datus-plugin-development",
+      "source": {
+        "source": "local",
+        "path": "."
+      },
+      "policy": {
+        "installation": "AVAILABLE"
+      },
+      "category": "Productivity"
+    }
+  ]
+}
