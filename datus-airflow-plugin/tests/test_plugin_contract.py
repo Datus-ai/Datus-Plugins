@@ -95,9 +95,25 @@ def test_config_schema_is_a_valid_json_schema():
 
 def test_config_schema_marks_credentials_secret():
     properties = _schema()["properties"]
-    for secret_field in ("token", "password", "s3"):
+    for secret_field in ("token", "password"):
         assert properties[secret_field]["x-secret"] is True, f"{secret_field} must never reach the prompt"
-    assert {"api_base_url", "username", "dags_folder"} <= _non_secret_fields()
+    s3_properties = properties["s3"]["properties"]
+    for secret_field in ("secret_access_key", "session_token"):
+        assert s3_properties[secret_field]["x-secret"] is True, f"s3.{secret_field} must never reach the prompt"
+    # The s3 block itself stays non-secret so its non-credential leaves are
+    # TUI-editable (they surface as dotted fields: s3.region, ...).
+    assert {"api_base_url", "username", "dags_folder", "s3"} <= _non_secret_fields()
+
+
+def test_config_schema_s3_matches_the_runtime_keys():
+    """S3Settings.from_dict rejects unknown keys; the schema must declare
+    exactly that key set (and additionalProperties: false) so TUI validation
+    mirrors the runtime."""
+    from datus_airflow_plugin.config import S3Settings
+
+    s3_schema = _schema()["properties"]["s3"]
+    assert s3_schema["additionalProperties"] is False
+    assert set(s3_schema["properties"]) == set(S3Settings.__dataclass_fields__)
 
 
 def test_config_schema_accepts_a_real_profile_and_requires_api_base_url():
@@ -112,20 +128,44 @@ def test_config_schema_accepts_a_real_profile_and_requires_api_base_url():
         "verify_ssl": True,
         "timeout": 30,
         "dags_folder": "s3://bucket/dags/",
-        "s3": {"region": "us-east-1"},
+        "s3": {"region": "us-east-1", "secret_access_key": "${AWS_SECRET_ACCESS_KEY}"},
     }
     assert list(validator.iter_errors(profile)) == []
     errors = [e.message for e in validator.iter_errors({"username": "admin"})]
     assert any("api_base_url" in message for message in errors)
 
 
+def test_config_schema_rejects_unknown_s3_keys():
+    from jsonschema import Draft202012Validator
+
+    validator = Draft202012Validator(_schema())
+    profile = {"api_base_url": "https://airflow.example.com", "s3": {"regoin": "us-east-1"}}
+    errors = [e.message for e in validator.iter_errors(profile)]
+    assert any("regoin" in message for message in errors)
+
+
 # -------------------------------------------------------------- prompt
 
 
+def _whitelist(cfg: Dict[str, Any], properties: Dict[str, Any]) -> Dict[str, Any]:
+    """Emulate datus' structural whitelist: only declared, non-x-secret schema
+    fields survive, recursing into declared nested objects."""
+    kept: Dict[str, Any] = {}
+    for key, value in (cfg or {}).items():
+        spec = properties.get(key)
+        if spec is None or (isinstance(spec, dict) and spec.get("x-secret") is True):
+            continue
+        nested = spec.get("properties") if isinstance(spec, dict) else None
+        if isinstance(spec, dict) and spec.get("type") == "object" and isinstance(nested, dict):
+            kept[key] = _whitelist(value if isinstance(value, dict) else {}, nested)
+        else:
+            kept[key] = value
+    return kept
+
+
 def _strip_secret_fields(profiles: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
-    """Emulate datus' structural whitelist: only non-secret schema fields survive."""
-    allowed = _non_secret_fields()
-    return {name: {k: v for k, v in (cfg or {}).items() if k in allowed} for name, cfg in profiles.items()}
+    properties = _schema()["properties"]
+    return {name: _whitelist(cfg, properties) for name, cfg in profiles.items()}
 
 
 def _render_prompt(profiles: Dict[str, Dict[str, Any]]) -> str:

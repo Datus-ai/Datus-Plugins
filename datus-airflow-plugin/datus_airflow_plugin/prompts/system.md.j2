@@ -3,11 +3,14 @@
   trim_blocks and lstrip_blocks. Context: plugin_name, profiles, config_path.
 
   `profiles` carries ONLY fields declared non-secret in the manifest's
-  config_schema (api_base_url, username, dags_folder, ...). token / password /
-  s3 are stripped structurally BEFORE rendering and must never be referenced
-  here; use cfg.get("field") for optional fields so missing keys never trip
-  StrictUndefined. Because `token` is stripped, the auth label is derived from
-  `username` presence alone: username -> username/password, otherwise token.
+  config_schema (api_base_url, username, dags_folder, ...). token / password
+  and the s3 credential leaves (s3.secret_access_key, s3.session_token) are
+  stripped structurally BEFORE rendering and must never be referenced here;
+  the stripping recurses into the declared s3 object, so undeclared s3 keys
+  are dropped too. Use cfg.get("field") for optional fields so missing keys
+  never trip StrictUndefined. Because `token` is stripped, the auth label is
+  derived from `username` presence alone: username -> username/password,
+  otherwise token.
 -#}
 {% if profiles %}
 ## Airflow

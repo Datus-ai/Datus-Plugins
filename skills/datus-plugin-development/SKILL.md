@@ -67,9 +67,10 @@ appendix):
   identifier.
 - **Never surface secrets.** Secret config fields are marked `x-secret: true`
   in the manifest's `config_schema`; Datus strips them (and every field NOT
-  declared in the schema) before the system-prompt template renders — so
-  declare every non-secret field the template needs. Secrets in config are
-  always `${ENV_VAR}` references, never literals.
+  declared in the schema) before the system-prompt template renders, recursing
+  into declared nested objects — so declare every non-secret field the
+  template needs. Secrets in config are always `${ENV_VAR}` references, never
+  literals.
 
 If the requested command name is reserved / collides / starts with `-`, flag it
 in the draft and propose an alternative.
@@ -151,6 +152,11 @@ docs.
 - A `name` key is injected by Datus (= profile name); do not declare it.
 - Every NON-secret field the system-prompt template will reference MUST appear
   here — undeclared fields are stripped before rendering.
+- A group of related options (e.g. an `s3` credentials block) is declared as a
+  nested `type: object` property with its own `properties`; use the dotted
+  path as the table's field name (`s3.secret_access_key`) and mark the secret
+  **leaves** `x-secret`, not the whole block, so the non-secret leaves stay
+  editable in the `/plugins` TUI.
 
 ### 2. CLI command list
 
@@ -481,7 +487,18 @@ The inline JSON Schema (an **object schema for one profile**) drives the
   it. It is a property-level extension keyword — JSON Schema validators ignore
   it.
 - **`required`** membership marks a form field as required; **`default`** is
-  offered as the initial value. Property insertion order == TUI field order.
+  pre-filled as the field's initial value, and a field left empty (no default,
+  nothing typed) shows its `description` as a dim placeholder — write
+  descriptions as fill-in hints. Property insertion order == TUI field order.
+- **Nested objects** — a `type: object` property with its own `properties`
+  expands in the TUI into one field per leaf, named by its dotted path
+  (`s3.region`, `s3.secret_access_key`); submitted values are re-assembled
+  into the nested profile shape before saving. `x-secret: true` on the object
+  marks every leaf secret (prefer marking only the secret leaves so the rest
+  stays TUI-editable); a leaf is form-required only when its whole ancestor
+  path is required. Prompt stripping recurses into declared nested objects.
+  Add `additionalProperties: false` to a nested block when the runtime
+  rejects unknown keys, so the TUI catches typos the same way.
 - **Validation** runs `jsonschema` on the raw candidate dict (values the user
   just entered, **before** `${VAR}` expansion). Values containing `${ENV_VAR}`
   placeholders are treated as opaque — pattern/enum violations on them are
@@ -770,7 +787,8 @@ the template must not hard-code config paths.
 **Secrets are stripped structurally.** Profile values are `${VAR}`-expanded
 (real secrets) by prompt time, so Datus filters the profiles **before** the
 template sees them: only fields declared in `config_schema` and NOT marked
-`x-secret: true` pass through; undeclared fields are dropped too. Without a
+`x-secret: true` pass through; undeclared fields are dropped too, and declared
+nested objects are filtered recursively under the same rules. Without a
 `config_schema`, templates receive profile names with empty dicts. Two
 practical consequences:
 
@@ -1022,7 +1040,7 @@ Before publishing, verify:
 - [ ] The entry-point name is not reserved (`upgrade`, `skill`, `plugin`) and does not start with `-`.
 - [ ] `datus-plugin.yml` sits at the package root, declares `manifest_version: 1`, and ships in the wheel (`unzip -l dist/*.whl`).
 - [ ] The `cli` function signature is `main(argv: list[str], profile: dict) -> int | None` and does not call `sys.exit()` on the success path.
-- [ ] Secret config fields are marked `x-secret: true` in `config_schema`; every non-secret field the prompt template references is declared in the schema.
+- [ ] Secret config fields are marked `x-secret: true` in `config_schema` (in nested objects, mark the secret leaves); every non-secret field the prompt template references is declared in the schema.
 - [ ] The system-prompt template handles `profiles == {}` via `{% if profiles %}` and points at `<name>-setup` in the else branch.
 - [ ] `permissions` patterns are namespace-relative (no `datus <name>` prefix — Datus adds it), and state-changing subcommands are `ask` under `normal`.
 - [ ] Skill files and the prompt template are packaged into the wheel.
