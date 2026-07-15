@@ -1,0 +1,72 @@
+# The whole plugin contract for `datus mwaa` — see the Datus plugin docs.
+manifest_version: 1
+description: "Inspect Amazon MWAA environments, mint web-login/CLI tokens, and run the Airflow CLI over REST."
+
+cli: datus_mwaa_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+
+# Environment inspection and token minting run everywhere; `cli run` is an
+# opaque Airflow-CLI passthrough (the wrapped command could be destructive),
+# so it always requires confirmation in both profiles.
+permissions:
+  normal:
+    allow:
+      - "environments list:*"
+      - "environments get:*"
+      - "token web-login:*"
+      - "token cli:*"
+    ask:
+      - "cli run:*"
+  auto:
+    allow:
+      - "environments list:*"
+      - "environments get:*"
+      - "token web-login:*"
+      - "token cli:*"
+    ask:
+      - "cli run:*"
+
+config_schema:
+  type: object
+  properties:
+    environment:
+      type: string
+      description: "Default MWAA environment name"
+    region:
+      type: string
+      description: "AWS region of the MWAA environments"
+    profile:
+      type: string
+      description: "AWS named profile in ~/.aws/config"
+    access_key_id:
+      type: string
+      description: "Static AWS access key ID (omit to use the standard credential chain)"
+    secret_access_key:
+      type: string
+      description: "AWS secret access key"
+      x-secret: true
+    session_token:
+      type: string
+      description: "AWS session token for temporary credentials"
+      x-secret: true
+    role_arn:
+      type: string
+      description: "IAM role ARN to assume (AssumeRole)"
+    role_session_name:
+      type: string
+      description: "Session name for AssumeRole"
+    external_id:
+      type: string
+      description: "ExternalId for AssumeRole"
+    endpoint_url:
+      type: string
+      description: "Custom AWS endpoint URL (testing/VPC endpoints)"
+    timeout:
+      type: string
+      description: "HTTP timeout in seconds"
+      default: "60"
+    max_attempts:
+      type: string
+      description: "Max boto3 retry attempts"
+      default: "3"

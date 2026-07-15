@@ -1,0 +1,117 @@
+# The whole Datus plugin contract for `datus statsig` — see the Datus plugin
+# development guide. This file ships inside the wheel; datus reads it without
+# importing the package (only `cli` is imported, lazily, on dispatch).
+manifest_version: 1
+description: "Read Statsig metrics & experiment results, author warehouse-native metric SQL, and drive ETL ingestion (Console API v20240601)."
+
+cli: datus_statsig_plugin.cli:main
+
+skills: skills
+
+system_prompt: prompts/system.md.j2
+
+# Bash-permission rules for `datus statsig ...` when run by the agent.
+# Patterns are namespace-relative (datus prefixes `datus statsig `).
+# Policy: read-only commands (and `describe`) auto-run everywhere; every
+# state-changing command — metric/source authoring, WHN recompute, ETL
+# backfill/schedule, warehouse-connection updates — confirms under both
+# profiles (re-running them costs warehouse compute and hits Statsig's
+# mutation rate limit, so `auto` does not promote them).
+permissions:
+  normal:
+    allow:
+      - "metrics list:*"
+      - "metrics get:*"
+      - "metrics sql:*"
+      - "metrics values:*"
+      - "metric-source list:*"
+      - "metric-source get:*"
+      - "experiments list:*"
+      - "experiments get:*"
+      - "experiments pulse:*"
+      - "experiments summary:*"
+      - "experiments exposures:*"
+      - "experiments pulse-status:*"
+      - "ingestion get:*"
+      - "ingestion runs:*"
+      - "ingestion run:*"
+      - "ingestion status:*"
+      - "ingestion schedule-get:*"
+      - "events list:*"
+      - "events get:*"
+      - "logs query:*"
+      - "reports get:*"
+      - "describe:*"
+    ask:
+      - "metrics create:*"
+      - "metrics update:*"
+      - "metrics reload:*"
+      - "metric-source create:*"
+      - "metric-source update:*"
+      - "metric-source delete:*"
+      - "experiments load-pulse:*"
+      - "ingestion backfill:*"
+      - "ingestion schedule-set:*"
+      - "warehouse-connections update:*"
+  auto:
+    allow:
+      - "metrics list:*"
+      - "metrics get:*"
+      - "metrics sql:*"
+      - "metrics values:*"
+      - "metric-source list:*"
+      - "metric-source get:*"
+      - "experiments list:*"
+      - "experiments get:*"
+      - "experiments pulse:*"
+      - "experiments summary:*"
+      - "experiments exposures:*"
+      - "experiments pulse-status:*"
+      - "ingestion get:*"
+      - "ingestion runs:*"
+      - "ingestion run:*"
+      - "ingestion status:*"
+      - "ingestion schedule-get:*"
+      - "events list:*"
+      - "events get:*"
+      - "logs query:*"
+      - "reports get:*"
+      - "describe:*"
+    ask:
+      - "metrics create:*"
+      - "metrics update:*"
+      - "metrics reload:*"
+      - "metric-source create:*"
+      - "metric-source update:*"
+      - "metric-source delete:*"
+      - "experiments load-pulse:*"
+      - "ingestion backfill:*"
+      - "ingestion schedule-set:*"
+      - "warehouse-connections update:*"
+
+# One profile of `agent.plugins.statsig`. Property order == TUI field order;
+# TUI-entered values are strings. Non-secret fields listed here (and only
+# these) are visible to the system-prompt template.
+config_schema:
+  type: object
+  required: [api_key]
+  properties:
+    api_key:
+      type: string
+      description: "Statsig Console API key (create at console.statsig.com/api_keys) — use a ${ENV_VAR} reference"
+      x-secret: true
+    api_base_url:
+      type: string
+      description: "Console API root; the plugin appends /console/v1 itself"
+      default: "https://statsigapi.net"
+    api_version:
+      type: string
+      description: "Console API version (STATSIG-API-VERSION header)"
+      default: "20240601"
+    timeout:
+      type: string
+      description: "HTTP request timeout in seconds"
+      default: "30"
+    base_url:
+      type: string
+      description: "Legacy alias for api_base_url (prefer api_base_url)"

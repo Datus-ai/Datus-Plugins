@@ -1,0 +1,212 @@
+# The whole datus plugin contract, declaratively (manifest_version 1).
+# datus reads this file without importing the package; only `cli` is imported,
+# lazily, when `datus airflow ...` is dispatched.
+manifest_version: 1
+
+description: "Drive remote Apache Airflow 3.x deployments from `datus airflow` (REST API v2), with DAG deploy to S3 or a dags folder."
+
+# Called as main(argv: list[str], profile: dict) -> int on `datus airflow ...`.
+cli: datus_airflow_plugin.cli:main
+
+# Bundled skills: `airflow` (usage reference) and `airflow-setup` (guided config).
+skills: skills
+
+# Jinja2 template rendered into the agent's system prompt with
+# {plugin_name, profiles, config_path}; profiles carry only non-secret
+# config_schema fields.
+system_prompt: prompts/system.md.j2
+
+# Bash-permission rules for `datus airflow ...` when run by the agent.
+#
+# Patterns are namespace-relative (datus prefixes `datus airflow `).
+# Policy: read-only commands auto-run everywhere; routine reversible
+# operations need confirmation under `normal` and auto-run under `auto`;
+# destructive / code-shipping / run-starting / secret-handling commands
+# require confirmation under both profiles.
+permissions:
+  normal:
+    # read-only
+    allow:
+      - "version:*"
+      - "health:*"
+      - "plugins:*"
+      - "providers:*"
+      - "config:*"
+      - "jobs:*"
+      - "dags list:*"
+      - "dags details:*"
+      - "dags list-runs:*"
+      - "dags list-import-errors:*"
+      - "dags show:*"
+      - "dags source:*"
+      - "dags state:*"
+      - "dags next-execution:*"
+      - "tasks list:*"
+      - "tasks state:*"
+      - "tasks states-for-dag-run:*"
+      - "tasks failed-deps:*"
+      - "tasks logs:*"
+      - "variables list:*"
+      - "variables get:*"
+      - "connections list:*"
+      - "connections get:*"
+      - "connections test:*"
+      - "pools list:*"
+      - "pools get:*"
+      - "assets list:*"
+      - "assets details:*"
+      - "assets events:*"
+      - "backfill list:*"
+    ask:
+      # routine reversible operations
+      - "dags pause:*"
+      - "dags unpause:*"
+      - "dags clear-run:*"
+      - "tasks clear:*"
+      - "backfill pause:*"
+      - "backfill unpause:*"
+      - "backfill cancel:*"
+      - "variables set:*"
+      - "pools set:*"
+      - "variables export:*"
+      - "pools export:*"
+      # starts new runs (materialize is trigger by another route)
+      - "dags trigger:*"
+      - "assets materialize:*"
+      - "backfill create:*"
+      # ships executable code to the scheduler; --prune deletes remote files
+      - "dags deploy:*"
+      # deletes files from the dags folder target
+      - "dags undeploy:*"
+      # irreversible or bulk-overwriting
+      - "dags delete:*"
+      - "variables delete:*"
+      - "pools delete:*"
+      - "variables import:*"
+      - "connections import:*"
+      - "pools import:*"
+      # handles connection secrets (add puts them on the command line,
+      # export writes them to disk in clear text)
+      - "connections add:*"
+      - "connections delete:*"
+      - "connections export:*"
+  auto:
+    allow:
+      # read-only
+      - "version:*"
+      - "health:*"
+      - "plugins:*"
+      - "providers:*"
+      - "config:*"
+      - "jobs:*"
+      - "dags list:*"
+      - "dags details:*"
+      - "dags list-runs:*"
+      - "dags list-import-errors:*"
+      - "dags show:*"
+      - "dags source:*"
+      - "dags state:*"
+      - "dags next-execution:*"
+      - "tasks list:*"
+      - "tasks state:*"
+      - "tasks states-for-dag-run:*"
+      - "tasks failed-deps:*"
+      - "tasks logs:*"
+      - "variables list:*"
+      - "variables get:*"
+      - "connections list:*"
+      - "connections get:*"
+      - "connections test:*"
+      - "pools list:*"
+      - "pools get:*"
+      - "assets list:*"
+      - "assets details:*"
+      - "assets events:*"
+      - "backfill list:*"
+      # routine reversible operations, promoted to auto-run
+      - "dags pause:*"
+      - "dags unpause:*"
+      - "dags clear-run:*"
+      - "tasks clear:*"
+      - "backfill pause:*"
+      - "backfill unpause:*"
+      - "backfill cancel:*"
+      - "variables set:*"
+      - "pools set:*"
+      - "variables export:*"
+      - "pools export:*"
+    ask:
+      # starts new runs (materialize is trigger by another route)
+      - "dags trigger:*"
+      - "assets materialize:*"
+      - "backfill create:*"
+      # ships executable code to the scheduler; --prune deletes remote files
+      - "dags deploy:*"
+      # deletes files from the dags folder target
+      - "dags undeploy:*"
+      # irreversible or bulk-overwriting
+      - "dags delete:*"
+      - "variables delete:*"
+      - "pools delete:*"
+      - "variables import:*"
+      - "connections import:*"
+      - "pools import:*"
+      # handles connection secrets (add puts them on the command line,
+      # export writes them to disk in clear text)
+      - "connections add:*"
+      - "connections delete:*"
+      - "connections export:*"
+
+# JSON Schema for ONE profile under agent.plugins.airflow.<profile>
+# (see datus_airflow_plugin/config.py — the runtime interpreter of these keys).
+# Property order == /plugins TUI field order. Fields marked `x-secret: true`
+# are masked in the TUI and stripped before the system prompt renders.
+config_schema:
+  type: object
+  required: [api_base_url]
+  properties:
+    api_base_url:
+      type: string
+      description: "Airflow web server root URL, without /api/v2 (e.g. https://airflow.example.com)"
+    token:
+      type: string
+      description: "Static JWT API token (alternative to username/password); use a ${ENV_VAR} reference"
+      x-secret: true
+    username:
+      type: string
+      description: "Login username, exchanged for a JWT at POST /auth/token"
+    password:
+      type: string
+      description: "Login password; use a ${ENV_VAR} reference"
+      x-secret: true
+    auth_token_url:
+      type: string
+      description: "Override the token-exchange endpoint (default: <api_base_url>/auth/token)"
+    verify_ssl:
+      type: ["boolean", "string"]
+      description: "true, false, or a CA bundle path for self-signed TLS"
+      default: true
+    timeout:
+      type: ["number", "string"]
+      description: "Request timeout in seconds"
+      default: 30
+    dags_folder:
+      type: string
+      description: "Default target for `dags deploy` (s3://bucket/prefix/ or a local/mounted path)"
+    s3:
+      # A nested mapping (endpoint_url, region, profile, access_key_id,
+      # secret_access_key, session_token, role_arn, role_session_name,
+      # external_id) that may hold AWS credentials — marked secret so it can
+      # never reach the system prompt. Edit it in agent.yml (the airflow-setup
+      # skill documents the shape); it is not TUI-editable.
+      type: object
+      description: "boto3 overrides for S3 deploys; may hold AWS credentials — configure in agent.yml (see the airflow-setup skill)"
+      x-secret: true
+    cache_token:
+      type: ["boolean", "string"]
+      description: "Cache the exchanged JWT under cache_dir"
+      default: true
+    cache_dir:
+      type: string
+      description: "Token cache directory"
+      default: "~/.cache/datus-airflow-plugin"

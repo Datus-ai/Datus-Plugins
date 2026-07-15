@@ -1,63 +1,160 @@
-"""The Datus plugin contract: constructor, run_cli, skills_dir, system_prompt, cli_permissions."""
+"""The Datus plugin contract: the declarative ``datus-plugin.yml`` manifest.
+
+The plugin ships no class — datus reads the manifest (entry point value ==
+package name), calls the declared ``cli`` function as ``main(argv, profile)``,
+renders the declared Jinja2 system-prompt template with secret-stripped
+profiles, and applies the declared bash-permission rules. These tests validate
+each declared surface with plain YAML/Jinja2 tooling, emulating datus'
+renderer settings (StrictUndefined, trim_blocks, lstrip_blocks) and its
+structural secret stripping.
+"""
 
 from __future__ import annotations
 
 import argparse
 import subprocess
 import sys
+import tomllib
 from pathlib import Path
+from typing import Any, Dict
 
-from datus_airflow_plugin.plugin import AirflowPlugin
+import yaml
+from jinja2 import Environment, FileSystemLoader, StrictUndefined
+
+from datus_airflow_plugin.cli import main
 
 PKG_DIR = Path(__file__).resolve().parents[1] / "datus_airflow_plugin"
+MANIFEST: Dict[str, Any] = yaml.safe_load((PKG_DIR / "datus-plugin.yml").read_text(encoding="utf-8"))
 
 
-def test_constructor_accepts_profile_keyword():
-    plugin = AirflowPlugin(profile={"name": "prod", "api_base_url": "http://x"})
-    assert plugin.profile["name"] == "prod"
-    assert AirflowPlugin().profile == {}
+# ------------------------------------------------------------------ manifest
 
 
-def test_run_cli_help_returns_zero(capsys):
-    rc = AirflowPlugin(profile={}).run_cli(["--help"])
+def test_entry_point_is_a_bare_package_name():
+    pyproject = tomllib.loads((PKG_DIR.parent / "pyproject.toml").read_text(encoding="utf-8"))
+    entry_points = pyproject["project"]["entry-points"]["datus.plugins"]
+    assert entry_points == {"airflow": "datus_airflow_plugin"}  # pkg:Class refs are the legacy contract
+
+
+def test_manifest_declares_the_new_contract():
+    assert MANIFEST["manifest_version"] == 1
+    assert MANIFEST["cli"] == "datus_airflow_plugin.cli:main"
+    description = MANIFEST["description"]
+    assert isinstance(description, str) and description.strip() and "\n" not in description
+
+
+def test_manifest_paths_exist_in_the_package():
+    skills = PKG_DIR / MANIFEST["skills"]
+    assert (skills / "airflow" / "SKILL.md").is_file()
+    assert (skills / "airflow-setup" / "SKILL.md").is_file()
+    assert (PKG_DIR / MANIFEST["system_prompt"]).is_file()
+
+
+# ----------------------------------------------------------------- cli entry
+
+
+def test_cli_help_returns_zero(capsys):
+    rc = main(["--help"], {})
     assert rc == 0
     out = capsys.readouterr().out
     for group in ("dags", "tasks", "variables", "connections", "pools", "backfill"):
         assert group in out
 
 
-def test_run_cli_unknown_command_returns_usage_error(capsys):
-    rc = AirflowPlugin(profile={}).run_cli(["frobnicate"])
+def test_cli_unknown_command_returns_usage_error(capsys):
+    rc = main(["frobnicate"], {})
     assert rc == 2
 
 
-def test_run_cli_without_base_url_is_config_error(capsys):
-    rc = AirflowPlugin(profile={}).run_cli(["dags", "list"])
+def test_cli_without_base_url_is_config_error(capsys):
+    rc = main(["dags", "list"], {})
     assert rc == 3
     assert "api_base_url" in capsys.readouterr().err
 
 
-def test_skills_dir_is_class_reachable_and_exists():
-    skills = Path(AirflowPlugin.skills_dir())
-    assert (skills / "airflow" / "SKILL.md").is_file()
-    assert (skills / "airflow-setup" / "SKILL.md").is_file()
+# ------------------------------------------------------------- config schema
 
 
-def test_system_prompt_unconfigured_points_to_setup_skill():
-    text = AirflowPlugin.system_prompt({})
+def _schema() -> Dict[str, Any]:
+    return MANIFEST["config_schema"]
+
+
+def _non_secret_fields() -> set:
+    return {
+        name
+        for name, spec in _schema()["properties"].items()
+        if not (isinstance(spec, dict) and spec.get("x-secret") is True)
+    }
+
+
+def test_config_schema_is_a_valid_json_schema():
+    from jsonschema import Draft202012Validator
+
+    Draft202012Validator.check_schema(_schema())
+
+
+def test_config_schema_marks_credentials_secret():
+    properties = _schema()["properties"]
+    for secret_field in ("token", "password", "s3"):
+        assert properties[secret_field]["x-secret"] is True, f"{secret_field} must never reach the prompt"
+    assert {"api_base_url", "username", "dags_folder"} <= _non_secret_fields()
+
+
+def test_config_schema_accepts_a_real_profile_and_requires_api_base_url():
+    from jsonschema import Draft202012Validator
+
+    validator = Draft202012Validator(_schema())
+    profile = {
+        "name": "prod",  # datus injects the profile name; the schema must tolerate it
+        "api_base_url": "https://airflow.example.com",
+        "username": "admin",
+        "password": "${AIRFLOW_PASSWORD}",
+        "verify_ssl": True,
+        "timeout": 30,
+        "dags_folder": "s3://bucket/dags/",
+        "s3": {"region": "us-east-1"},
+    }
+    assert list(validator.iter_errors(profile)) == []
+    errors = [e.message for e in validator.iter_errors({"username": "admin"})]
+    assert any("api_base_url" in message for message in errors)
+
+
+# -------------------------------------------------------------- prompt
+
+
+def _strip_secret_fields(profiles: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[str, Any]]:
+    """Emulate datus' structural whitelist: only non-secret schema fields survive."""
+    allowed = _non_secret_fields()
+    return {name: {k: v for k, v in (cfg or {}).items() if k in allowed} for name, cfg in profiles.items()}
+
+
+def _render_prompt(profiles: Dict[str, Dict[str, Any]]) -> str:
+    env = Environment(
+        loader=FileSystemLoader(str(PKG_DIR)),
+        autoescape=False,
+        undefined=StrictUndefined,
+        trim_blocks=True,
+        lstrip_blocks=True,
+    )
+    template = env.get_template(MANIFEST["system_prompt"])
+    return template.render(plugin_name="airflow", profiles=_strip_secret_fields(profiles), config_path=None).strip()
+
+
+def test_prompt_unconfigured_points_to_setup_skill():
+    text = _render_prompt({})
     assert "not configured" in text
     assert "airflow-setup" in text
 
 
-def test_system_prompt_lists_environments_without_secrets():
+def test_prompt_lists_environments_without_secrets():
     profiles = {
         "prod": {
             "name": "prod",
             "api_base_url": "https://airflow.example.com",
             "username": "admin",
             "password": "s3cr3t-password",
-            "token": None,
             "dags_folder": "s3://bucket/dags/",
+            "s3": {"access_key_id": "AKIAXXX", "secret_access_key": "aws-secret-key"},
         },
         "staging": {
             "name": "staging",
@@ -65,17 +162,26 @@ def test_system_prompt_lists_environments_without_secrets():
             "token": "very-secret-jwt",
         },
     }
-    text = AirflowPlugin.system_prompt(profiles)
+    text = _render_prompt(profiles)
     assert "## Airflow" in text
+    assert "Environments (2):" in text
     assert "https://airflow.example.com" in text
     assert "s3://bucket/dags/" in text
     assert "username/password" in text  # auth mode, not the values
-    assert "s3cr3t-password" not in text
-    assert "very-secret-jwt" not in text
-    assert "admin" not in text
+    assert "auth=token" in text  # staging has no username
+    for secret in ("s3cr3t-password", "very-secret-jwt", "AKIAXXX", "aws-secret-key", "admin"):
+        assert secret not in text
+    assert "- prod: " in text and "- staging: " in text  # one line per environment
 
 
-# ----------------------------------------------------------- cli_permissions
+def test_prompt_handles_a_profile_missing_optional_fields():
+    # StrictUndefined: cfg.get() must guard every optional field.
+    text = _render_prompt({"bare": {"name": "bare"}})
+    assert "- bare: api=?, auth=token" in text
+    assert "dags_folder" not in text.split("Environments", 1)[1]
+
+
+# ------------------------------------------------------------------ permissions
 
 
 def _subparser_choices(parser: argparse.ArgumentParser) -> dict:
@@ -107,8 +213,12 @@ def _matches(command: str, head: str) -> bool:
     return command == head or command.startswith(head + " ")
 
 
-def test_cli_permissions_shape():
-    perms = AirflowPlugin.cli_permissions()
+def _permissions() -> Dict[str, Dict[str, list]]:
+    return MANIFEST["permissions"]
+
+
+def test_permissions_shape():
+    perms = _permissions()
     assert set(perms) == {"normal", "auto"}  # `dangerous` must not be declared
     for profile, rules in perms.items():
         assert set(rules) <= {"allow", "ask", "deny"}
@@ -119,20 +229,18 @@ def test_cli_permissions_shape():
                 assert not pattern.startswith("-")
 
 
-def test_cli_permissions_patterns_reference_real_commands():
+def test_permissions_patterns_reference_real_commands():
     commands = _cli_command_paths()
-    perms = AirflowPlugin.cli_permissions()
-    for rules in perms.values():
+    for rules in _permissions().values():
         for patterns in rules.values():
             for pattern in patterns:
                 head = _pattern_head(pattern)
                 assert any(_matches(cmd, head) for cmd in commands), f"stale pattern: {pattern}"
 
 
-def test_cli_permissions_cover_every_command():
+def test_permissions_cover_every_command():
     """A new subcommand must be classified, or this test fails."""
-    perms = AirflowPlugin.cli_permissions()
-    for profile, rules in perms.items():
+    for profile, rules in _permissions().items():
         heads = [_pattern_head(p) for patterns in rules.values() for p in patterns]
         for command in _cli_command_paths():
             assert any(_matches(command, h) for h in heads), (
@@ -140,15 +248,14 @@ def test_cli_permissions_cover_every_command():
             )
 
 
-def test_cli_permissions_dangerous_commands_never_auto_run():
+def test_permissions_dangerous_commands_never_auto_run():
     risky = [
         "dags delete", "dags deploy", "dags undeploy", "dags trigger", "assets materialize",
         "backfill create", "variables delete", "pools delete",
         "variables import", "connections import", "pools import",
         "connections add", "connections delete", "connections export",
     ]
-    perms = AirflowPlugin.cli_permissions()
-    for profile, rules in perms.items():
+    for profile, rules in _permissions().items():
         allow_heads = [_pattern_head(p) for p in rules.get("allow", [])]
         for command in risky:
             assert not any(_matches(command, h) for h in allow_heads), (
@@ -156,8 +263,8 @@ def test_cli_permissions_dangerous_commands_never_auto_run():
             )
 
 
-def test_cli_permissions_read_only_allowed_and_routine_promoted():
-    perms = AirflowPlugin.cli_permissions()
+def test_permissions_read_only_allowed_and_routine_promoted():
+    perms = _permissions()
 
     def allowed(profile: str, command: str) -> bool:
         heads = [_pattern_head(p) for p in perms[profile]["allow"]]
@@ -170,9 +277,12 @@ def test_cli_permissions_read_only_allowed_and_routine_promoted():
         assert allowed("auto", command)
 
 
+# ------------------------------------------------------------------ isolation
+
+
 def test_package_never_imports_datus():
     result = subprocess.run(
-        [sys.executable, "-c", "import sys; import datus_airflow_plugin.plugin; "
+        [sys.executable, "-c", "import sys; import datus_airflow_plugin; "
          "import datus_airflow_plugin.cli; "
          "assert not any(m == 'datus' or m.startswith('datus.') for m in sys.modules), "
          "'plugin must not import datus'"],

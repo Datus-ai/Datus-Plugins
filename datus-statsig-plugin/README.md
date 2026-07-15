@@ -84,5 +84,9 @@ pip install -e 'datus-statsig-plugin[dev]'
 pytest datus-statsig-plugin
 ```
 
-The plugin never imports `datus` — Datus is the config broker and calls the
-plugin by duck typing.
+The plugin never imports `datus` — the whole contract is the declarative
+`datus_statsig_plugin/datus-plugin.yml` manifest (CLI entry function,
+permissions, config schema, system-prompt template, bundled skills). Datus is
+the config broker: it reads the manifest without importing the package and
+calls the declared `cli` function (`datus_statsig_plugin.cli:main`) with the
+resolved profile dict.

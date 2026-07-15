@@ -38,11 +38,12 @@ datus-<name>-plugin/            # directory & PyPI distribution name
 ├── pyproject.toml              # entry point: [project.entry-points."datus.plugins"] <name> = ...
 ├── README.md
 ├── datus_<name>_plugin/        # import package
-│   ├── plugin.py               # contract: run_cli / skills_dir / system_prompt / cli_permissions
+│   ├── datus-plugin.yml        # the declarative plugin contract (manifest)
+│   ├── prompts/                # system-prompt Jinja2 template (system.md.j2)
 │   ├── cli/                    # one module per command group, each exposing register(sub)
 │   └── skills/                 # bundled agent skills (SKILL.md per skill)
 └── tests/
-    └── test_plugin_contract.py # duck-typed contract conformance tests
+    └── test_plugin_contract.py # manifest conformance tests
 ```
 
 The nine AWS plugins follow the same triple but are grouped under
@@ -53,8 +54,9 @@ distribution each, all depending on the sibling `datus-aws-common/` distribution
 
 Rules that keep the plugin contract clean:
 
-- **No `datus` import.** The contract is duck-typed; `tests/test_plugin_contract.py`
-  is what pins it down — copy it into new plugins.
+- **No `datus` import.** The whole contract is the declarative `datus-plugin.yml`
+  manifest; `tests/test_plugin_contract.py` is what pins it down — copy it into
+  new plugins.
 - **No cross-plugin imports.** Plugins never import each other. Shared code is
   extracted into a dedicated library (`datus_aws_common`) only once several plugins
   need it — until then, prefer copying small helpers (`output.py`, `errors.py`,
@@ -62,7 +64,7 @@ Rules that keep the plugin contract clean:
 - **Exit codes**: `0` success · `1` runtime/API error · `2` usage · `3` config
   error · `8` missing optional dependency.
 - **Destructive commands prompt** and accept `-y/--yes`; agent-facing risk is
-  declared via `cli_permissions()` (allow / ask per permission profile).
+  declared via the manifest's `permissions` key (allow / ask per permission profile).
 
 ## Development
 

@@ -62,15 +62,17 @@ reach `Complete`) · `2` usage · `3` config error.
 uv run --package datus-cloudwatch-plugin pytest datus-cloudwatch-plugin
 ```
 
-The package never imports `datus`; it implements the plugin contract
-(`run_cli`, `skills_dir`, `system_prompt`, `cli_permissions`) and registers the
-entry point `cloudwatch` in the `datus.plugins` group. Shared boto3 plumbing
+The package never imports `datus`; the whole plugin contract (CLI entry,
+skills, system prompt, permissions, config schema) is declared in
+`datus_cloudwatch_plugin/datus-plugin.yml`, and the `cloudwatch` entry point
+in the `datus.plugins` group names the package. Shared boto3 plumbing
 lives in `datus-aws-common`. Bundled skills: `cloudwatch` (usage reference) and
 `cloudwatch-setup` (guided configuration).
 
 ## Agent bash permissions
 
-`cli_permissions()` declares how the Datus agent may run this CLI: all read-only
+The manifest's `permissions` key declares how the Datus agent may run this
+CLI: all read-only
 commands (`logs`/`metrics`/`alarms`/`dashboards` list/get/tail/insights) run
 everywhere; `alarms set-state` is routine (confirmed under `normal`, auto under
 `auto`). User rules in `agent.yml` always win (deny > ask > allow).

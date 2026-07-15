@@ -1,0 +1,30 @@
+{#- One-line, secret-free summary of an AWS profile: region, named profile,
+    role ARN, whitelisted plugin fields, and the credential mode. Secret fields
+    (secret_access_key, session_token) are stripped by datus before rendering;
+    access_key_id is checked for presence only and never emitted. -#}
+{%- macro aws_summary(cfg, extra_fields=[]) -%}
+{%- set parts = [] -%}
+{%- if cfg.get("region") %}{% set _ = parts.append("region=" ~ cfg.get("region")) %}{% endif -%}
+{%- if cfg.get("profile") %}{% set _ = parts.append("aws_profile=" ~ cfg.get("profile")) %}{% endif -%}
+{%- if cfg.get("role_arn") %}{% set _ = parts.append("role=" ~ cfg.get("role_arn")) %}{% endif -%}
+{%- for field in extra_fields -%}
+{%- if cfg.get(field) %}{% set _ = parts.append(field ~ "=" ~ cfg.get(field)) %}{% endif -%}
+{%- endfor -%}
+{%- if cfg.get("access_key_id") %}{% set _ = parts.append("creds=keys") -%}
+{%- elif cfg.get("role_arn") %}{% set _ = parts.append("creds=assume-role") -%}
+{%- else %}{% set _ = parts.append("creds=chain") %}{% endif -%}
+{{- parts | join(", ") -}}
+{%- endmacro -%}
+{% if profiles %}
+## MWAA
+Inspect Amazon MWAA (Managed Workflows for Apache Airflow) environments and reach their Airflow through `datus mwaa <group> <subcommand>` (`--profile <env>` before the group).
+Groups: `environments` (list, get), `token` (web-login, cli — mint short-lived tokens), `cli run` (run an Airflow CLI command over REST). For fine-grained, permission-classified DAG operations prefer the dedicated `datus airflow` plugin pointed at this environment; `cli run` is an opaque passthrough and always confirmed. Environment create/update/delete is out of scope. Add `-o json` for machine-readable output.
+Environments ({{ profiles | length }}):
+{% for name, cfg in profiles.items() -%}
+- {{ name }}: {{ aws_summary(cfg, ["environment"]) }}
+{% endfor -%}
+{% else %}
+## MWAA (installed, not configured)
+The `datus mwaa` CLI is installed but has no environment configured.
+Run the `mwaa-setup` skill to configure one.
+{% endif %}

@@ -7,9 +7,9 @@ import json
 import pytest
 from conftest import BASE_URL, FakeResponse, paged, single
 
+from datus_statsig_plugin.cli import main
 from datus_statsig_plugin.client import StatsigClient
 from datus_statsig_plugin.errors import ApiError
-from datus_statsig_plugin.plugin import StatsigPlugin
 
 
 def test_metrics_list_paginates_and_sends_auth(run_cli, fake_session, capsys):
@@ -45,7 +45,7 @@ def test_metrics_get_by_name_and_type(run_cli, fake_session):
 
 
 def test_metrics_get_requires_id_or_name_type():
-    rc = StatsigPlugin(profile={"api_key": "x"}).run_cli(["metrics", "get"])
+    rc = main(["metrics", "get"], {"api_key": "x"})
     assert rc == 2
 
 
@@ -136,7 +136,7 @@ def test_compact_output_is_single_line(run_cli, fake_session, capsys):
 
 
 def test_describe_unknown_command_is_usage_error():
-    rc = StatsigPlugin(profile={}).run_cli(["describe", "gates", "toggle"])
+    rc = main(["describe", "gates", "toggle"], {})
     assert rc == 2
 
 

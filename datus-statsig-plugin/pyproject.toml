@@ -17,10 +17,12 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8.0"]
+# jinja2/jsonschema are test-only: datus (not the plugin) renders the
+# system-prompt template and validates the config schema at runtime.
+dev = ["pytest>=8.0", "jinja2>=3.1", "jsonschema>=4.0"]
 
 [project.entry-points."datus.plugins"]
-statsig = "datus_statsig_plugin.plugin:StatsigPlugin"
+statsig = "datus_statsig_plugin"
 
 [tool.hatch.build.targets.wheel]
 packages = ["datus_statsig_plugin"]
