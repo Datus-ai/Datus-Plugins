@@ -1,6 +1,7 @@
 ---
 name: airflow-setup
 description: Configure an environment profile for the `datus airflow` plugin (API endpoint, credentials, optional S3/dags-folder deployment target)
+requires_mutable_config: true
 ---
 
 # Airflow Setup

@@ -26,5 +26,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## QuickSight (installed, not configured)
 The `datus quicksight` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `quicksight-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

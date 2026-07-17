@@ -1,6 +1,7 @@
 ---
 name: glue-setup
 description: Configure an environment profile for the `datus glue` plugin (AWS region + credentials, optional cross-account catalog_id)
+requires_mutable_config: true
 ---
 
 # Glue Setup

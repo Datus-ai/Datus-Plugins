@@ -1,6 +1,7 @@
 ---
 name: iam-setup
 description: Configure an environment profile for the `datus iam` plugin (AWS credentials for read-only IAM inspection)
+requires_mutable_config: true
 ---
 
 # IAM Setup

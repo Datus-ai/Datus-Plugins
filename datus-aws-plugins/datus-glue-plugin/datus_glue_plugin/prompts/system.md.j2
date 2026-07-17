@@ -26,5 +26,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## Glue (installed, not configured)
 The `datus glue` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `glue-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

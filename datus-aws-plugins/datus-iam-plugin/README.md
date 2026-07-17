@@ -9,6 +9,8 @@ This plugin has **no** mutating commands by design.
 pip install datus-aws-plugins
 ```
 
+> Requires datus-agent >= 0.3.8 — the system-prompt template uses the `config_mutable` render-context variable (older versions skip the whole prompt section).
+
 ## Configuration
 
 Profiles live under `agent.plugins.iam.<profile>` in Datus' `agent.yml`:

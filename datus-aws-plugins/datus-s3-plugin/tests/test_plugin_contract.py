@@ -26,7 +26,7 @@ def resolve_cli(manifest: dict):
     return getattr(import_module(module_name), func_name)
 
 
-def render_prompt(manifest: dict, profiles: dict) -> str:
+def render_prompt(manifest: dict, profiles: dict, config_mutable: bool = True) -> str:
     """Render the system-prompt template the way datus does: profiles are
     whitelist-stripped against config_schema (x-secret and undeclared fields
     never reach the template), StrictUndefined, trim/lstrip blocks."""
@@ -40,7 +40,7 @@ def render_prompt(manifest: dict, profiles: dict) -> str:
         lstrip_blocks=True,
     )
     template = env.get_template(manifest["system_prompt"])
-    return template.render(plugin_name=PLUGIN_NAME, profiles=stripped, config_path=None).strip()
+    return template.render(plugin_name=PLUGIN_NAME, profiles=stripped, config_path=None, config_mutable=config_mutable).strip()
 
 
 # ------------------------------------------------------------------ manifest
@@ -94,6 +94,14 @@ def test_system_prompt_unconfigured_points_to_setup_skill():
     text = render_prompt(load_manifest(), {})
     assert "not configured" in text
     assert "s3-setup" in text
+
+
+def test_system_prompt_unconfigured_immutable_defers_to_admin():
+    # Read-only config deployments must not be pointed at the setup skill.
+    text = render_prompt(load_manifest(), {}, config_mutable=False)
+    assert "not configured" in text
+    assert "s3-setup" not in text
+    assert "administrator" in text
 
 
 def test_system_prompt_lists_environments_without_secrets():

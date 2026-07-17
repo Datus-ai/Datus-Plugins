@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-emr-plugin"
-version = "0.1.0"
+version = "0.2.0"
 description = "Datus plugin: submit and monitor steps on existing EMR (on EC2) clusters and read step logs from `datus emr`"
 readme = "README.md"
 requires-python = ">=3.12"

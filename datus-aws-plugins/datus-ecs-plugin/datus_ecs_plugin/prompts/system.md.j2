@@ -26,5 +26,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## ECS (installed, not configured)
 The `datus ecs` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `ecs-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

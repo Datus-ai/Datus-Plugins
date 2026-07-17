@@ -290,7 +290,7 @@ def _strip_secret_fields(profiles: Dict[str, Any], schema: Optional[Dict[str, An
     return {name: {k: v for k, v in (cfg or {}).items() if k in allowed} for name, cfg in profiles.items()}
 
 
-def _render(manifest: Dict[str, Any], profiles: Dict[str, Any]) -> str:
+def _render(manifest: Dict[str, Any], profiles: Dict[str, Any], config_mutable: bool = True) -> str:
     """Render the template exactly as datus does."""
     from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
@@ -306,6 +306,7 @@ def _render(manifest: Dict[str, Any], profiles: Dict[str, Any]) -> str:
         plugin_name="statsig",
         profiles=_strip_secret_fields(profiles, manifest["config_schema"]),
         config_path=None,
+        config_mutable=config_mutable,
     ).strip()
 
 
@@ -320,6 +321,14 @@ def test_system_prompt_unconfigured_points_to_setup_skill(manifest):
     text = _render(manifest, {})
     assert "not configured" in text
     assert "statsig-setup" in text
+
+
+def test_system_prompt_unconfigured_immutable_defers_to_admin(manifest):
+    # Read-only config deployments must not be pointed at the setup skill.
+    text = _render(manifest, {}, config_mutable=False)
+    assert "not configured" in text
+    assert "statsig-setup" not in text
+    assert "administrator" in text
 
 
 def test_system_prompt_lists_environments_without_secrets(manifest):

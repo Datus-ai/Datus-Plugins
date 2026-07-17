@@ -1,6 +1,8 @@
 {#-
   Rendered by datus into the agent's system prompt with StrictUndefined,
-  trim_blocks and lstrip_blocks. Context: plugin_name, profiles, config_path.
+  trim_blocks and lstrip_blocks. Context: plugin_name, profiles, config_path,
+  config_mutable (False in managed API deployments — never point at the setup
+  skill there).
 
   `profiles` carries ONLY fields declared non-secret in the manifest's
   config_schema (api_base_url, username, dags_folder, ...). token / password
@@ -24,5 +26,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## Airflow (installed, not configured)
 The `datus airflow` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `airflow-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

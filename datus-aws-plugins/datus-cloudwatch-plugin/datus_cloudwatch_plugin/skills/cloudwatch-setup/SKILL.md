@@ -1,6 +1,7 @@
 ---
 name: cloudwatch-setup
 description: Configure an environment profile for the `datus cloudwatch` plugin (AWS region + credentials)
+requires_mutable_config: true
 ---
 
 # CloudWatch Setup

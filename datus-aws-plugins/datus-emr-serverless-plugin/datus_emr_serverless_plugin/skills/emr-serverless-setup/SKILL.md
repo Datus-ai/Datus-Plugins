@@ -1,6 +1,7 @@
 ---
 name: emr-serverless-setup
 description: Configure an environment profile for the `datus emr-serverless` plugin (AWS region + credentials, default application id and execution role)
+requires_mutable_config: true
 ---
 
 # EMR Serverless Setup

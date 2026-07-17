@@ -1,6 +1,7 @@
 ---
 name: mwaa-setup
 description: Configure an environment profile for the `datus mwaa` plugin (AWS region + credentials, optional default MWAA environment name)
+requires_mutable_config: true
 ---
 
 # MWAA Setup
