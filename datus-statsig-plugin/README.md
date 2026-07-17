@@ -12,6 +12,8 @@ pip install -e datus-statsig-plugin
 datus statsig --help
 ```
 
+> Requires datus-agent >= 0.3.8 — the system-prompt template uses the `config_mutable` render-context variable (older versions skip the whole prompt section).
+
 ## Configure
 
 Add a profile under `agent.plugins.statsig` in your `agent.yml`:

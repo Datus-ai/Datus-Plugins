@@ -26,5 +26,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## EMR (installed, not configured)
 The `datus emr` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `emr-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

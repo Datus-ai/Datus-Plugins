@@ -168,7 +168,7 @@ def _strip_secret_fields(profiles: Dict[str, Dict[str, Any]]) -> Dict[str, Dict[
     return {name: _whitelist(cfg, properties) for name, cfg in profiles.items()}
 
 
-def _render_prompt(profiles: Dict[str, Dict[str, Any]]) -> str:
+def _render_prompt(profiles: Dict[str, Dict[str, Any]], config_mutable: bool = True) -> str:
     env = Environment(
         loader=FileSystemLoader(str(PKG_DIR)),
         autoescape=False,
@@ -177,13 +177,21 @@ def _render_prompt(profiles: Dict[str, Dict[str, Any]]) -> str:
         lstrip_blocks=True,
     )
     template = env.get_template(MANIFEST["system_prompt"])
-    return template.render(plugin_name="airflow", profiles=_strip_secret_fields(profiles), config_path=None).strip()
+    return template.render(plugin_name="airflow", profiles=_strip_secret_fields(profiles), config_path=None, config_mutable=config_mutable).strip()
 
 
 def test_prompt_unconfigured_points_to_setup_skill():
     text = _render_prompt({})
     assert "not configured" in text
     assert "airflow-setup" in text
+
+
+def test_prompt_unconfigured_immutable_defers_to_admin():
+    # Read-only config deployments must not be pointed at the setup skill.
+    text = _render_prompt({}, config_mutable=False)
+    assert "not configured" in text
+    assert "airflow-setup" not in text
+    assert "administrator" in text
 
 
 def test_prompt_lists_environments_without_secrets():

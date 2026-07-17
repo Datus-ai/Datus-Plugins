@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-ecs-plugin"
-version = "0.1.0"
+version = "0.2.0"
 description = "Datus plugin: run and monitor tasks on existing ECS/Fargate clusters, scale services, and read task logs from `datus ecs`"
 readme = "README.md"
 requires-python = ">=3.12"

@@ -1,6 +1,7 @@
 ---
 name: quicksight-setup
 description: Configure an environment profile for the `datus quicksight` plugin (AWS region + credentials and the required aws_account_id)
+requires_mutable_config: true
 ---
 
 # QuickSight Setup

@@ -9,5 +9,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## Statsig (installed, not configured)
 The `datus statsig` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `statsig-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

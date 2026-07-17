@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-cloudwatch-plugin"
-version = "0.1.0"
+version = "0.2.0"
 description = "Datus plugin: query AWS CloudWatch logs (incl. Logs Insights), metrics, alarms and dashboards from `datus cloudwatch`"
 readme = "README.md"
 requires-python = ">=3.12"

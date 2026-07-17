@@ -8,6 +8,8 @@ Backed by boto3.
 pip install datus-aws-plugins
 ```
 
+> Requires datus-agent >= 0.3.8 — the system-prompt template uses the `config_mutable` render-context variable (older versions skip the whole prompt section).
+
 ## Configuration
 
 Profiles live under `agent.plugins.emr-serverless.<profile>` in Datus'

@@ -1,6 +1,7 @@
 ---
 name: statsig-setup
 description: Configure an environment profile for the `datus statsig` plugin (Console API base URL, API key, version)
+requires_mutable_config: true
 ---
 
 # Statsig Setup

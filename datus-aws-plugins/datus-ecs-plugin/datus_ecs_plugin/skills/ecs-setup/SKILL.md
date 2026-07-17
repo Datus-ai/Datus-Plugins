@@ -1,6 +1,7 @@
 ---
 name: ecs-setup
 description: Configure an environment profile for the `datus ecs` plugin (AWS region + credentials, optional default cluster and CloudWatch log group)
+requires_mutable_config: true
 ---
 
 # ECS Setup

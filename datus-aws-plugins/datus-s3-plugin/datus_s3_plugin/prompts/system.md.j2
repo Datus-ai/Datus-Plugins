@@ -26,5 +26,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## S3 (installed, not configured)
 The `datus s3` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `s3-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

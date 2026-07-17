@@ -1,6 +1,7 @@
 ---
 name: s3-setup
 description: Configure an environment profile for the `datus s3` plugin (AWS region + credentials, optional default bucket and SSE-KMS key)
+requires_mutable_config: true
 ---
 
 # S3 Setup

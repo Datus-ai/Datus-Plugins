@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-statsig-plugin"
-version = "0.1.0"
+version = "0.2.0"
 description = "Datus plugin: read Statsig metrics & experiment results, author warehouse-native metric SQL, and drive ETL ingestion from `datus statsig` (Console API v20240601)"
 readme = "README.md"
 requires-python = ">=3.12"

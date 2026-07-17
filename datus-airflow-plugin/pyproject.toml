@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-airflow-plugin"
-version = "0.1.0"
+version = "0.2.0"
 description = "Datus plugin: drive a remote Apache Airflow (3.x REST API v2) from `datus airflow`, with DAG deploy to S3 or a local dags folder"
 readme = "README.md"
 requires-python = ">=3.12"

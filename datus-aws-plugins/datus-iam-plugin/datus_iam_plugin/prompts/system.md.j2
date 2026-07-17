@@ -26,5 +26,9 @@ Environments ({{ profiles | length }}):
 {% else %}
 ## IAM (installed, not configured)
 The `datus iam` CLI is installed but has no environment configured.
+{% if config_mutable %}
 Run the `iam-setup` skill to configure one.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to contact them.
+{% endif %}
 {% endif %}

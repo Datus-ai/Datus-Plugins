@@ -8,6 +8,8 @@ URLs, and **S3 Select** (SQL over CSV/JSON/Parquet). Backed by boto3.
 pip install datus-s3-plugin
 ```
 
+> Requires datus-agent >= 0.3.8 — the system-prompt template uses the `config_mutable` render-context variable (older versions skip the whole prompt section).
+
 ## Configuration
 
 Profiles live under `agent.plugins.s3.<profile>` in Datus' `agent.yml`:

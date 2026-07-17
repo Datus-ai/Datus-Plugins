@@ -395,7 +395,7 @@ required; every other key is optional:
 | `tool_transformers` | mapping | Tool pattern → code ref (or list of refs) that rewrite or deny the agent's tool calls. |
 | `permissions` | mapping | Bash-permission rules for the plugin's own CLI namespace, per permission profile — pure YAML, no code. |
 | `system_prompt` | path | Package-relative path of a Jinja2 template rendered into the agent's system prompt. |
-| `skills` | path | Package-relative path of a bundled skill directory. |
+| `skills` | path | Package-relative path of a bundled skill directory. A `<name>-setup` skill must declare `requires_mutable_config: true` in its frontmatter (see "Bundling a setup skill"). |
 | `config_schema` | JSON Schema | Inline object schema describing one profile — drives the `/plugins` TUI form and validates profiles before saving. |
 
 A **code ref** is a dotted `module.path:function` string. Paths are relative to
@@ -763,8 +763,13 @@ Environments ({{ profiles | length }}):
 - {{ name }}: {{ cfg.get("greeting", "?") }}
 {% endfor %}
 {% else %}
-Installed but not configured — run the `hello-setup` skill to configure an
-environment.
+Installed but not configured.
+{% if config_mutable %}
+Run the `hello-setup` skill to configure an environment.
+{% else %}
+Configuration is managed by the deployment administrator — tell the user to
+contact them.
+{% endif %}
 {% endif %}
 ```
 
@@ -774,15 +779,18 @@ The render context:
 |---|---|
 | `plugin_name` | the entry-point name |
 | `profiles` | `dict[str, dict]` — the plugin's profile mapping, **narrowed to the profiles the project activated** and **secret-stripped** (see below) |
-| `config_path` | the loaded agent config file path, or `None` |
+| `config_path` | the loaded agent config file path, or `None` (always `None` when the config is read-only) |
+| `config_mutable` | `True` when the agent may edit the config file; `False` in managed deployments (multi-tenant chat API / gateway). Requires a datus-agent version that supplies it — on older versions a template referencing it fails to render (strict mode) and the whole section is skipped, so referencing it raises the plugin's minimum datus-agent version |
 
 An installed-but-unconfigured plugin renders with `profiles == {}` — use
-`{% if profiles %}` and emit a short "installed, not configured" note pointing
-at the bundled setup skill in the `{% else %}` branch, instead of disappearing
-from the prompt.
+`{% if profiles %}` and emit a short "installed, not configured" note in the
+`{% else %}` branch instead of disappearing from the prompt. Inside that
+branch check `config_mutable`: point at the bundled setup skill only when it
+is `True`, otherwise defer to the administrator.
 
 Datus prepends its own `## Plugins` preamble naming the loaded config file, so
-the template must not hard-code config paths.
+the template must not hard-code config paths. In read-only mode the preamble
+switches to wording that forbids config-edit suggestions.
 
 **Secrets are stripped structurally.** Profile values are `${VAR}`-expanded
 (real secrets) by prompt time, so Datus filters the profiles **before** the
@@ -925,9 +933,14 @@ The setup `SKILL.md` should cover, in order:
    preamble, marking the first profile `default: true`.
 5. **Verify** — a cheap read-only command (e.g. `datus hello version`).
 
-Add a guard note: if the current environment cannot edit the config file (API /
-VSCode / web deployment), the agent should tell the user to edit `agent.yml` on
-the server instead.
+Declare `requires_mutable_config: true` in the setup skill's frontmatter.
+Datus then hides the skill from `<available_skills>` and refuses `load_skill`
+in deployments where the agent config is read-only (multi-tenant chat API /
+gateway) — the agent defers to the administrator instead of walking the user
+through an edit it cannot make. Keep an in-body guard note as a fallback for
+older datus-agent versions that ignore the frontmatter field: if the current
+environment cannot edit the config file (API / VSCode / web deployment), the
+agent should tell the user to edit `agent.yml` on the server instead.
 
 A complete minimal `hello-setup/SKILL.md`:
 
@@ -935,6 +948,7 @@ A complete minimal `hello-setup/SKILL.md`:
 ---
 name: hello-setup
 description: Configure an environment profile for the `datus hello` plugin
+requires_mutable_config: true
 ---
 
 # Hello Setup
@@ -1011,11 +1025,15 @@ def test_prompt_template_renders_without_secrets():
     template = env.get_template("prompts/system.md.j2")
     # datus strips undeclared / x-secret fields before rendering; emulate that:
     # pass only schema-declared, non-secret fields.
-    text = template.render(plugin_name="hello",
-                           profiles={"prod": {"greeting": "Hi"}}, config_path=None)
+    ctx = {"plugin_name": "hello", "config_path": None, "config_mutable": True}
+    text = template.render(profiles={"prod": {"greeting": "Hi"}}, **ctx)
     assert "## Hello" in text
-    text = template.render(plugin_name="hello", profiles={}, config_path=None)
+    text = template.render(profiles={}, **ctx)
     assert "hello-setup" in text
+    # read-only deployments must never be pointed at the setup skill
+    text = template.render(profiles={}, plugin_name="hello",
+                           config_path=None, config_mutable=False)
+    assert "hello-setup" not in text
 ```
 
 ## Distributing

@@ -1,6 +1,7 @@
 ---
 name: emr-setup
 description: Configure an environment profile for the `datus emr` plugin (AWS region + credentials, optional default cluster and S3 log_uri)
+requires_mutable_config: true
 ---
 
 # EMR Setup

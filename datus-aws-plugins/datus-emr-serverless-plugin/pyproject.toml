@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-emr-serverless-plugin"
-version = "0.1.0"
+version = "0.2.0"
 description = "Datus plugin: operate EMR Serverless applications and run/monitor Spark job runs from `datus emr-serverless`"
 readme = "README.md"
 requires-python = ">=3.12"
