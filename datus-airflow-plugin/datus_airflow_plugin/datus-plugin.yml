@@ -241,3 +241,302 @@ config_schema:
       type: string
       description: "Token cache directory"
       default: "~/.cache/datus-airflow-plugin"
+
+# Descriptive CLI catalogue powering the '!airflow' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and cli/.
+commands:
+  - name: version
+    description: "Show Airflow server and plugin versions"
+  - name: health
+    description: "Report health of metadatabase, scheduler, triggerer, dag processor"
+  - name: plugins
+    description: "List plugins loaded by the server"
+  - name: providers
+    description: "Inspect provider packages installed on the server"
+    subcommands:
+      - name: list
+        description: "List installed provider packages"
+  - name: config
+    description: "Inspect server configuration (requires expose_config)"
+    subcommands:
+      - name: list
+        description: "List configuration options"
+        args:
+          - {name: --section, description: "only this section"}
+      - name: get-value
+        description: "Print one configuration value"
+        args:
+          - {name: section, required: true, description: "config section name"}
+          - {name: option, required: true, description: "config option key"}
+  - name: jobs
+    description: "Query server jobs"
+    subcommands:
+      - name: check
+        description: "Exit 0 when matching alive jobs exist, 1 otherwise"
+        args:
+          - {name: --job-type, description: "e.g. SchedulerJob, TriggererJob, DagProcessorJob"}
+          - {name: --hostname, description: "only jobs on this host"}
+  - name: dags
+    description: "Manage DAGs (list, trigger, pause, deploy, ...)"
+    subcommands:
+      - name: list
+        description: "List DAGs"
+        args:
+          - {name: --pattern, description: "filter dag_id with a SQL LIKE pattern"}
+          - {name: --tag, description: "filter by tag (repeatable)"}
+      - name: details
+        description: "Show full serialized details of one DAG"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+      - name: list-runs
+        description: "List DAG runs (all DAGs when dag_id is omitted)"
+        args:
+          - {name: dag_id, description: "DAG id (default: all DAGs)"}
+          - {name: --state, description: "filter by run state (repeatable)"}
+      - name: list-import-errors
+        description: "List DAG import errors"
+      - name: show
+        description: "Print the task dependency tree of a DAG"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+      - name: source
+        description: "Print the source code of a DAG file"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: --version-number, description: "specific DAG version (default: latest)"}
+      - name: state
+        description: "Print the state of a DAG run"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: run_id, required: true, description: "DAG run id"}
+      - name: next-execution
+        description: "Show the next scheduled run of a DAG"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+      - name: pause
+        description: "Pause one or more DAGs"
+        args:
+          - {name: dag_id, required: true, description: "one or more DAG ids"}
+      - name: unpause
+        description: "Unpause one or more DAGs"
+        args:
+          - {name: dag_id, required: true, description: "one or more DAG ids"}
+      - name: clear-run
+        description: "Clear a DAG run (reset its task instances)"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: run_id, required: true, description: "DAG run id"}
+          - {name: --only-failed, description: "only clear failed task instances"}
+          - {name: --dry-run, description: "only show what would be cleared"}
+      - name: trigger
+        description: "Trigger a new DAG run"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: --conf, description: "JSON dict passed to the run as conf"}
+          - {name: --run-id, description: "custom run id (default: server-generated)"}
+          - {name: --wait, description: "poll until the run reaches success/failed"}
+      - name: deploy
+        description: "Upload DAG files to the dags folder (s3://... or a local path)"
+        args:
+          - {name: sources, required: true, description: "DAG file(s) or director(y/ies)"}
+          - {name: --dest, description: "target: s3://bucket/prefix/ or a dags folder path"}
+          - {name: --prune, description: "delete target files not part of this deployment"}
+          - {name: --verify, description: "after upload, wait until this DAG is re-parsed (repeatable)"}
+          - {name: --dry-run, description: "print the plan without changing anything"}
+      - name: undeploy
+        description: "Delete DAG file(s) from the dags folder target"
+        args:
+          - {name: paths, required: true, description: "file path(s) relative to the target root"}
+          - {name: --dest, description: "target: s3://bucket/prefix/ or a dags folder path"}
+          - {name: --dry-run, description: "print what would be deleted without deleting"}
+      - name: delete
+        description: "Delete all metadata of a DAG"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: --yes, description: "do not prompt for confirmation"}
+  - name: tasks
+    description: "Manage tasks and task instances"
+    subcommands:
+      - name: list
+        description: "List the tasks of a DAG"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+      - name: state
+        description: "Print the state of a task instance"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: run_id, required: true, description: "DAG run id"}
+          - {name: task_id, required: true, description: "task id"}
+          - {name: --map-index, description: "map index for mapped tasks"}
+      - name: states-for-dag-run
+        description: "List all task instances of a DAG run"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: run_id, required: true, description: "DAG run id"}
+      - name: failed-deps
+        description: "Show what blocks a task instance from being scheduled"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: run_id, required: true, description: "DAG run id"}
+          - {name: task_id, required: true, description: "task id"}
+      - name: logs
+        description: "Print the log of a task instance try"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: run_id, required: true, description: "DAG run id"}
+          - {name: task_id, required: true, description: "task id"}
+          - {name: try_number, description: "try number (default: the latest try)"}
+          - {name: --full-content, description: "fetch the full log, not just the tail"}
+      - name: clear
+        description: "Clear task instances so they re-run"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: --task-regex, description: "only tasks whose task_id matches this regex"}
+          - {name: --run-id, description: "only within this DAG run"}
+          - {name: --only-failed, description: "only failed task instances"}
+          - {name: --dry-run, description: "only show what would be cleared"}
+  - name: variables
+    description: "Manage Airflow Variables"
+    subcommands:
+      - name: list
+        description: "List variables"
+        args:
+          - {name: --pattern, description: "filter keys with a SQL LIKE pattern"}
+      - name: get
+        description: "Print the value of a variable"
+        args:
+          - {name: key, required: true, description: "variable key"}
+          - {name: --default, description: "value printed when the variable does not exist"}
+      - name: set
+        description: "Create or update a variable"
+        args:
+          - {name: key, required: true, description: "variable key"}
+          - {name: value, required: true, description: "variable value"}
+          - {name: --json, description: "parse VALUE as JSON instead of a raw string"}
+      - name: export
+        description: "Export all variables to a JSON file"
+        args:
+          - {name: file, required: true, description: "output path, or - for stdout"}
+      - name: delete
+        description: "Delete a variable"
+        args:
+          - {name: key, required: true, description: "variable key"}
+      - name: import
+        description: "Import variables from a JSON file"
+        args:
+          - {name: file, required: true, description: "JSON file of key -> value"}
+          - {name: --action-on-existing-key, description: "overwrite | fail | skip (default: overwrite)"}
+  - name: connections
+    description: "Manage Airflow connections"
+    subcommands:
+      - name: list
+        description: "List connections"
+      - name: get
+        description: "Show one connection"
+        args:
+          - {name: conn_id, required: true, description: "connection id"}
+          - {name: --show-secrets, description: "do not mask password/extra"}
+      - name: test
+        description: "Test a connection (server must enable test_connection)"
+        args:
+          - {name: conn_id, description: "existing connection id to test"}
+          - {name: --conn-uri, description: "connection URI"}
+          - {name: --conn-type, description: "connection type, e.g. postgres, aws, http"}
+      - name: import
+        description: "Import connections from a json/yaml/env file"
+        args:
+          - {name: file, required: true, description: "input file"}
+          - {name: --overwrite, description: "update connections that already exist"}
+      - name: add
+        description: "Create a connection"
+        args:
+          - {name: conn_id, required: true, description: "connection id"}
+          - {name: --conn-uri, description: "connection URI"}
+          - {name: --conn-type, description: "connection type, e.g. postgres, aws, http"}
+      - name: delete
+        description: "Delete a connection"
+        args:
+          - {name: conn_id, required: true, description: "connection id"}
+      - name: export
+        description: "Export all connections to a json/yaml/env file"
+        args:
+          - {name: file, required: true, description: "output path, or - for stdout"}
+          - {name: --file-format, description: "json | yaml | env (default: by file extension)"}
+  - name: pools
+    description: "Manage worker slot pools"
+    subcommands:
+      - name: list
+        description: "List pools"
+      - name: get
+        description: "Show one pool"
+        args:
+          - {name: name, required: true, description: "pool name"}
+      - name: set
+        description: "Create or update a pool"
+        args:
+          - {name: name, required: true, description: "pool name"}
+          - {name: slots, required: true, description: "number of slots"}
+          - {name: description, required: true, description: "pool description"}
+          - {name: --include-deferred, description: "deferred tasks count towards the pool"}
+      - name: export
+        description: "Export all pools to a JSON file"
+        args:
+          - {name: file, required: true, description: "output path, or - for stdout"}
+      - name: delete
+        description: "Delete a pool"
+        args:
+          - {name: name, required: true, description: "pool name"}
+      - name: import
+        description: "Import pools from a JSON file"
+        args:
+          - {name: file, required: true, description: "JSON file of pool_name -> config"}
+  - name: assets
+    description: "Inspect and materialize data assets"
+    subcommands:
+      - name: list
+        description: "List assets"
+        args:
+          - {name: --name-pattern, description: "filter by name substring"}
+          - {name: --uri-pattern, description: "filter by uri substring"}
+      - name: details
+        description: "Show one asset"
+        args:
+          - {name: --id, description: "asset id"}
+          - {name: --name, description: "exact asset name"}
+          - {name: --uri, description: "exact asset uri"}
+      - name: events
+        description: "List asset events"
+        args:
+          - {name: --asset-id, description: "filter by asset id"}
+          - {name: --source-dag-id, description: "filter by source DAG id"}
+      - name: materialize
+        description: "Materialize an asset (trigger the DAG that produces it)"
+        args:
+          - {name: --id, description: "asset id"}
+          - {name: --name, description: "exact asset name"}
+          - {name: --uri, description: "exact asset uri"}
+  - name: backfill
+    description: "Create and control backfills"
+    subcommands:
+      - name: list
+        description: "List backfills of a DAG"
+        args:
+          - {name: --dag-id, required: true, description: "DAG id"}
+      - name: pause
+        description: "Pause a running backfill"
+        args:
+          - {name: backfill_id, required: true, description: "backfill id"}
+      - name: unpause
+        description: "Resume a paused backfill"
+        args:
+          - {name: backfill_id, required: true, description: "backfill id"}
+      - name: cancel
+        description: "Cancel a backfill"
+        args:
+          - {name: backfill_id, required: true, description: "backfill id"}
+      - name: create
+        description: "Start a backfill for a date range"
+        args:
+          - {name: --dag-id, required: true, description: "DAG id"}
+          - {name: --from-date, required: true, description: "start of the date range (ISO)"}
+          - {name: --to-date, required: true, description: "end of the date range (ISO)"}
+          - {name: --dry-run, description: "only list the logical dates a backfill would create"}

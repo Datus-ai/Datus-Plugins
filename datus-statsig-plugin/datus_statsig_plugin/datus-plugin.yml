@@ -115,3 +115,211 @@ config_schema:
     base_url:
       type: string
       description: "Legacy alias for api_base_url (prefer api_base_url)"
+
+# Descriptive CLI catalogue powering the '!statsig' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and cli/.
+commands:
+  - name: metrics
+    description: "Metric definitions, values, generated SQL, and authoring"
+    subcommands:
+      - name: list
+        description: "List metrics in the project"
+        args:
+          - {name: --tag, description: "filter by tag (repeatable)"}
+          - {name: --show-hidden, description: "include hidden metrics"}
+          - {name: --limit, description: "stop after N metrics"}
+      - name: get
+        description: "Read a metric definition by id, or by --name + --type"
+        args:
+          - {name: id, description: "metric id (or use --name + --type)"}
+          - {name: --name, description: "metric name (with --type, instead of id)"}
+          - {name: --type, description: "metric type (with --name)"}
+      - name: sql
+        description: "Get the SQL generated for a metric"
+        args:
+          - {name: id, required: true, description: "metric id"}
+      - name: values
+        description: "List metric values for a date"
+        args:
+          - {name: --date, required: true, description: "date, e.g. 2024-09-01"}
+          - {name: --metric-name, description: "filter by metric name"}
+          - {name: --metric-type, description: "filter by metric type"}
+          - {name: --limit, description: "stop after N values"}
+      - name: create
+        description: "Create a metric (analysis authoring — confirms)"
+        args:
+          - {name: --json, description: "request body as an inline JSON object"}
+          - {name: --json-file, description: "request body from a JSON file"}
+          - {name: --dry-run, description: "validate the body without persisting"}
+      - name: update
+        description: "Update a metric (confirms)"
+        args:
+          - {name: id, required: true, description: "metric id"}
+          - {name: --json, description: "request body as an inline JSON object"}
+          - {name: --json-file, description: "request body from a JSON file"}
+          - {name: --dry-run, description: "validate the body without persisting"}
+      - name: reload
+        description: "Trigger a warehouse-native metric recompute (confirms)"
+        args:
+          - {name: id, required: true, description: "metric id"}
+          - {name: --incremental, description: "incremental reload"}
+  - name: metric-source
+    description: "Warehouse-native metric sources (SQL authoring)"
+    subcommands:
+      - name: list
+        description: "List metric sources"
+        args:
+          - {name: --limit, description: "stop after N sources"}
+      - name: get
+        description: "Read a metric source by name"
+        args:
+          - {name: name, required: true, description: "metric source name"}
+      - name: create
+        description: "Create a metric source from SQL (confirms)"
+        args:
+          - {name: --json, description: "request body as an inline JSON object"}
+          - {name: --json-file, description: "request body from a JSON file"}
+          - {name: --dry-run, description: "validate the body without persisting"}
+      - name: update
+        description: "Update a metric source (confirms)"
+        args:
+          - {name: name, required: true, description: "metric source name"}
+          - {name: --json, description: "request body as an inline JSON object"}
+          - {name: --json-file, description: "request body from a JSON file"}
+          - {name: --dry-run, description: "validate the body without persisting"}
+      - name: delete
+        description: "Delete a metric source (confirms)"
+        args:
+          - {name: name, required: true, description: "metric source name"}
+  - name: experiments
+    description: "Experiment metadata plus Pulse / exposure readouts"
+    subcommands:
+      - name: list
+        description: "List experiments"
+        args:
+          - {name: --status, description: "filter by status"}
+          - {name: --tag, description: "filter by tag (repeatable)"}
+          - {name: --limit, description: "stop after N experiments"}
+      - name: get
+        description: "Read a single experiment"
+        args:
+          - {name: id, required: true, description: "experiment id"}
+      - name: pulse
+        description: "Full Pulse results (lift, CIs, p-values)"
+        args:
+          - {name: id, required: true, description: "experiment id"}
+          - {name: --control, required: true, description: "control group id"}
+          - {name: --test, required: true, description: "test group id"}
+          - {name: --cuped, description: "CUPED setting"}
+          - {name: --confidence, description: "confidence interval level"}
+          - {name: --date, description: "results as of this date"}
+      - name: summary
+        description: "Summary charts / readout sections"
+        args:
+          - {name: id, required: true, description: "experiment id"}
+          - {name: --control, description: "control group id"}
+          - {name: --test, description: "test group id"}
+      - name: exposures
+        description: "Cumulative exposures (or --dimensional for SRM breakdown)"
+        args:
+          - {name: id, required: true, description: "experiment id"}
+          - {name: --dimensional, description: "dimensional exposures / SRM"}
+          - {name: --dimension-type, description: "dimension type (with --dimensional)"}
+          - {name: --severity, description: "severity filter (with --dimensional)"}
+      - name: pulse-status
+        description: "Pulse load history (optionally one dag id)"
+        args:
+          - {name: id, required: true, description: "experiment id"}
+          - {name: dag_id, description: "specific pulse-load dag id"}
+          - {name: --limit, description: "stop after N history entries"}
+      - name: load-pulse
+        description: "Trigger a warehouse-native Pulse computation (confirms)"
+        args:
+          - {name: id, required: true, description: "experiment id"}
+          - {name: --refresh, description: "force a refresh"}
+  - name: ingestion
+    description: "ETL ingestion runs, status, backfills, and schedule"
+    subcommands:
+      - name: get
+        description: "Read an ingestion source config"
+        args:
+          - {name: --type, required: true, description: "dataset type (e.g. metrics, events)"}
+          - {name: --dataset, required: true, description: "dataset"}
+          - {name: --source-name, description: "source name"}
+      - name: runs
+        description: "List ingestion runs"
+        args:
+          - {name: --limit, description: "stop after N runs"}
+      - name: run
+        description: "Read a single ingestion run by id"
+        args:
+          - {name: id, required: true, description: "ingestion run id"}
+      - name: status
+        description: "List ingestion status entries over a window"
+        args:
+          - {name: --start, required: true, description: "start date (YYYY-MM-DD)"}
+          - {name: --end, required: true, description: "end date (YYYY-MM-DD)"}
+          - {name: --source, description: "filter by source"}
+          - {name: --dataset, description: "filter by dataset"}
+          - {name: --status, description: "filter by status"}
+          - {name: --limit, description: "stop after N entries"}
+      - name: schedule-get
+        description: "Read the ingestion schedule for a dataset"
+        args:
+          - {name: --dataset, required: true, description: "dataset"}
+      - name: backfill
+        description: "Kick off a backfill run over a date range (confirms)"
+        args:
+          - {name: --type, required: true, description: "dataset type"}
+          - {name: --dataset, required: true, description: "dataset"}
+          - {name: --start, required: true, description: "datestamp_start (YYYY-MM-DD)"}
+          - {name: --end, required: true, description: "datestamp_end (YYYY-MM-DD)"}
+          - {name: --source, description: "source name"}
+      - name: schedule-set
+        description: "Set the ingestion schedule for a dataset (confirms)"
+        args:
+          - {name: --dataset, required: true, description: "dataset"}
+          - {name: --hour, required: true, description: "scheduled_hour_pst (0-23)"}
+  - name: events
+    description: "Recently logged events (read-only)"
+    subcommands:
+      - name: list
+        description: "List recently logged events (rolling window)"
+        args:
+          - {name: --limit, description: "stop after N events"}
+      - name: get
+        description: "Recently logged events for one event name"
+        args:
+          - {name: event_name, required: true, description: "event name"}
+          - {name: --limit, description: "stop after N events"}
+  - name: logs
+    description: "Query the Logs Explorer (events / logs / spans)"
+    subcommands:
+      - name: query
+        description: "Query recent events / logs / spans"
+        args:
+          - {name: --query, description: "Logs Explorer filter expression"}
+          - {name: --source, description: "source: logs / events / spans (default: logs)"}
+          - {name: --columns, description: "comma-separated column ids to include"}
+          - {name: --start, description: "start_ts (Unix ms)"}
+          - {name: --end, description: "end_ts (Unix ms)"}
+          - {name: --limit, description: "max rows (default 100, max 1000)"}
+          - {name: --after, description: "opaque pagination cursor"}
+  - name: reports
+    description: "Generate an analytics report (returns a URL)"
+    subcommands:
+      - name: get
+        description: "Get a report URL for a type + date"
+        args:
+          - {name: --type, required: true, description: "report type: first_exposures / pulse_daily / topline_impact_daily"}
+          - {name: --date, required: true, description: "report date, e.g. 2024-09-01"}
+  - name: describe
+    description: "Print the request-body template for a write command"
+    args:
+      - {name: path, required: true, description: "<group> <subcommand>, e.g. metrics create"}
+  - name: warehouse-connections
+    description: "Update warehouse connection credentials"
+    subcommands:
+      - name: update
+        description: "Update warehouse connection credentials (confirms; --json-file only)"
+        args:
+          - {name: --json-file, required: true, description: "request body from a JSON file (contains credentials)"}

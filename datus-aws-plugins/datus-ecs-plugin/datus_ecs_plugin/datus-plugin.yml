@@ -89,3 +89,89 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!ecs' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: clusters
+    description: "ECS clusters: list and describe."
+    subcommands:
+      - name: list
+        description: "List clusters with status and task/service counts."
+      - name: describe
+        description: "Describe one cluster."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+  - name: services
+    description: "ECS services: list, describe, view events, scale."
+    subcommands:
+      - name: list
+        description: "List services in a cluster."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: --limit, description: "Max services to list"}
+      - name: describe
+        description: "Describe one service."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: service, required: true, description: "Service name or ARN"}
+      - name: events
+        description: "Show recent service events."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: service, required: true, description: "Service name or ARN"}
+          - {name: --limit, description: "Max events to show (default 20)"}
+      - name: scale
+        description: "Set a service's desired task count."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: service, required: true, description: "Service name or ARN"}
+          - {name: count, required: true, description: "Desired task count"}
+  - name: tasks
+    description: "ECS tasks: list, describe, run, stop, read logs."
+    subcommands:
+      - name: list
+        description: "List task ARNs in a cluster."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: --limit, description: "Max tasks to list"}
+      - name: describe
+        description: "Describe one task."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: task, required: true, description: "Task id or ARN"}
+      - name: logs
+        description: "Read a task container's CloudWatch logs (needs log_group)."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: task, required: true, description: "Task id or ARN"}
+          - {name: --container, required: true, description: "Container name"}
+          - {name: --stream-prefix, description: "awslogs stream prefix (default 'ecs')"}
+      - name: stop
+        description: "Stop a running task."
+        args:
+          - {name: cluster, required: true, description: "Cluster name or ARN"}
+          - {name: task, required: true, description: "Task id or ARN"}
+          - {name: --reason, description: "Stop reason"}
+      - name: run
+        description: "Run a one-off task (starts billed compute)."
+        args:
+          - {name: cluster, description: "Cluster (defaults to the profile's cluster)"}
+          - {name: --task-def, required: true, description: "Task definition family[:revision]"}
+          - {name: --launch-type, description: "FARGATE or EC2 (default FARGATE)"}
+          - {name: --count, description: "Number of tasks to run (default 1)"}
+          - {name: --subnet, description: "Subnet id (repeatable; awsvpc)"}
+          - {name: --security-group, description: "Security group id (repeatable)"}
+          - {name: --assign-public-ip, description: "Assign a public IP"}
+          - {name: --wait, description: "Poll until the task stops"}
+  - name: task-defs
+    description: "ECS task definitions: list and describe."
+    subcommands:
+      - name: list
+        description: "List task definition ARNs."
+        args:
+          - {name: --family, description: "Family prefix filter"}
+          - {name: --limit, description: "Max ARNs to list"}
+      - name: describe
+        description: "Describe a task definition."
+        args:
+          - {name: task_def, required: true, description: "family[:revision] or ARN"}

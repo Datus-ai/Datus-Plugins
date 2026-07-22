@@ -221,3 +221,383 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!quicksight' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: datasets
+    description: "QuickSight datasets: list/describe/create/update/delete/permissions"
+    subcommands:
+      - name: list
+        description: "List datasets"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one dataset"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+      - name: permissions
+        description: "Show a dataset's resource permissions"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+      - name: create
+        description: "Create a dataset from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "CreateDataSet request as JSON (without AwsAccountId)"}
+      - name: update
+        description: "Update a dataset from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "UpdateDataSet request as JSON (without AwsAccountId)"}
+      - name: delete
+        description: "Delete a dataset"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+      - name: set-permissions
+        description: "Grant/revoke dataset permissions from a JSON body"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: --cli-input, required: true, description: "UpdateDataSetPermissions body as JSON"}
+  - name: datasources
+    description: "QuickSight data sources: list/describe/create/update/delete"
+    subcommands:
+      - name: list
+        description: "List data sources"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one data source"
+        args:
+          - {name: datasource_id, required: true, description: "Data source id"}
+      - name: create
+        description: "Create a data source from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "CreateDataSource request as JSON (without AwsAccountId)"}
+      - name: update
+        description: "Update a data source from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "UpdateDataSource request as JSON (without AwsAccountId)"}
+      - name: delete
+        description: "Delete a data source"
+        args:
+          - {name: datasource_id, required: true, description: "Data source id"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+  - name: dashboards
+    description: "QuickSight dashboards: lifecycle, versions, permissions, embed"
+    subcommands:
+      - name: list
+        description: "List dashboards"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one dashboard"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+      - name: versions
+        description: "List a dashboard's versions"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: permissions
+        description: "Show a dashboard's permissions"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+      - name: embed-url
+        description: "Embed URL for a registered user"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+          - {name: --user-arn, required: true, description: "ARN of the registered user"}
+          - {name: --session-lifetime, description: "Session lifetime in minutes"}
+      - name: embed-url-anonymous
+        description: "Embed URL for an anonymous user"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+          - {name: --namespace, description: "Namespace for the anonymous session (default: default)"}
+          - {name: --authorized-resource-arn, description: "ARN the anonymous session may access (repeatable)"}
+          - {name: --session-lifetime, description: "Session lifetime in minutes"}
+      - name: create
+        description: "Create a dashboard from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "CreateDashboard request as JSON (without AwsAccountId)"}
+      - name: update
+        description: "Update a dashboard from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "UpdateDashboard request as JSON (without AwsAccountId)"}
+      - name: publish
+        description: "Set the published version of a dashboard"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+          - {name: version_number, required: true, description: "Version number to publish"}
+      - name: delete
+        description: "Delete a dashboard"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+      - name: set-permissions
+        description: "Grant/revoke dashboard permissions from a JSON body"
+        args:
+          - {name: dashboard_id, required: true, description: "Dashboard id"}
+          - {name: --cli-input, required: true, description: "UpdateDashboardPermissions body as JSON"}
+  - name: analyses
+    description: "QuickSight analyses: list/describe/create/update/delete/restore"
+    subcommands:
+      - name: list
+        description: "List analyses"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one analysis"
+        args:
+          - {name: analysis_id, required: true, description: "Analysis id"}
+      - name: create
+        description: "Create an analysis from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "CreateAnalysis request as JSON (without AwsAccountId)"}
+      - name: update
+        description: "Update an analysis from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "UpdateAnalysis request as JSON (without AwsAccountId)"}
+      - name: delete
+        description: "Delete an analysis"
+        args:
+          - {name: analysis_id, required: true, description: "Analysis id"}
+          - {name: --force, description: "Skip the recovery window (ForceDeleteWithoutRecovery)"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+      - name: restore
+        description: "Restore a deleted analysis (within the recovery window)"
+        args:
+          - {name: analysis_id, required: true, description: "Analysis id"}
+  - name: templates
+    description: "QuickSight templates: list/describe/versions/create/update/delete"
+    subcommands:
+      - name: list
+        description: "List templates"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one template"
+        args:
+          - {name: template_id, required: true, description: "Template id"}
+      - name: versions
+        description: "List a template's versions"
+        args:
+          - {name: template_id, required: true, description: "Template id"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: create
+        description: "Create a template from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "CreateTemplate request as JSON (without AwsAccountId)"}
+      - name: update
+        description: "Update a template from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "UpdateTemplate request as JSON (without AwsAccountId)"}
+      - name: delete
+        description: "Delete a template"
+        args:
+          - {name: template_id, required: true, description: "Template id"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+  - name: themes
+    description: "QuickSight themes: list/describe/create/update/delete"
+    subcommands:
+      - name: list
+        description: "List themes"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one theme"
+        args:
+          - {name: theme_id, required: true, description: "Theme id"}
+      - name: create
+        description: "Create a theme from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "CreateTheme request as JSON (without AwsAccountId)"}
+      - name: update
+        description: "Update a theme from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "UpdateTheme request as JSON (without AwsAccountId)"}
+      - name: delete
+        description: "Delete a theme"
+        args:
+          - {name: theme_id, required: true, description: "Theme id"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+  - name: folders
+    description: "QuickSight folders: list/describe/create/delete + membership"
+    subcommands:
+      - name: list
+        description: "List folders"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one folder"
+        args:
+          - {name: folder_id, required: true, description: "Folder id"}
+      - name: members
+        description: "List a folder's members"
+        args:
+          - {name: folder_id, required: true, description: "Folder id"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: create
+        description: "Create a folder from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "CreateFolder request as JSON (without AwsAccountId)"}
+      - name: delete
+        description: "Delete a folder"
+        args:
+          - {name: folder_id, required: true, description: "Folder id"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+      - name: member-add
+        description: "Add an asset to a folder"
+        args:
+          - {name: folder_id, required: true, description: "Folder id"}
+          - {name: member_id, required: true, description: "Member asset id"}
+          - {name: --member-type, required: true, description: "One of DASHBOARD/ANALYSIS/DATASET/DATASOURCE"}
+      - name: member-remove
+        description: "Remove an asset from a folder"
+        args:
+          - {name: folder_id, required: true, description: "Folder id"}
+          - {name: member_id, required: true, description: "Member asset id"}
+          - {name: --member-type, required: true, description: "One of DASHBOARD/ANALYSIS/DATASET/DATASOURCE"}
+  - name: users
+    description: "QuickSight users: list/describe/register/update/delete"
+    subcommands:
+      - name: list
+        description: "List users in the namespace"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one user"
+        args:
+          - {name: user_name, required: true, description: "User name"}
+      - name: register
+        description: "Register a user from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "RegisterUser request as JSON (without AwsAccountId/Namespace)"}
+      - name: update
+        description: "Update a user from a JSON request body"
+        args:
+          - {name: --cli-input, required: true, description: "UpdateUser request as JSON (without AwsAccountId/Namespace)"}
+      - name: delete
+        description: "Delete a user"
+        args:
+          - {name: user_name, required: true, description: "User name"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+  - name: groups
+    description: "QuickSight groups: list/describe/create/delete + membership"
+    subcommands:
+      - name: list
+        description: "List groups in the namespace"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one group"
+        args:
+          - {name: group_name, required: true, description: "Group name"}
+      - name: members
+        description: "List a group's members"
+        args:
+          - {name: group_name, required: true, description: "Group name"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: create
+        description: "Create a group"
+        args:
+          - {name: group_name, required: true, description: "Group name"}
+          - {name: --description, description: "Group description"}
+      - name: delete
+        description: "Delete a group"
+        args:
+          - {name: group_name, required: true, description: "Group name"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+      - name: member-add
+        description: "Add a user to a group"
+        args:
+          - {name: group_name, required: true, description: "Group name"}
+          - {name: member_name, required: true, description: "User name to add"}
+      - name: member-remove
+        description: "Remove a user from a group"
+        args:
+          - {name: group_name, required: true, description: "Group name"}
+          - {name: member_name, required: true, description: "User name to remove"}
+  - name: namespaces
+    description: "QuickSight namespaces: list/describe/create/delete"
+    subcommands:
+      - name: list
+        description: "List namespaces"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: describe
+        description: "Describe one namespace"
+        args:
+          - {name: namespace, required: true, description: "Namespace name"}
+      - name: create
+        description: "Create a namespace (QUICKSIGHT identity store)"
+        args:
+          - {name: namespace, required: true, description: "Namespace name"}
+      - name: delete
+        description: "Delete a namespace"
+        args:
+          - {name: namespace, required: true, description: "Namespace name"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+  - name: refresh
+    description: "SPICE ingestions and refresh schedules"
+    subcommands:
+      - name: list
+        description: "List ingestions of a dataset"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: status
+        description: "Status of one ingestion"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: ingestion_id, required: true, description: "Ingestion id"}
+      - name: schedules
+        description: "List a dataset's refresh schedules"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+      - name: run
+        description: "Start a SPICE ingestion (refresh; billed)"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: --ingestion-id, description: "Id for the ingestion (default: datus-<epoch>)"}
+          - {name: --wait, description: "Poll until the ingestion is terminal"}
+      - name: cancel
+        description: "Cancel a running ingestion"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: ingestion_id, required: true, description: "Ingestion id"}
+      - name: schedule-put
+        description: "Create/replace a refresh schedule from a JSON body"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: --cli-input, required: true, description: "Schedule object as JSON (the CreateRefreshSchedule 'Schedule')"}
+      - name: schedule-delete
+        description: "Delete a refresh schedule"
+        args:
+          - {name: dataset_id, required: true, description: "Dataset id"}
+          - {name: schedule_id, required: true, description: "Refresh schedule id"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+  - name: account
+    description: "QuickSight account: settings, subscription"
+    subcommands:
+      - name: settings
+        description: "Show account settings"
+      - name: subscription
+        description: "Show the account subscription/edition"
+  - name: assets
+    description: "QuickSight asset bundles: export/import"
+    subcommands:
+      - name: export
+        description: "Start an asset-bundle export job from a JSON body"
+        args:
+          - {name: --cli-input, required: true, description: "StartAssetBundleExportJob request as JSON (without AwsAccountId)"}
+      - name: export-status
+        description: "Describe an export job (download URL when ready)"
+        args:
+          - {name: job_id, required: true, description: "Asset bundle export job id"}
+      - name: import-status
+        description: "Describe an import job"
+        args:
+          - {name: job_id, required: true, description: "Asset bundle import job id"}
+      - name: import
+        description: "Start an asset-bundle import job from a JSON body"
+        args:
+          - {name: --cli-input, required: true, description: "StartAssetBundleImportJob request as JSON (without AwsAccountId)"}

@@ -79,3 +79,58 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!emr' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: clusters
+    description: "EMR clusters: list, describe, instances"
+    subcommands:
+      - name: list
+        description: "List EMR clusters, optionally filtered by state"
+        args:
+          - {name: --state, description: "Filter by cluster state (repeatable), e.g. WAITING RUNNING"}
+          - {name: --limit, description: "Maximum number of clusters to return"}
+      - name: describe
+        description: "Describe one cluster"
+        args:
+          - {name: cluster_id, required: true, description: "EMR cluster id"}
+      - name: instances
+        description: "List a cluster's instances"
+        args:
+          - {name: cluster_id, required: true, description: "EMR cluster id"}
+  - name: steps
+    description: "EMR steps: list, describe, add, cancel, logs"
+    subcommands:
+      - name: list
+        description: "List steps on a cluster, optionally filtered by state"
+        args:
+          - {name: cluster_id, required: true, description: "EMR cluster id"}
+          - {name: --state, description: "Filter by step state (repeatable)"}
+          - {name: --limit, description: "Maximum number of steps to return"}
+      - name: describe
+        description: "Describe one step"
+        args:
+          - {name: cluster_id, required: true, description: "EMR cluster id"}
+          - {name: step_id, required: true, description: "Step id"}
+      - name: logs
+        description: "Read a step's stdout/stderr from S3 (needs log_uri)"
+        args:
+          - {name: cluster_id, required: true, description: "EMR cluster id"}
+          - {name: step_id, required: true, description: "Step id"}
+          - {name: --stderr, description: "Read stderr instead of stdout"}
+      - name: cancel
+        description: "Cancel a pending/running step"
+        args:
+          - {name: cluster_id, required: true, description: "EMR cluster id"}
+          - {name: step_id, required: true, description: "Step id"}
+      - name: add
+        description: "Submit a step to a cluster (runs billed work)"
+        args:
+          - {name: cluster_id, description: "Cluster id (defaults to the profile's cluster_id)"}
+          - {name: --name, required: true, description: "Step name"}
+          - {name: --command, description: "Command run via command-runner.jar, e.g. 'spark-submit s3://b/job.py'"}
+          - {name: --jar, description: "Path/URI of the JAR to run"}
+          - {name: --arg, description: "Argument to the JAR (repeatable)"}
+          - {name: --main-class, description: "Main class in the JAR"}
+          - {name: --action-on-failure, description: "CONTINUE, CANCEL_AND_WAIT, or TERMINATE_CLUSTER"}
+          - {name: --wait, description: "Poll until the step reaches a terminal state"}

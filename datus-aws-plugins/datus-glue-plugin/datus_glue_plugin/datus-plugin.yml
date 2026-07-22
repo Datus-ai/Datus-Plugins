@@ -126,3 +126,184 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!glue' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: catalog
+    description: "Glue Data Catalog: databases, tables, partitions, stats"
+    subcommands:
+      - name: databases
+        description: "List databases"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: tables
+        description: "List tables in a database"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: --expression, description: "Table-name filter expression"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: show
+        description: "Show a table's schema"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: table, required: true, description: "Table name"}
+      - name: search
+        description: "Search tables across the catalog"
+        args:
+          - {name: keyword, required: true, description: "Search text"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: partitions
+        description: "List a table's partitions"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: table, required: true, description: "Table name"}
+          - {name: --expression, description: "Partition filter expression"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: versions
+        description: "List a table's versions"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: table, required: true, description: "Table name"}
+          - {name: --limit, description: "Max rows to return"}
+      - name: stats
+        description: "Column statistics for a table"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: table, required: true, description: "Table name"}
+          - {name: --column, description: "Column to include (repeatable; default: all)"}
+      - name: create-database
+        description: "Create a database"
+        args:
+          - {name: name, required: true, description: "Database name"}
+          - {name: --description, description: "Database description"}
+      - name: delete-database
+        description: "Delete a database (and all its tables)"
+        args:
+          - {name: name, required: true, description: "Database name"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+      - name: create-table
+        description: "Create a table from a TableInput JSON"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: --table-input, required: true, description: "Glue TableInput as JSON"}
+      - name: update-table
+        description: "Update a table from a TableInput JSON"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: --table-input, required: true, description: "Glue TableInput as JSON"}
+      - name: delete-table
+        description: "Delete a table"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: table, required: true, description: "Table name"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+      - name: add-partition
+        description: "Add a partition from a PartitionInput JSON"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: table, required: true, description: "Table name"}
+          - {name: --partition-input, required: true, description: "Glue PartitionInput as JSON"}
+      - name: delete-partition
+        description: "Delete a partition by its values"
+        args:
+          - {name: database, required: true, description: "Database name"}
+          - {name: table, required: true, description: "Table name"}
+          - {name: --values, required: true, description: "JSON array of partition values"}
+          - {name: --yes, description: "Skip the confirmation prompt"}
+  - name: crawlers
+    description: "Glue crawlers: list, run, stop, schedule"
+    subcommands:
+      - name: list
+        description: "List crawlers"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: get
+        description: "Describe one crawler"
+        args:
+          - {name: name, required: true, description: "Crawler name"}
+      - name: status
+        description: "Show a crawler's state and last crawl"
+        args:
+          - {name: name, required: true, description: "Crawler name"}
+      - name: history
+        description: "Recent crawl history"
+        args:
+          - {name: name, required: true, description: "Crawler name"}
+          - {name: --limit, description: "Max rows to return (default: 20)"}
+      - name: metrics
+        description: "Crawler metrics"
+        args:
+          - {name: name, description: "Crawler name(s) (default: all)"}
+      - name: run
+        description: "Start a crawler (updates the catalog only)"
+        args:
+          - {name: name, required: true, description: "Crawler name"}
+          - {name: --wait, description: "Poll until the crawl finishes"}
+      - name: stop
+        description: "Stop a running crawler"
+        args:
+          - {name: name, required: true, description: "Crawler name"}
+      - name: schedule-pause
+        description: "Pause a crawler's schedule"
+        args:
+          - {name: name, required: true, description: "Crawler name"}
+      - name: schedule-resume
+        description: "Resume a crawler's schedule"
+        args:
+          - {name: name, required: true, description: "Crawler name"}
+  - name: jobs
+    description: "Glue ETL jobs: list, run, monitor, logs"
+    subcommands:
+      - name: list
+        description: "List job definitions"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: get
+        description: "Describe one job definition"
+        args:
+          - {name: name, required: true, description: "Job name"}
+      - name: runs
+        description: "Recent runs of a job"
+        args:
+          - {name: name, required: true, description: "Job name"}
+          - {name: --state, description: "Filter by JobRunState"}
+          - {name: --limit, description: "Max rows to return (default: 20)"}
+      - name: run-status
+        description: "Status of one job run"
+        args:
+          - {name: name, required: true, description: "Job name"}
+          - {name: run_id, required: true, description: "Job run id"}
+      - name: logs
+        description: "Read a run's CloudWatch logs"
+        args:
+          - {name: name, required: true, description: "Job name"}
+          - {name: run_id, required: true, description: "Job run id"}
+          - {name: --error, description: "Read the error log group instead of output"}
+          - {name: --limit, description: "Max log events to return (default: 200)"}
+      - name: stop
+        description: "Stop job run(s)"
+        args:
+          - {name: name, required: true, description: "Job name"}
+          - {name: run_id, required: true, description: "One or more job run ids"}
+      - name: bookmark-reset
+        description: "Reset a job's bookmark (causes reprocessing)"
+        args:
+          - {name: name, required: true, description: "Job name"}
+      - name: run
+        description: "Start a job run (writes data, billed)"
+        args:
+          - {name: name, required: true, description: "Job name"}
+          - {name: --args, description: "Job Arguments as a JSON object"}
+          - {name: --wait, description: "Poll until the run reaches a terminal state"}
+  - name: connections
+    description: "Glue Data Catalog connections: list, get"
+    subcommands:
+      - name: list
+        description: "List connections"
+        args:
+          - {name: --limit, description: "Max rows to return"}
+      - name: get
+        description: "Get a connection (secrets masked)"
+        args:
+          - {name: name, required: true, description: "Connection name"}
+          - {name: --show-secrets, description: "Reveal password/secret properties"}

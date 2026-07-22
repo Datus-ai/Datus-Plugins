@@ -70,3 +70,37 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!mwaa' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: environments
+    description: "Inspect Amazon MWAA environments"
+    subcommands:
+      - name: list
+        description: "List environment names"
+        args:
+          - {name: --limit, description: "Maximum number of environments to return"}
+      - name: get
+        description: "Describe one environment"
+        args:
+          - {name: name, required: true, description: "Environment name to describe"}
+  - name: token
+    description: "Mint short-lived MWAA tokens"
+    subcommands:
+      - name: web-login
+        description: "Create a one-time Airflow UI login URL"
+        args:
+          - {name: name, description: "Environment name (default: profile's environment)"}
+      - name: cli
+        description: "Create a CLI token and web server hostname"
+        args:
+          - {name: name, description: "Environment name (default: profile's environment)"}
+  - name: cli
+    description: "Run the Airflow CLI over MWAA's REST endpoint"
+    subcommands:
+      - name: run
+        description: "Run an Airflow CLI command, e.g. 'dags list'"
+        args:
+          - {name: command, required: true, description: "The Airflow CLI command as a single quoted string"}
+          - {name: --env, description: "Environment name (default: profile's environment)"}
+          - {name: --timeout, description: "HTTP request timeout in seconds"}

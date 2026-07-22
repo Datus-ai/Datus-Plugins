@@ -83,3 +83,95 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!cloudwatch' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: logs
+    description: "CloudWatch Logs: groups, streams, get, tail, insights"
+    subcommands:
+      - name: groups
+        description: "List log groups"
+        args:
+          - {name: --prefix, description: "Log group name prefix filter"}
+          - {name: --limit, description: "Stop after N groups"}
+      - name: streams
+        description: "List log streams in a group"
+        args:
+          - {name: group_name, required: true, description: "Log group name"}
+          - {name: --order-by, description: "Sort by LogStreamName or LastEventTime"}
+          - {name: --limit, description: "Max streams to return"}
+      - name: get
+        description: "Get events from one log stream"
+        args:
+          - {name: group_name, required: true, description: "Log group name"}
+          - {name: stream_name, required: true, description: "Log stream name"}
+          - {name: --limit, description: "Max events to return"}
+          - {name: --start-from-head, description: "Oldest first (default: newest)"}
+      - name: tail
+        description: "Tail events across a log group (optionally --follow)"
+        args:
+          - {name: group_name, required: true, description: "Log group name"}
+          - {name: --filter, description: "CloudWatch Logs filter pattern"}
+          - {name: --since, description: "Look-back window: 30s/15m/2h/1d (default 10m)"}
+          - {name: --follow, description: "Keep polling for new events until interrupted"}
+      - name: insights
+        description: "Run a CloudWatch Logs Insights query and wait for results"
+        args:
+          - {name: group_name, required: true, description: "One or more log group names"}
+          - {name: --query, required: true, description: "Logs Insights query string"}
+          - {name: --start, required: true, description: "ISO 8601, 'now', or -1h/-30m/-2d relative"}
+          - {name: --end, description: "ISO 8601 or 'now' (default now)"}
+          - {name: --limit, description: "Max result rows"}
+  - name: metrics
+    description: "CloudWatch metrics: list, get"
+    subcommands:
+      - name: list
+        description: "List available metrics"
+        args:
+          - {name: --namespace, description: "Metric namespace, e.g. AWS/Lambda, AWS/Glue"}
+          - {name: --name, description: "Metric name"}
+          - {name: --limit, description: "Max metrics to return"}
+      - name: get
+        description: "Get metric statistics over a time range"
+        args:
+          - {name: --namespace, required: true, description: "Metric namespace"}
+          - {name: --name, required: true, description: "Metric name"}
+          - {name: --start, required: true, description: "ISO 8601 or 'now'"}
+          - {name: --stat, description: "Statistic: Average/Sum/Minimum/Maximum/SampleCount"}
+          - {name: --dimension, description: "Metric dimension Name=Value (repeatable)"}
+  - name: alarms
+    description: "CloudWatch alarms: list, get, history, set-state"
+    subcommands:
+      - name: list
+        description: "List metric alarms"
+        args:
+          - {name: --prefix, description: "Alarm name prefix"}
+          - {name: --state, description: "Filter by current state (OK/ALARM/INSUFFICIENT_DATA)"}
+          - {name: --limit, description: "Max alarms to return"}
+      - name: get
+        description: "Describe one alarm"
+        args:
+          - {name: name, required: true, description: "Alarm name"}
+      - name: history
+        description: "Alarm state-change history"
+        args:
+          - {name: name, required: true, description: "Alarm name"}
+          - {name: --limit, description: "Max history items"}
+      - name: set-state
+        description: "Set an alarm's state (testing / temporary suppression)"
+        args:
+          - {name: name, required: true, description: "Alarm name"}
+          - {name: --state, required: true, description: "Target state (OK/ALARM/INSUFFICIENT_DATA)"}
+          - {name: --reason, description: "State-change reason"}
+  - name: dashboards
+    description: "CloudWatch dashboards: list, get"
+    subcommands:
+      - name: list
+        description: "List dashboards"
+        args:
+          - {name: --prefix, description: "Dashboard name prefix"}
+          - {name: --limit, description: "Max dashboards to return"}
+      - name: get
+        description: "Get a dashboard definition"
+        args:
+          - {name: name, required: true, description: "Dashboard name"}

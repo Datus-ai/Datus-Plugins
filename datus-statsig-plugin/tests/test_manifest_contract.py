@@ -35,6 +35,7 @@ MANIFEST_KEYS = {
     "system_prompt",
     "skills",
     "config_schema",
+    "commands",
 }
 
 # The permission policy, verbatim: reads (and `describe`) auto-run under both
@@ -238,6 +239,75 @@ def test_permissions_reads_allowed_everywhere(manifest):
         "logs query", "reports get", "describe",
     ):
         assert allowed("normal", command) and allowed("auto", command)
+
+
+# -------------------------------------------------------------- command catalogue
+
+
+def _manifest_command_paths(manifest: Dict[str, Any]) -> list[str]:
+    """Leaf `<group> <subcommand>` paths declared in the `commands` catalogue."""
+
+    def walk(cmds: list, prefix: str = "") -> list[str]:
+        out: list[str] = []
+        for cmd in cmds:
+            path = f"{prefix} {cmd['name']}".strip()
+            subs = cmd.get("subcommands") or []
+            if subs:
+                out.extend(walk(subs, path))
+            else:
+                out.append(path)
+        return out
+
+    return walk(manifest.get("commands", []))
+
+
+def test_commands_catalogue_tracks_the_real_cli(manifest):
+    """The descriptive `commands` catalogue must mirror the real parser 1:1.
+
+    It powers the REPL's `!statsig` completion / argument hints, so a stale or
+    missing entry silently misleads users (datus never executes from it). A new
+    subcommand added to the CLI must be catalogued here, or this test fails.
+    """
+    assert set(_manifest_command_paths(manifest)) == set(_cli_command_paths())
+
+
+def test_commands_catalogue_arg_flags_are_real(manifest):
+    """Every `--flag` a command declares must exist on that command's parser."""
+    from datus_statsig_plugin.cli import build_parser
+
+    def parser_for(path: str) -> Optional[argparse.ArgumentParser]:
+        parser = build_parser()
+        node = parser
+        for token in path.split(" "):
+            choices = _subparser_choices(node)
+            node = choices.get(token)
+            if node is None:
+                return None
+        return node
+
+    def flag_strings(parser: argparse.ArgumentParser) -> set[str]:
+        flags: set[str] = set()
+        for action in parser._actions:
+            flags.update(opt for opt in action.option_strings if opt.startswith("--"))
+        return flags
+
+    def check(cmds: list, prefix: str = "") -> None:
+        for cmd in cmds:
+            path = f"{prefix} {cmd['name']}".strip()
+            subs = cmd.get("subcommands") or []
+            if subs:
+                check(subs, path)
+                continue
+            declared = [a["name"] for a in (cmd.get("args") or []) if a["name"].startswith("--")]
+            if not declared:
+                continue
+            parser = parser_for(path)
+            assert parser is not None, f"no parser for catalogued command {path!r}"
+            real = flag_strings(parser)
+            unknown = [f for f in declared if f not in real]
+            assert not unknown, f"{path!r} catalogues unknown flags {unknown} (real: {sorted(real)})"
+
+    check(manifest.get("commands", []))
 
 
 # --------------------------------------------------------------- config schema
