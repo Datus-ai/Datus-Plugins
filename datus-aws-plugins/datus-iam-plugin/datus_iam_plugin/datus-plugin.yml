@@ -83,3 +83,73 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!iam' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: whoami
+    description: "Show the current caller identity (STS GetCallerIdentity)."
+  - name: roles
+    description: "Inspect IAM roles: list, get, attached, trust."
+    subcommands:
+      - name: list
+        description: "List IAM roles."
+        args:
+          - {name: --limit, description: "Maximum number of roles to return"}
+      - name: get
+        description: "Describe one role."
+        args:
+          - {name: name, required: true, description: "Role name"}
+      - name: attached
+        description: "List a role's attached managed policies."
+        args:
+          - {name: name, required: true, description: "Role name"}
+      - name: trust
+        description: "Show a role's trust (assume-role) policy."
+        args:
+          - {name: name, required: true, description: "Role name"}
+  - name: users
+    description: "Inspect IAM users: list, get, attached."
+    subcommands:
+      - name: list
+        description: "List IAM users."
+        args:
+          - {name: --limit, description: "Maximum number of users to return"}
+      - name: get
+        description: "Describe one user."
+        args:
+          - {name: name, required: true, description: "User name"}
+      - name: attached
+        description: "List a user's attached managed policies."
+        args:
+          - {name: name, required: true, description: "User name"}
+  - name: policies
+    description: "Inspect IAM managed policies: list, get, document."
+    subcommands:
+      - name: list
+        description: "List managed policies."
+        args:
+          - {name: --scope, description: "Policy scope: Local (default), AWS, or All"}
+          - {name: --limit, description: "Maximum number of policies to return"}
+      - name: get
+        description: "Describe one policy by ARN."
+        args:
+          - {name: arn, required: true, description: "Policy ARN"}
+      - name: document
+        description: "Print a policy's default-version JSON document."
+        args:
+          - {name: arn, required: true, description: "Policy ARN"}
+  - name: simulate
+    description: "Simulate whether actions are allowed."
+    subcommands:
+      - name: principal
+        description: "Simulate an existing principal's effective permissions."
+        args:
+          - {name: arn, required: true, description: "Principal ARN (role/user)"}
+          - {name: --action, required: true, description: "Action to test, e.g. s3:GetObject (repeatable)"}
+          - {name: --resource, description: "Resource ARN (repeatable; default '*')"}
+      - name: custom
+        description: "Simulate a standalone policy document."
+        args:
+          - {name: --policy, required: true, description: "Policy JSON document"}
+          - {name: --action, required: true, description: "Action to test (repeatable)"}
+          - {name: --resource, description: "Resource ARN (repeatable; default '*')"}

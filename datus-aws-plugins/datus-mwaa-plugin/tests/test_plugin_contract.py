@@ -216,3 +216,33 @@ def test_package_never_imports_datus():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+# ------------------------------------------------------------ command catalogue
+
+
+def _manifest_command_paths(manifest: dict) -> list:
+    """Leaf ``<group> <subcommand>`` paths declared in the ``commands`` catalogue."""
+
+    def walk(cmds: list, prefix: str = "") -> list:
+        out: list = []
+        for cmd in cmds:
+            path = f"{prefix} {cmd['name']}".strip()
+            subs = cmd.get("subcommands") or []
+            if subs:
+                out.extend(walk(subs, path))
+            else:
+                out.append(path)
+        return out
+
+    return walk(manifest.get("commands", []))
+
+
+def test_commands_catalogue_tracks_the_real_cli():
+    """The descriptive ``commands`` catalogue must mirror the real parser 1:1.
+
+    It powers the REPL's ``!<plugin>`` completion / argument hints (datus never
+    executes from it), so a stale or missing entry silently misleads users. A new
+    subcommand added to the CLI must be catalogued here, or this test fails.
+    """
+    assert set(_manifest_command_paths(load_manifest())) == set(_cli_command_paths())

@@ -86,3 +86,71 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!s3' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and cli/.
+commands:
+  - name: ls
+    description: "List objects under an S3 prefix (or list buckets when no URI is given)"
+    args:
+      - {name: uri, description: "s3://bucket/prefix/ (omit to list buckets)"}
+      - {name: --recursive, description: "Recurse into sub-prefixes"}
+      - {name: --limit, description: "Maximum number of objects to list"}
+  - name: stat
+    description: "Show object metadata (HEAD)"
+    args:
+      - {name: uri, required: true, description: "s3://bucket/key of the object"}
+  - name: cat
+    description: "Print an object's contents to stdout"
+    args:
+      - {name: uri, required: true, description: "s3://bucket/key of the object"}
+      - {name: --max-bytes, description: "Only fetch the first N bytes"}
+  - name: head
+    description: "Print the first lines of an object"
+    args:
+      - {name: uri, required: true, description: "s3://bucket/key of the object"}
+      - {name: --lines, description: "Number of lines to print (default 10)"}
+      - {name: --bytes, description: "Max bytes to fetch (default 64KiB)"}
+  - name: presign
+    description: "Generate a presigned URL for an object"
+    args:
+      - {name: uri, required: true, description: "s3://bucket/key of the object"}
+      - {name: --method, description: "HTTP method: GET or PUT (default GET)"}
+      - {name: --expires, description: "Seconds until expiry (default 3600)"}
+  - name: select
+    description: "Run an S3 Select SQL query over an object"
+    args:
+      - {name: uri, required: true, description: "s3://bucket/key of the object"}
+      - {name: --sql, required: true, description: "S3 Select SQL, e.g. select * from s3object s limit 10"}
+      - {name: --format, description: "Input format: csv, json or parquet (default csv)"}
+  - name: buckets
+    description: "List buckets and get a bucket's region"
+    subcommands:
+      - name: list
+        description: "List all buckets"
+      - name: location
+        description: "Get a bucket's region"
+        args:
+          - {name: bucket, required: true, description: "Bucket name"}
+  - name: cp
+    description: "Copy between local and S3 (or S3 to S3)"
+    args:
+      - {name: src, required: true, description: "Source path or s3:// URI"}
+      - {name: dst, required: true, description: "Destination path or s3:// URI"}
+      - {name: --recursive, description: "Copy directories/prefixes recursively"}
+  - name: sync
+    description: "Upload a local directory to S3 (new/changed files only)"
+    args:
+      - {name: src, required: true, description: "Local source directory"}
+      - {name: dst, required: true, description: "Destination s3:// URI"}
+  - name: mv
+    description: "Move (copy then delete source)"
+    args:
+      - {name: src, required: true, description: "Source path or s3:// URI"}
+      - {name: dst, required: true, description: "Destination path or s3:// URI"}
+      - {name: --recursive, description: "Move directories/prefixes recursively"}
+  - name: rm
+    description: "Delete object(s)"
+    args:
+      - {name: uri, required: true, description: "s3://bucket/key or prefix to delete"}
+      - {name: --recursive, description: "Delete all objects under the prefix"}
+      - {name: --yes, description: "Do not prompt for confirmation"}

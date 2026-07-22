@@ -81,3 +81,62 @@ config_schema:
       type: string
       description: "Max boto3 retry attempts"
       default: "3"
+
+# Descriptive CLI catalogue powering the '!emr-serverless' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and the CLI.
+commands:
+  - name: applications
+    description: "Manage EMR Serverless applications."
+    subcommands:
+      - name: list
+        description: "List EMR Serverless applications."
+        args:
+          - {name: --limit, description: "Maximum number of applications to return"}
+          - {name: --output, description: "Output format: table (default), json, or yaml"}
+      - name: get
+        description: "Describe one EMR Serverless application."
+        args:
+          - {name: app_id, required: true, description: "Application id to describe"}
+          - {name: --output, description: "Output format: table (default), json, or yaml"}
+      - name: start
+        description: "Start an application so it can run jobs."
+        args:
+          - {name: app_id, required: true, description: "Application id to start"}
+      - name: stop
+        description: "Stop an application."
+        args:
+          - {name: app_id, required: true, description: "Application id to stop"}
+  - name: jobs
+    description: "Run and monitor EMR Serverless Spark job runs."
+    subcommands:
+      - name: list
+        description: "List job runs of an application."
+        args:
+          - {name: app_id, required: true, description: "Application id whose job runs to list"}
+          - {name: --limit, description: "Maximum number of job runs to return"}
+          - {name: --output, description: "Output format: table (default), json, or yaml"}
+      - name: run-status
+        description: "Show the status of one job run."
+        args:
+          - {name: app_id, required: true, description: "Application id"}
+          - {name: run_id, required: true, description: "Job run id"}
+          - {name: --output, description: "Output format: table (default), json, or yaml"}
+      - name: dashboard
+        description: "Get the live Spark UI URL for a job run."
+        args:
+          - {name: app_id, required: true, description: "Application id"}
+          - {name: run_id, required: true, description: "Job run id"}
+      - name: cancel
+        description: "Cancel a running job run."
+        args:
+          - {name: app_id, required: true, description: "Application id"}
+          - {name: run_id, required: true, description: "Job run id"}
+      - name: run
+        description: "Submit a Spark job run (writes data, billed)."
+        args:
+          - {name: app_id, description: "Application id (defaults to the profile's application_id)"}
+          - {name: --entry-point, required: true, description: "Entry point, e.g. s3://bkt/job.py or a JAR"}
+          - {name: --entry-point-args, description: "Entry point arguments as a JSON array"}
+          - {name: --spark-submit-params, description: "Extra spark-submit parameters string"}
+          - {name: --execution-role, description: "IAM role ARN (defaults to the profile's execution_role_arn)"}
+          - {name: --name, description: "A name for the job run"}
+          - {name: --wait, description: "Poll until the run reaches a terminal state"}

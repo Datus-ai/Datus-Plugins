@@ -175,6 +175,12 @@ For each subcommand:
 (Repeat per subcommand. Group read-only vs. state-changing so the permission
 posture is obvious.)
 
+This command list is written twice into the manifest: as `permissions` patterns
+(the posture) and as the `commands` catalogue (the descriptive tree that powers
+`!<plugin>` completion — see [Declaring the CLI command catalogue](#declaring-the-cli-command-catalogue)).
+Command groups become nested `subcommands`; note each command's key arguments so
+the catalogue can hint them.
+
 Permission patterns are namespace-relative — Datus prefixes `datus <name> `
 automatically. Syntax: `cmd` exact, `cmd:*` prefix, `cmd:glob` prefix + first-arg
 glob, `:*` whole namespace. Only `normal` and `auto` profiles are accepted.
@@ -254,8 +260,10 @@ Implement in this order:
    Dependencies list the plugin's own libs, **never `datus`**.
 3. **The manifest** — write `datus_plugin_<name>/datus-plugin.yml` from the
    approved draft: `manifest_version: 1`, `description`, `cli`, `permissions`
-   (§2 table), `system_prompt`, `skills`, `config_schema` (§1 table). See
-   [The manifest](#the-manifest).
+   (§2 table), `system_prompt`, `skills`, `config_schema` (§1 table), and
+   `commands` (the §2 command list as a nested catalogue — see
+   [Declaring the CLI command catalogue](#declaring-the-cli-command-catalogue)).
+   See [The manifest](#the-manifest).
 4. **The CLI function** — `main(argv, profile)` using the routing style from
    the draft (see [CLI recipes](#cli-recipes)). Read endpoint/credentials from
    `profile`; map subcommands to operations; return conventional exit codes
@@ -397,6 +405,7 @@ required; every other key is optional:
 | `system_prompt` | path | Package-relative path of a Jinja2 template rendered into the agent's system prompt. |
 | `skills` | path | Package-relative path of a bundled skill directory. A `<name>-setup` skill must declare `requires_mutable_config: true` in its frontmatter (see "Bundling a setup skill"). |
 | `config_schema` | JSON Schema | Inline object schema describing one profile — drives the `/plugins` TUI form and validates profiles before saving. |
+| `commands` | list | Descriptive catalogue of the CLI commands (and nested subcommands / args) the `cli` function accepts — powers the REPL's `!<plugin>` completion and argument hints. Purely metadata; Datus never parses the plugin's args (see "Declaring the CLI command catalogue"). |
 
 A **code ref** is a dotted `module.path:function` string. Paths are relative to
 the package directory and may not escape it. Manifest parsing is defensive: a
@@ -438,6 +447,19 @@ config_schema:
       type: string
       description: "Request timeout in seconds"
       default: "30"
+
+commands:                        # descriptive CLI catalogue (see below)
+  - name: list-pets
+    description: "List pets in the inventory"
+    args:
+      - {name: --status, description: "filter by status"}
+  - name: pets                   # a command GROUP with nested subcommands
+    description: "Pet operations"
+    subcommands:
+      - name: get
+        description: "Fetch one pet by id"
+        args:
+          - {name: id, required: true, description: "pet id"}
 ```
 
 ## Configuration & profile resolution
@@ -855,6 +877,70 @@ Declare read-only subcommands as `allow` and state-changing ones as `ask` under
 `normal`; promote routine state changes to `allow` under `auto` only when
 re-running them is harmless.
 
+## Declaring the CLI command catalogue
+
+The manifest's `commands` key is a **descriptive catalogue** of the subcommands
+your `cli` function accepts. Datus never uses it to parse the plugin's arguments
+— the `cli` function still owns all of that. The catalogue exists so the
+interactive REPL can help a power user drive the plugin directly with the
+`!<plugin> …` escape hatch:
+
+- Typing `!<plugin> ` opens a completion menu of the top-level commands; drilling
+  into a command **group** (`!airflow dags `) lists that group's subcommands,
+  one level at a time.
+- Once a command is settled, a dim `<required> [--optional]` hint follows the
+  input line, naming the arguments still to supply.
+- `datus plugin info` prints the same catalogue.
+
+**Shape.** `commands` is a list; each entry has a `name` (the command token) plus
+optional `description`, `args`, and nested `subcommands` (same shape — this is
+how you model command groups like `dags trigger` or `glue crawlers run`). Each
+`args` entry has a `name` — a positional token (`table`) or a flag (`--limit`) —
+plus optional `required` (bool, default `false`) and `description`:
+
+```yaml
+commands:
+  # A flat command that takes arguments directly.
+  - name: ls
+    description: "List objects under a prefix"
+    args:
+      - {name: uri, required: true, description: "s3://bucket/prefix"}
+      - {name: --recursive, description: "recurse into sub-prefixes"}
+
+  # A command GROUP: no args of its own, only nested subcommands.
+  - name: dags
+    description: "DAG operations"
+    subcommands:
+      - name: trigger
+        description: "Trigger a DAG run"
+        args:
+          - {name: dag_id, required: true}
+          - {name: --conf, description: "run configuration JSON"}
+      - name: list
+        description: "List DAGs"
+```
+
+**Authoring guidance.**
+
+- **Mirror the `permissions` tree.** The command groups/subcommands you list here
+  are exactly the ones your `permissions` patterns already enumerate
+  (`dags trigger:*` → group `dags`, subcommand `trigger`). Keep the two in sync;
+  the catalogue is the human-facing view of the same surface.
+- **Nest to match the CLI.** A two-level CLI (`<group> <subcommand>`) uses one
+  level of `subcommands`; a flat CLI (`ls`, `cp`) uses top-level commands with
+  `args` and no `subcommands`. Nesting deeper than a handful of levels is
+  rejected defensively.
+- **Descriptive only, but keep it honest.** Because Datus does not parse these
+  args, an out-of-date catalogue only misleads completion — it never breaks
+  execution. Still, treat it as documentation: update it whenever the `cli`
+  function's commands or arguments change.
+- **`args` are optional.** Listing a subcommand with no `args` still gives useful
+  completion (the command menu); add the positional/flag args when you want the
+  argument-name hints too. Prioritise the arguments a user most needs prompting
+  for.
+- Malformed entries (a command without a `name`, a non-list `args`/`subcommands`)
+  are warned about and dropped individually, so one typo never discards the rest.
+
 ## Tool argument transformers
 
 The manifest's `tool_transformers` key lets a plugin intercept the **agent's
@@ -1061,5 +1147,6 @@ Before publishing, verify:
 - [ ] Secret config fields are marked `x-secret: true` in `config_schema` (in nested objects, mark the secret leaves); every non-secret field the prompt template references is declared in the schema.
 - [ ] The system-prompt template handles `profiles == {}` via `{% if profiles %}` and points at `<name>-setup` in the else branch.
 - [ ] `permissions` patterns are namespace-relative (no `datus <name>` prefix — Datus adds it), and state-changing subcommands are `ask` under `normal`.
+- [ ] `commands` catalogues the CLI surface (command groups as nested `subcommands`, key args per command) and stays in sync with the `permissions` tree and the `cli` function.
 - [ ] Skill files and the prompt template are packaged into the wheel.
 - [ ] The `datus.plugins` entry-point name matches the intended `datus <name>` command and the `agent.plugins.<name>` config key.
