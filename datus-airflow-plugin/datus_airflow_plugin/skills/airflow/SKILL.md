@@ -1,12 +1,13 @@
 ---
 name: airflow
-description: Operate a remote Apache Airflow 3.x deployment (list/trigger/monitor DAGs, tasks, variables, connections, pools, backfills) and deploy DAG files to S3 or a dags folder via the `datus airflow` CLI
+description: Operate a remote Apache Airflow 2.x or 3.x deployment (list/trigger/monitor DAGs, tasks, variables, connections, pools, backfills) and deploy DAG files to S3 or a dags folder via the `datus airflow` CLI
 ---
 
 # Airflow
 
-`datus airflow` drives a remote Apache Airflow 3.x deployment through its REST
-API v2. Command groups mirror the Airflow CLI. Global usage:
+`datus airflow` drives a remote Apache Airflow deployment through REST API v1
+(Airflow 2.x, Basic Auth) or v2 (Airflow 3.x, JWT). Command groups mirror the
+Airflow CLI. Global usage:
 
 ```
 datus airflow [--profile <env>] <group> <subcommand> [args...]
@@ -103,3 +104,7 @@ datus airflow version | health | providers list | plugins | config list | config
 0 success · 1 runtime/API error (also: failed run with `--wait`, failed
 connection test, unhealthy `health`) · 2 usage error · 3 profile/config
 error · 8 missing dependency (boto3, if the environment stripped it).
+
+`assets` and the top-level `backfill` API are Airflow 3/API v2 features. The
+Airflow 2/API v1 compatibility path covers DAG, run, task, log, variable,
+connection, pool, server-info, and DAG deployment operations.

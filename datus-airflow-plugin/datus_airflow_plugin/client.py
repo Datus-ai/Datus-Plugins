@@ -1,9 +1,9 @@
-"""Minimal Airflow REST API v2 client (Airflow 3.x).
+"""Minimal Airflow REST API client for Airflow 2.x v1 and 3.x v2.
 
-Authentication follows the Airflow 3 model: either a static JWT provided in
-the profile, or username/password exchanged for a JWT at ``POST /auth/token``
-(the endpoint exposed by both SimpleAuthManager and FabAuthManager).
-Fetched tokens are cached on disk (0600) and refreshed transparently on 401.
+Airflow 3 authentication uses either a static JWT or username/password
+exchanged at ``POST /auth/token``. Airflow 2 uses Basic Auth for the stable
+``/api/v1`` API. Fetched v2 tokens are cached on disk (0600) and refreshed
+transparently on 401.
 """
 
 from __future__ import annotations
@@ -20,7 +20,6 @@ import requests
 from .config import Settings
 from .errors import ApiError, ConfigError
 
-API_PREFIX = "/api/v2"
 # Matches the server-side default page size; never exceeds the default
 # [api] maximum_page_limit, so pagination works against stock servers.
 PAGE_SIZE = 50
@@ -46,11 +45,19 @@ class AirflowClient:
         self._session = session or requests.Session()
         self._static_token = bool(settings.token)
         self._token: Optional[str] = settings.token
+        if self.is_v1 and not settings.token and settings.username:
+            self._session.auth = (settings.username, settings.password or "")
+
+    @property
+    def is_v1(self) -> bool:
+        return self.settings.api_version == "v1"
 
     # ------------------------------------------------------------------ auth
 
     def _can_login(self) -> bool:
-        return bool(self.settings.username and self.settings.password is not None)
+        return not self.is_v1 and bool(
+            self.settings.username and self.settings.password is not None
+        )
 
     def _cache_path(self) -> Optional[str]:
         if not self.settings.cache_token:
@@ -148,7 +155,7 @@ class AirflowClient:
     def _api_url(self, path: str) -> str:
         if not path.startswith("/"):
             path = "/" + path
-        return f"{self.base_url}{API_PREFIX}{path}"
+        return f"{self.base_url}/api/{self.settings.api_version}{path}"
 
     def request(
         self,
@@ -164,7 +171,7 @@ class AirflowClient:
         resp: Optional[requests.Response] = None
         for attempt in (1, 2):
             headers = {"Accept": accept}
-            token = self._get_token()
+            token = self._token if self.is_v1 else self._get_token()
             if token:
                 headers["Authorization"] = f"Bearer {token}"
             resp = self._session.request(
@@ -185,11 +192,14 @@ class AirflowClient:
 
         assert resp is not None
         if resp.status_code == 401:
-            hint = (
-                "the configured token was rejected"
-                if self._static_token
-                else "authentication failed"
-            )
+            if self.is_v1 and not self._static_token:
+                hint = "Basic Auth failed"
+            else:
+                hint = (
+                    "the configured token was rejected"
+                    if self._static_token
+                    else "authentication failed"
+                )
             raise ApiError(
                 f"HTTP 401 for {method} {path}: {hint} — {_extract_detail(resp)}",
                 status_code=401,

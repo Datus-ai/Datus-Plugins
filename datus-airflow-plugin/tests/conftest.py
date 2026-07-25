@@ -50,6 +50,7 @@ class FakeSession:
     def __init__(self):
         self.routes: Dict[tuple, Any] = {}
         self.calls: List[Dict[str, Any]] = []
+        self.auth = None
 
     def add(self, method: str, path: str, response: Any) -> None:
         self.routes[(method.upper(), path)] = response
@@ -63,6 +64,7 @@ class FakeSession:
             "params": jsonlib.loads(jsonlib.dumps(params)) if params is not None else None,
             "json": jsonlib.loads(jsonlib.dumps(json)) if json is not None else None,
             "headers": dict(headers or {}),
+            "auth": self.auth,
             "verify": verify,
             "timeout": timeout,
         }

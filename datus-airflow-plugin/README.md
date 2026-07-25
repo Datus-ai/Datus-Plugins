@@ -1,8 +1,8 @@
 # datus-airflow-plugin
 
-A [Datus](https://datus.ai) plugin that drives **remote Apache Airflow 3.x**
-deployments from `datus airflow ...`, backed entirely by the
-[Airflow REST API v2](https://airflow.apache.org/docs/apache-airflow/3.1.6/stable-rest-api-ref.html)
+A [Datus](https://datus.ai) plugin that drives **remote Apache Airflow 2.x or
+3.x** deployments from `datus airflow ...`, backed entirely by the stable REST
+API (`/api/v1` for Airflow 2, `/api/v2` for Airflow 3)
 — no Airflow installation needed on the client. Command groups mirror the
 Airflow CLI, plus a `dags deploy` command that ships DAG files to **S3** or a
 local/mounted dags folder and verifies the scheduler picked them up.
@@ -24,7 +24,8 @@ agent:
     airflow:
       prod:
         default: true
-        api_base_url: https://airflow.example.com   # server root, without /api/v2
+        api_base_url: https://airflow.example.com/api/v1
+        api_version: auto                          # URL suffix selects v1; no suffix defaults to v2
         username: admin
         password: ${AIRFLOW_PASSWORD}               # or a static JWT: token: ${AIRFLOW_API_TOKEN}
         dags_folder: s3://my-bucket/dags/           # default `dags deploy` target
@@ -42,7 +43,8 @@ agent:
 Select an environment with `datus airflow --profile staging ...`; the
 `default: true` profile is used otherwise.
 
-Authentication follows the Airflow 3 model: username/password are exchanged
+For Airflow 2 API v1, username/password use HTTP Basic Auth. Authentication
+for Airflow 3 follows its JWT model: username/password are exchanged
 for a JWT at `POST /auth/token` (SimpleAuthManager and FabAuthManager both
 expose it; override the URL with `auth_token_url` if needed). Tokens are
 cached under `~/.cache/datus-airflow-plugin/` (0600) and refreshed on expiry;

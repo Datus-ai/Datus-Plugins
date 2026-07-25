@@ -128,8 +128,41 @@ def test_validation_error_detail_is_flattened(fake_session, tmp_path):
 def test_base_url_normalization():
     s = Settings.from_profile({"api_base_url": "http://host:8080/api/v2/"})
     assert s.base_url == "http://host:8080"
+    assert s.api_version == "v2"
+    s = Settings.from_profile({"api_base_url": "http://host:8080/api/v1/"})
+    assert s.base_url == "http://host:8080"
+    assert s.api_version == "v1"
+    s = Settings.from_profile({"api_base_url": "http://host:8080", "api_version": "v1"})
+    assert s.api_version == "v1"
     with pytest.raises(ConfigError):
         Settings.from_profile({"api_base_url": "host:8080"})
+    with pytest.raises(ConfigError):
+        Settings.from_profile({"api_base_url": "http://host:8080", "api_version": "v3"})
+
+
+def test_v1_uses_basic_auth_without_token_exchange(fake_session, tmp_path):
+    settings = make_settings(
+        tmp_path, api_version="v1", username="admin", password="pw"
+    )
+    client = AirflowClient(settings, session=fake_session)
+    fake_session.add("GET", "/api/v1/version", FakeResponse(json_data={"version": "2.10.5"}))
+
+    assert client.request("GET", "/version")["version"] == "2.10.5"
+    call = fake_session.calls[0]
+    assert call["auth"] == ("admin", "pw")
+    assert "Authorization" not in call["headers"]
+    assert not fake_session.calls_to("POST", "/auth/token")
+
+
+def test_v1_static_token_is_still_sent_as_bearer(fake_session, tmp_path):
+    client = AirflowClient(
+        make_settings(tmp_path, api_version="v1", token="v1-jwt"),
+        session=fake_session,
+    )
+    fake_session.add("GET", "/api/v1/version", FakeResponse(json_data={"version": "2.10.5"}))
+
+    client.request("GET", "/version")
+    assert fake_session.calls[0]["headers"]["Authorization"] == "Bearer v1-jwt"
 
 
 def test_paginate_walks_all_pages(fake_session, tmp_path):
