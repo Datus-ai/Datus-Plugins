@@ -73,6 +73,81 @@ def test_dags_pause_uses_update_mask(run_cli, fake_session, capsys):
     assert call["json"] == {"is_paused": True}
 
 
+def test_v1_dag_lifecycle_uses_stable_api_shapes(
+    run_cli, fake_session, settings, capsys
+):
+    settings.api_version = "v1"
+    settings.token = None
+    settings.username = "admin"
+    settings.password = "pw"
+    fake_session.add(
+        "GET", "/api/v1/dags/etl",
+        FakeResponse(json_data={"dag_id": "etl", "is_paused": False}),
+    )
+    fake_session.add(
+        "PATCH", "/api/v1/dags/etl",
+        FakeResponse(json_data={"dag_id": "etl", "is_paused": True}),
+    )
+    fake_session.add(
+        "POST", "/api/v1/dags/etl/dagRuns",
+        FakeResponse(json_data={"dag_run_id": "manual__1", "state": "queued"}),
+    )
+
+    assert run_cli(["dags", "details", "etl", "-o", "json"], settings) == 0
+    assert run_cli(["dags", "pause", "etl"], settings) == 0
+    assert run_cli(
+        ["dags", "trigger", "etl", "--logical-date", "2026-07-05T00:00:00Z"],
+        settings,
+    ) == 0
+
+    patch_call = fake_session.calls_to("PATCH", "/api/v1/dags/etl")[0]
+    assert patch_call["params"] is None
+    assert patch_call["json"] == {"is_paused": True}
+    trigger_call = fake_session.calls_to("POST", "/api/v1/dags/etl/dagRuns")[0]
+    assert trigger_call["json"]["execution_date"].startswith("2026-07-05T00:00:00")
+    assert "logical_date" not in trigger_call["json"]
+
+
+def test_v1_list_runs_maps_logical_date_filters(run_cli, fake_session, settings, capsys):
+    settings.api_version = "v1"
+    fake_session.add(
+        "GET",
+        "/api/v1/dags/etl/dagRuns",
+        FakeResponse(json_data=paged("dag_runs", [])),
+    )
+
+    assert run_cli([
+        "dags",
+        "list-runs",
+        "etl",
+        "--logical-date-gte",
+        "2026-07-01",
+        "--logical-date-lte",
+        "2026-07-31",
+    ], settings) == 0
+
+    params = fake_session.calls[0]["params"]
+    assert params["order_by"] == "-execution_date"
+    assert params["execution_date_gte"].startswith("2026-07-01T00:00:00")
+    assert params["execution_date_lte"].startswith("2026-07-31T00:00:00")
+    assert "logical_date_gte" not in params
+    assert "logical_date_lte" not in params
+
+
+def test_v1_health_uses_health_endpoint(run_cli, fake_session, settings, capsys):
+    settings.api_version = "v1"
+    fake_session.add(
+        "GET", "/api/v1/health",
+        FakeResponse(json_data={
+            "metadatabase": {"status": "healthy"},
+            "scheduler": {"status": "healthy"},
+        }),
+    )
+
+    assert run_cli(["health"], settings) == 0
+    assert fake_session.calls[0]["path"] == "/api/v1/health"
+
+
 def test_dags_state_prints_run_state(run_cli, fake_session, capsys):
     fake_session.add(
         "GET", "/api/v2/dags/etl/dagRuns/r1", FakeResponse(json_data={"state": "success"})

@@ -20,7 +20,8 @@ agent:
     airflow:
       prod:
         default: true                        # mark exactly one profile as default
-        api_base_url: https://airflow.example.com   # required — server root, without /api/v2
+        api_base_url: https://airflow.example.com/api/v1  # v1 suffix selects Airflow 2
+        api_version: auto                           # auto | v1 | v2
 
         # auth — EITHER a static JWT token:
         token: ${AIRFLOW_API_TOKEN}          # secret — env var reference, never a literal
@@ -47,8 +48,9 @@ agent:
 ## Steps
 
 1. Ask the user for:
-   - `api_base_url` — the Airflow web server root (Airflow 3.x; the plugin
-     calls `<api_base_url>/api/v2/...`).
+   - `api_base_url` — the Airflow web server root. An `/api/v1` suffix selects
+     Airflow 2 with Basic Auth; `/api/v2` selects Airflow 3 with JWT. Without a
+     suffix, `api_version` defaults to v2.
    - Auth method: a ready-made API token, **or** username + password. For the
      secret, have the user export an environment variable (e.g.
      `export AIRFLOW_PASSWORD=...`) and write `${VAR}` into the YAML — never a

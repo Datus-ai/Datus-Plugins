@@ -3,7 +3,7 @@
 # lazily, when `datus airflow ...` is dispatched.
 manifest_version: 1
 
-description: "Drive remote Apache Airflow 3.x deployments from `datus airflow` (REST API v2), with DAG deploy to S3 or a dags folder."
+description: "Drive remote Apache Airflow 2.x/3.x deployments from `datus airflow` (REST API v1/v2), with DAG deploy to S3 or a dags folder."
 
 # Called as main(argv: list[str], profile: dict) -> int on `datus airflow ...`.
 cli: datus_airflow_plugin.cli:main
@@ -167,7 +167,12 @@ config_schema:
   properties:
     api_base_url:
       type: string
-      description: "Airflow web server root URL, without /api/v2 (e.g. https://airflow.example.com)"
+      description: "Airflow web server root URL; an /api/v1 or /api/v2 suffix also selects that API generation"
+    api_version:
+      type: string
+      enum: [auto, v1, v2]
+      description: "REST API generation; auto infers a URL suffix and otherwise defaults to v2"
+      default: auto
     token:
       type: string
       description: "Static JWT API token (alternative to username/password); use a ${ENV_VAR} reference"

@@ -16,7 +16,7 @@
 -#}
 {% if profiles %}
 ## Airflow
-Operate remote Apache Airflow 3.x deployments through `datus airflow <group> <subcommand>` (REST API backed; supports `--profile <env>` before the group).
+Operate remote Apache Airflow 2.x/3.x deployments through `datus airflow <group> <subcommand>` (REST API v1/v2 backed; supports `--profile <env>` before the group).
 Groups: `dags` (list, details, list-runs, trigger [--wait], pause/unpause, state, clear-run, delete, show, source, next-execution, list-import-errors, and `deploy` to ship DAG files to S3 or a dags folder), `tasks` (list, state, states-for-dag-run, clear, failed-deps, logs), `variables`, `connections`, `pools` (each with list/get/set-or-add/delete/import/export), `assets` (list, details, materialize, events), `backfill` (create/list/pause/unpause/cancel), `providers list`, `plugins`, `config`, `jobs check`, `version`, `health`.
 Add `-o json` for machine-readable output. Consult the `airflow` skill for details before composing non-trivial commands.
 Environments ({{ profiles | length }}):

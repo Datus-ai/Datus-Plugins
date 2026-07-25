@@ -16,11 +16,13 @@ from .errors import ConfigError
 
 DEFAULT_TIMEOUT = 30.0
 DEFAULT_CACHE_DIR = "~/.cache/datus-airflow-plugin"
+API_VERSIONS = ("v1", "v2")
 
 
 def _normalize_base_url(raw: str) -> str:
     url = raw.strip().rstrip("/")
-    # Users often paste the full API root; the client appends /api/v2 itself.
+    # Users often paste the full API root; the client appends the selected
+    # /api/v1 or /api/v2 prefix itself.
     for suffix in ("/api/v2", "/api/v1"):
         if url.endswith(suffix):
             url = url[: -len(suffix)]
@@ -29,6 +31,24 @@ def _normalize_base_url(raw: str) -> str:
             f"api_base_url must start with http:// or https:// (got {raw!r})"
         )
     return url
+
+
+def _resolve_api_version(raw_url: str, raw_version: Any) -> str:
+    """Resolve the REST API generation, preserving URL suffix compatibility."""
+    if raw_version is None or str(raw_version).strip().lower() == "auto":
+        normalized_url = raw_url.strip().rstrip("/").lower()
+        if normalized_url.endswith("/api/v1"):
+            return "v1"
+        if normalized_url.endswith("/api/v2"):
+            return "v2"
+        return "v2"
+    value = str(raw_version).strip().lower()
+    value = {"1": "v1", "2": "v2"}.get(value, value)
+    if value not in API_VERSIONS:
+        raise ConfigError(
+            f"api_version must be one of: auto, v1, v2 (got {raw_version!r})"
+        )
+    return value
 
 
 @dataclass
@@ -60,6 +80,7 @@ class S3Settings:
 class Settings:
     profile_name: str = ""
     base_url: Optional[str] = None
+    api_version: str = "v2"
     token: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
@@ -79,7 +100,11 @@ class Settings:
 
         raw_url = data.get("api_base_url") or data.get("base_url")
         if raw_url:
-            settings.base_url = _normalize_base_url(str(raw_url))
+            raw_url = str(raw_url)
+            settings.api_version = _resolve_api_version(raw_url, data.get("api_version"))
+            settings.base_url = _normalize_base_url(raw_url)
+        elif data.get("api_version") is not None:
+            settings.api_version = _resolve_api_version("", data.get("api_version"))
 
         for key in ("token", "username", "password", "auth_token_url", "dags_folder"):
             value = data.get(key)

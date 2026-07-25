@@ -135,23 +135,31 @@ def cmd_list(ctx: Context, ns) -> int:
 
 
 def cmd_details(ctx: Context, ns) -> int:
-    data = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}/details")
+    suffix = "" if ctx.client.is_v1 else "/details"
+    data = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}{suffix}")
     print(render_one(data, ns.output))
     return 0
 
 
 def cmd_list_runs(ctx: Context, ns) -> int:
+    order_by = ns.order_by
+    if ctx.client.is_v1 and order_by == "-run_after":
+        order_by = "-execution_date"
     params: Dict[str, Any] = {
         "state": ns.state,
-        "order_by": ns.order_by,
+        "order_by": order_by,
     }
+    date_field = "execution_date" if ctx.client.is_v1 else "logical_date"
     if ns.logical_date_gte:
-        params["logical_date_gte"] = parse_datetime_arg(ns.logical_date_gte, "--logical-date-gte")
+        params[f"{date_field}_gte"] = parse_datetime_arg(ns.logical_date_gte, "--logical-date-gte")
     if ns.logical_date_lte:
-        params["logical_date_lte"] = parse_datetime_arg(ns.logical_date_lte, "--logical-date-lte")
+        params[f"{date_field}_lte"] = parse_datetime_arg(ns.logical_date_lte, "--logical-date-lte")
     rows = ctx.client.paginate(
         f"/dags/{quote_path_part(ns.dag_id)}/dagRuns", "dag_runs", params=params, limit=ns.limit
     )
+    if ctx.client.is_v1:
+        for row in rows:
+            row.setdefault("logical_date", row.get("execution_date"))
     columns = ["dag_id", "dag_run_id", "state", "run_type", "logical_date", "start_date", "end_date"]
     print(render_rows(rows, columns, ns.output))
     return 0
@@ -206,9 +214,18 @@ def cmd_show(ctx: Context, ns) -> int:
 
 
 def cmd_source(ctx: Context, ns) -> int:
-    params = {"version_number": ns.version_number} if ns.version_number else None
+    if ctx.client.is_v1:
+        dag = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}")
+        file_token = (dag or {}).get("file_token")
+        if not file_token:
+            raise PluginError(f"Airflow v1 returned no file_token for DAG {ns.dag_id!r}")
+        source_id = quote_path_part(str(file_token))
+        params = None
+    else:
+        source_id = quote_path_part(ns.dag_id)
+        params = {"version_number": ns.version_number} if ns.version_number else None
     text = ctx.client.request(
-        "GET", f"/dagSources/{quote_path_part(ns.dag_id)}", params=params, accept="text/plain"
+        "GET", f"/dagSources/{source_id}", params=params, accept="text/plain"
     )
     if isinstance(text, dict):  # server ignored the Accept header
         text = text.get("content", "")
@@ -218,10 +235,11 @@ def cmd_source(ctx: Context, ns) -> int:
 
 def cmd_pause(ctx: Context, ns) -> int:
     for dag_id in ns.dag_id:
+        params = None if ctx.client.is_v1 else {"update_mask": "is_paused"}
         data = ctx.client.request(
             "PATCH",
             f"/dags/{quote_path_part(dag_id)}",
-            params={"update_mask": "is_paused"},
+            params=params,
             json_body={"is_paused": ns.pause},
         )
         print(f"{data.get('dag_id', dag_id)}: is_paused={data.get('is_paused')}")
@@ -229,12 +247,13 @@ def cmd_pause(ctx: Context, ns) -> int:
 
 
 def cmd_trigger(ctx: Context, ns) -> int:
-    body: Dict[str, Any] = {
-        # required by the API but nullable; null lets the server assign it
-        "logical_date": parse_datetime_arg(ns.logical_date, "--logical-date")
-        if ns.logical_date
-        else None,
-    }
+    body: Dict[str, Any] = {}
+    if ns.logical_date:
+        date_key = "execution_date" if ctx.client.is_v1 else "logical_date"
+        body[date_key] = parse_datetime_arg(ns.logical_date, "--logical-date")
+    elif not ctx.client.is_v1:
+        # Required by API v2 but nullable; null lets the server assign it.
+        body["logical_date"] = None
     if ns.run_id:
         body["dag_run_id"] = ns.run_id
     if ns.conf:
@@ -281,10 +300,18 @@ def cmd_state(ctx: Context, ns) -> int:
 
 
 def cmd_clear_run(ctx: Context, ns) -> int:
-    path = f"/dags/{quote_path_part(ns.dag_id)}/dagRuns/{quote_path_part(ns.run_id)}/clear"
-    preview = ctx.client.request(
-        "POST", path, json_body={"dry_run": True, "only_failed": ns.only_failed}
-    )
+    if ctx.client.is_v1:
+        path = f"/dags/{quote_path_part(ns.dag_id)}/clearTaskInstances"
+        request_body = {
+            "dag_run_id": ns.run_id,
+            "dry_run": True,
+            "only_failed": ns.only_failed,
+            "only_running": False,
+        }
+    else:
+        path = f"/dags/{quote_path_part(ns.dag_id)}/dagRuns/{quote_path_part(ns.run_id)}/clear"
+        request_body = {"dry_run": True, "only_failed": ns.only_failed}
+    preview = ctx.client.request("POST", path, json_body=request_body)
     instances = (preview or {}).get("task_instances", [])
     columns = ["task_id", "map_index", "state", "try_number"]
     print(render_rows(instances, columns, ns.output))
@@ -296,7 +323,7 @@ def cmd_clear_run(ctx: Context, ns) -> int:
     if not confirm(f"clear {len(instances)} task instance(s) of run {ns.run_id}?", ns.yes):
         print("aborted")
         return 1
-    ctx.client.request("POST", path, json_body={"dry_run": False, "only_failed": ns.only_failed})
+    ctx.client.request("POST", path, json_body={**request_body, "dry_run": False})
     print(f"cleared {len(instances)} task instance(s)")
     return 0
 

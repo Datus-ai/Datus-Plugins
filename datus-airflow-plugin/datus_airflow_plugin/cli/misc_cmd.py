@@ -74,7 +74,8 @@ def cmd_version(ctx: Context, ns) -> int:
 
 
 def cmd_health(ctx: Context, ns) -> int:
-    data = ctx.client.request("GET", "/monitor/health") or {}
+    path = "/health" if ctx.client.is_v1 else "/monitor/health"
+    data = ctx.client.request("GET", path) or {}
     rows: List[Dict[str, Any]] = []
     unhealthy = False
     for component, details in data.items():
