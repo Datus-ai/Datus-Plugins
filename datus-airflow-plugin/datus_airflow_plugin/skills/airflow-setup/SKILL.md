@@ -34,6 +34,11 @@ agent:
         timeout: 30                          # request timeout in seconds
         dags_folder: s3://my-bucket/dags/    # default target for `dags deploy`
                                              # (or a mounted path like /opt/airflow/dags)
+
+        # optional scope guardrails (see "Scoping a profile" below):
+        dag_id_prefix: team_a_               # only team_a_* DAGs; comma-separate several
+        allow_commands: dags,tasks,version   # only these top-level groups
+
         s3:                                  # only for s3:// dags_folder, all optional
           region: us-east-1
           profile: my-aws-profile            # named AWS profile
@@ -68,6 +73,27 @@ agent:
 
 If this environment cannot edit the config file (API / web deployment), tell
 the user to edit `agent.yml` on the server instead.
+
+## Scoping a profile
+
+Offer these when one environment should only serve one team or project:
+
+- `dag_id_prefix` — commands taking a `dag_id` refuse ids outside the prefix
+  before any request; DAG listings are filtered to it. `assets materialize` and
+  `backfill pause|unpause|cancel` become unavailable (no `dag_id` to check).
+- `allow_commands` — allowlist of top-level groups, e.g. `dags,tasks,version`.
+  Group level only; `dags list` is a config error, write `dags`.
+
+Both appear in the system prompt per environment, so the agent knows the
+boundary without probing for it.
+
+Be explicit with the user that this is a **guardrail against mistakes, not a
+security boundary** — anyone who can edit `agent.yml` or reach the Airflow API
+bypasses it. Real multi-tenancy needs server-side enforcement (DAG-level RBAC
+via FabAuthManager, or Airflow 3.2+ `[core] multi_team`), plus a separate
+Airflow user per profile so the server also limits what the token can do.
+Note that `variables`, `connections` and `pools` are instance-wide and cannot
+be prefix-scoped at all — leave them out of `allow_commands` if that matters.
 
 ## Troubleshooting
 

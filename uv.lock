@@ -136,7 +136,7 @@ wheels = [
 
 [[package]]
 name = "datus-airflow-plugin"
-version = "0.1.0"
+version = "0.3.0"
 source = { editable = "datus-airflow-plugin" }
 dependencies = [
     { name = "boto3" },
@@ -188,7 +188,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-cloudwatch-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-cloudwatch-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -210,7 +210,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-ecs-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-ecs-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -232,7 +232,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-emr-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-emr-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -254,7 +254,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-emr-serverless-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-emr-serverless-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -276,7 +276,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-glue-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-glue-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -298,7 +298,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-iam-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-iam-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -320,7 +320,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-mwaa-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-mwaa-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -344,7 +344,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-quicksight-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-quicksight-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -366,7 +366,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-s3-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-s3-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
@@ -388,7 +388,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-statsig-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-statsig-plugin" }
 dependencies = [
     { name = "pyyaml" },

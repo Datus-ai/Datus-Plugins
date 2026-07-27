@@ -80,6 +80,7 @@ def _body_from_args(ns) -> Dict[str, Any]:
 
 
 def cmd_create(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     body = _body_from_args(ns)
     if ns.dry_run:
         data = ctx.client.request("POST", "/backfills/dry_run", json_body=body)
@@ -93,6 +94,7 @@ def cmd_create(ctx: Context, ns) -> int:
 
 
 def cmd_list(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     rows = ctx.client.paginate(
         "/backfills", "backfills", params={"dag_id": ns.dag_id}, limit=ns.limit
     )
@@ -101,6 +103,11 @@ def cmd_list(ctx: Context, ns) -> int:
 
 
 def cmd_update_state(ctx: Context, ns) -> int:
+    # Only a backfill_id is given, so there is no dag_id to match the prefix against.
+    ctx.reject_when_scoped(
+        f"backfill {ns.action}",
+        "`backfill list --dag-id <dag>` plus the Airflow UI, or a profile without dag_id_prefix",
+    )
     data = ctx.client.request("PUT", f"/backfills/{ns.backfill_id}/{ns.action}")
     print(render_one(data, ns.output))
     return 0

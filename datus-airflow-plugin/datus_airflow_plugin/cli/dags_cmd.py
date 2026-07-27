@@ -123,18 +123,24 @@ def cmd_list(ctx: Context, ns) -> int:
         "tags": ns.tags,
         "owners": ns.owners,
     }
+    if params["dag_id_pattern"] is None and len(ctx.settings.dag_id_prefix) == 1:
+        # Narrows what the server sends back. dag_id_pattern is a substring
+        # match on both API generations, so filter_dag_rows below is what
+        # actually enforces the prefix.
+        params["dag_id_pattern"] = ctx.settings.dag_id_prefix[0]
     if ns.paused:
         params["paused"] = "true"
     elif ns.unpaused:
         params["paused"] = "false"
     if ns.include_stale:
         params["exclude_stale"] = "false"
-    rows = ctx.client.paginate("/dags", "dags", params=params, limit=ns.limit)
+    rows = ctx.filter_dag_rows(ctx.client.paginate("/dags", "dags", params=params, limit=ns.limit))
     print(render_rows(rows, ["dag_id", "fileloc", "owners", "is_paused"], ns.output))
     return 0
 
 
 def cmd_details(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     suffix = "" if ctx.client.is_v1 else "/details"
     data = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}{suffix}")
     print(render_one(data, ns.output))
@@ -142,6 +148,8 @@ def cmd_details(ctx: Context, ns) -> int:
 
 
 def cmd_list_runs(ctx: Context, ns) -> int:
+    if ns.dag_id != "~":  # "~" means "across every DAG" — filtered after the call
+        ctx.check_dag_id(ns.dag_id)
     order_by = ns.order_by
     if ctx.client.is_v1 and order_by == "-run_after":
         order_by = "-execution_date"
@@ -160,6 +168,8 @@ def cmd_list_runs(ctx: Context, ns) -> int:
     if ctx.client.is_v1:
         for row in rows:
             row.setdefault("logical_date", row.get("execution_date"))
+    if ns.dag_id == "~":
+        rows = ctx.filter_dag_rows(rows)
     columns = ["dag_id", "dag_run_id", "state", "run_type", "logical_date", "start_date", "end_date"]
     print(render_rows(rows, columns, ns.output))
     return 0
@@ -172,10 +182,17 @@ def cmd_list_import_errors(ctx: Context, ns) -> int:
         row["error"] = stack.strip().splitlines()[-1] if stack.strip() else ""
     columns = ["filename", "bundle_name", "timestamp", "error"]
     print(render_rows(rows, columns, ns.output))
+    if ctx.settings.scoped:
+        # import errors are keyed by filename, which cannot be mapped to a
+        # dag_id reliably (one file may declare several DAGs, or none)
+        print(
+            "note: import errors are not filtered by dag_id_prefix", file=sys.stderr
+        )
     return 0
 
 
 def cmd_show(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     data = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}/tasks")
     tasks: List[Dict[str, Any]] = data.get("tasks", [])
     by_id = {t["task_id"]: t for t in tasks}
@@ -214,6 +231,7 @@ def cmd_show(ctx: Context, ns) -> int:
 
 
 def cmd_source(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     if ctx.client.is_v1:
         dag = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}")
         file_token = (dag or {}).get("file_token")
@@ -234,6 +252,7 @@ def cmd_source(ctx: Context, ns) -> int:
 
 
 def cmd_pause(ctx: Context, ns) -> int:
+    ctx.check_dag_ids(ns.dag_id)  # all-or-nothing: never half-apply a bulk pause
     for dag_id in ns.dag_id:
         params = None if ctx.client.is_v1 else {"update_mask": "is_paused"}
         data = ctx.client.request(
@@ -247,6 +266,7 @@ def cmd_pause(ctx: Context, ns) -> int:
 
 
 def cmd_trigger(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     body: Dict[str, Any] = {}
     if ns.logical_date:
         date_key = "execution_date" if ctx.client.is_v1 else "logical_date"
@@ -291,6 +311,7 @@ def _wait_for_run(ctx: Context, dag_id: str, run_id: str, interval: float, timeo
 
 
 def cmd_state(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     run = ctx.client.request(
         "GET",
         f"/dags/{quote_path_part(ns.dag_id)}/dagRuns/{quote_path_part(ns.run_id)}",
@@ -300,6 +321,7 @@ def cmd_state(ctx: Context, ns) -> int:
 
 
 def cmd_clear_run(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     if ctx.client.is_v1:
         path = f"/dags/{quote_path_part(ns.dag_id)}/clearTaskInstances"
         request_body = {
@@ -329,6 +351,7 @@ def cmd_clear_run(ctx: Context, ns) -> int:
 
 
 def cmd_delete(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     if not confirm(
         f"delete DAG {ns.dag_id!r} and ALL its metadata (runs, task history)?", ns.yes
     ):
@@ -340,6 +363,7 @@ def cmd_delete(ctx: Context, ns) -> int:
 
 
 def cmd_next_execution(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     dag = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}")
     logical = dag.get("next_dagrun_logical_date")
     run_after = dag.get("next_dagrun_run_after")

@@ -38,10 +38,38 @@ agent:
         username: admin
         password: ${AIRFLOW_STAGING_PASSWORD}
         dags_folder: /opt/airflow/dags
+      team_a:                                       # scoped to one team's DAGs
+        api_base_url: https://airflow.example.com
+        token: ${AIRFLOW_TEAM_A_TOKEN}
+        dag_id_prefix: team_a_                      # only team_a_* DAGs
+        allow_commands: dags,tasks,version,health   # only these command groups
 ```
 
 Select an environment with `datus airflow --profile staging ...`; the
 `default: true` profile is used otherwise.
+
+### Scoping a profile
+
+Two optional fields narrow what the agent can do in an environment:
+
+| Field | Effect |
+|---|---|
+| `dag_id_prefix` | Every command taking a `dag_id` rejects ids outside the prefix **before** any request (exit 2); `dags list` / `dags list-runs` / `assets events` filter their output to it. Comma-separate several prefixes. |
+| `allow_commands` | Comma-separated allowlist of top-level groups. Groups left out do not exist in the parser at all, and `--help` only shows what remains. Group level only — `dags list` is rejected as a config error, write `dags`. |
+
+With `dag_id_prefix` set, `assets materialize` and `backfill pause|unpause|cancel`
+are refused: they take no `dag_id`, so the prefix cannot be checked before the
+action happens. Variables, connections and pools are instance-wide in Airflow
+and are never prefix-filtered — exclude them via `allow_commands` if a profile
+should not reach them.
+
+> **These are agent guardrails, not a security boundary.** Anyone who can edit
+> `agent.yml` or call the Airflow REST API directly bypasses them. Real tenant
+> isolation has to come from the server: DAG-level RBAC via FabAuthManager, or
+> Airflow 3.2+ `[core] multi_team`. The guardrails are complementary to the
+> manifest's `permissions` tree — that one classifies commands as auto-run vs.
+> confirm for *every* profile, these two limit *which* commands and DAGs a
+> single profile sees.
 
 For Airflow 2 API v1, username/password use HTTP Basic Auth. Authentication
 for Airflow 3 follows its JWT model: username/password are exchanged

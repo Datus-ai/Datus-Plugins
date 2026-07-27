@@ -12,12 +12,12 @@ import argparse
 import json
 import sys
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, Iterable, List, Optional, Set
 
 import requests
 
 from ..client import AirflowClient
-from ..config import Settings
+from ..config import COMMAND_GROUPS, Settings
 from ..errors import EXIT_USAGE, PluginError, UsageError
 from ..output import DEFAULT_FORMAT, FORMATS
 
@@ -36,6 +36,58 @@ class Context:
         if self._client is None:
             self._client = AirflowClient(self.settings)
         return self._client
+
+    # ------------------------------------------------------ scope guardrails
+    #
+    # `dag_id_prefix` keeps a profile pointed at one tenant's DAGs. Handlers
+    # validate *before* issuing any request, so an out-of-scope dag_id never
+    # reaches the server. This is an agent guardrail, not a security boundary —
+    # real isolation has to come from the Airflow server (RBAC / multi-team).
+
+    def _prefix_hint(self) -> str:
+        return ", ".join(repr(prefix) for prefix in self.settings.dag_id_prefix)
+
+    def allows_dag_id(self, dag_id: str) -> bool:
+        prefixes = self.settings.dag_id_prefix
+        return not prefixes or str(dag_id).startswith(prefixes)
+
+    def check_dag_id(self, dag_id: str) -> str:
+        """Return dag_id, or fail when the profile's prefix does not cover it."""
+        if not self.allows_dag_id(dag_id):
+            profile = self.settings.profile_name or "<default>"
+            raise UsageError(
+                f"dag_id {dag_id!r} is out of scope for profile {profile}: "
+                f"dag_id_prefix limits this environment to {self._prefix_hint()}"
+            )
+        return dag_id
+
+    def check_dag_ids(self, dag_ids: Iterable[str]) -> None:
+        """Validate every dag_id up front, so a bad one aborts the whole command."""
+        for dag_id in dag_ids:
+            self.check_dag_id(dag_id)
+
+    def filter_dag_rows(
+        self, rows: List[Dict[str, Any]], key: str = "dag_id"
+    ) -> List[Dict[str, Any]]:
+        if not self.settings.scoped:
+            return rows
+        kept = [row for row in rows if self.allows_dag_id(str(row.get(key) or ""))]
+        hidden = len(rows) - len(kept)
+        if hidden:
+            # stderr keeps `-o json` stdout machine-parseable
+            print(
+                f"note: {hidden} row(s) outside dag_id_prefix {self._prefix_hint()} hidden",
+                file=sys.stderr,
+            )
+        return kept
+
+    def reject_when_scoped(self, command: str, alternative: str) -> None:
+        """Refuse commands whose arguments carry no dag_id to check the prefix against."""
+        if self.settings.scoped:
+            raise UsageError(
+                f"`{command}` is unavailable while dag_id_prefix is set: it takes no "
+                f"dag_id, so the prefix cannot be enforced — use {alternative} instead"
+            )
 
 
 # ------------------------------------------------------------------ helpers
@@ -89,7 +141,12 @@ def quote_path_part(value: str) -> str:
 # ------------------------------------------------------------------- parser
 
 
-def build_parser() -> argparse.ArgumentParser:
+def build_parser(allowed: Optional[Set[str]] = None) -> argparse.ArgumentParser:
+    """Build the CLI parser; `allowed` (a profile's allow_commands) drops groups.
+
+    With ``allowed=None`` every group is registered — the manifest's `commands`
+    catalogue and permission patterns are validated against that full parser.
+    """
     from . import (
         assets_cmd,
         backfill_cmd,
@@ -100,6 +157,22 @@ def build_parser() -> argparse.ArgumentParser:
         tasks_cmd,
         variables_cmd,
     )
+
+    registrars = {
+        "dags": dags_cmd.register,
+        "tasks": tasks_cmd.register,
+        "variables": variables_cmd.register,
+        "connections": connections_cmd.register,
+        "pools": pools_cmd.register,
+        "assets": assets_cmd.register,
+        "backfill": backfill_cmd.register,
+        "version": misc_cmd.register_version,
+        "health": misc_cmd.register_health,
+        "providers": misc_cmd.register_providers,
+        "plugins": misc_cmd.register_plugins,
+        "config": misc_cmd.register_config,
+        "jobs": misc_cmd.register_jobs,
+    }
 
     parser = argparse.ArgumentParser(
         prog=PROG,
@@ -113,20 +186,44 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub = parser.add_subparsers(dest="group", required=True, metavar="<command>")
 
-    dags_cmd.register(sub)
-    tasks_cmd.register(sub)
-    variables_cmd.register(sub)
-    connections_cmd.register(sub)
-    pools_cmd.register(sub)
-    assets_cmd.register(sub)
-    backfill_cmd.register(sub)
-    misc_cmd.register(sub)
+    # COMMAND_GROUPS drives both the order and the completeness of registration
+    for name in COMMAND_GROUPS:
+        if allowed is None or name in allowed:
+            registrars[name](sub)
 
     return parser
 
 
+def _reject_disabled_group(
+    argv: List[str], allowed: Optional[Set[str]], profile_name: str
+) -> None:
+    """Turn `allow_commands` misses into a clear policy error.
+
+    Without this the filtered parser would only say "invalid choice", which
+    reads like a typo rather than a profile restriction.
+    """
+    if not allowed:
+        return
+    group = next((token for token in argv if not token.startswith("-")), None)
+    if group is None or group not in COMMAND_GROUPS or group in allowed:
+        return  # unknown names stay argparse's job
+    profile = profile_name or "<default>"
+    raise UsageError(
+        f"command group {group!r} is disabled by allow_commands in profile {profile} "
+        f"(available: {', '.join(sorted(allowed))})"
+    )
+
+
 def main(argv: List[str], profile: Dict[str, Any]) -> int:
-    parser = build_parser()
+    try:
+        settings = Settings.from_profile(profile)
+        allowed = settings.allowed_groups()
+        _reject_disabled_group(argv, allowed, settings.profile_name)
+    except PluginError as exc:  # bad profile / disabled group: report before parsing
+        print(f"error: {exc}", file=sys.stderr)
+        return exc.exit_code
+
+    parser = build_parser(allowed)
     try:
         ns = parser.parse_args(argv)
     except SystemExit as exc:  # -h or usage error; keep the CLI convention
@@ -136,7 +233,6 @@ def main(argv: List[str], profile: Dict[str, Any]) -> int:
         return code if isinstance(code, int) else EXIT_USAGE
 
     try:
-        settings = Settings.from_profile(profile)
         ctx = Context(settings)
         rc = ns.func(ctx, ns)
         return 0 if rc is None else int(rc)
