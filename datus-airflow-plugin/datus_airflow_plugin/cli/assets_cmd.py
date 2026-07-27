@@ -89,6 +89,12 @@ def cmd_details(ctx: Context, ns) -> int:
 
 
 def cmd_materialize(ctx: Context, ns) -> int:
+    # Materializing triggers whichever DAG produces the asset — that dag_id is
+    # not an argument here, so the prefix cannot be enforced before the run starts.
+    ctx.reject_when_scoped(
+        "assets materialize",
+        "`dags trigger <dag_id>` on the DAG that produces the asset",
+    )
     asset_id = _resolve_asset_id(ctx, ns)
     run = ctx.client.request("POST", f"/assets/{asset_id}/materialize")
     print(render_one(run, ns.output))
@@ -96,8 +102,11 @@ def cmd_materialize(ctx: Context, ns) -> int:
 
 
 def cmd_events(ctx: Context, ns) -> int:
+    if ns.source_dag_id:
+        ctx.check_dag_id(ns.source_dag_id)
     params = {"asset_id": ns.asset_id, "source_dag_id": ns.source_dag_id}
     rows = ctx.client.paginate("/assets/events", "asset_events", params=params, limit=ns.limit)
+    rows = ctx.filter_dag_rows(rows, key="source_dag_id")
     columns = ["asset_id", "source_dag_id", "source_task_id", "source_run_id", "timestamp"]
     print(render_rows(rows, columns, ns.output))
     return 0

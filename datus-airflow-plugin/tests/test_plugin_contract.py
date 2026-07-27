@@ -95,14 +95,37 @@ def test_config_schema_is_a_valid_json_schema():
 
 def test_config_schema_marks_credentials_secret():
     properties = _schema()["properties"]
+    # A credential field may be left out of the schema entirely (dropping
+    # `token` steers the /plugins form at username/password), but anything that
+    # IS declared must be masked — undeclared fields are stripped anyway, while
+    # a declared non-secret one would reach the system prompt verbatim.
+    assert "password" in properties, "username/password auth must stay configurable"
     for secret_field in ("token", "password"):
-        assert properties[secret_field]["x-secret"] is True, f"{secret_field} must never reach the prompt"
+        spec = properties.get(secret_field)
+        if spec is not None:
+            assert spec["x-secret"] is True, f"{secret_field} must never reach the prompt"
     s3_properties = properties["s3"]["properties"]
     for secret_field in ("secret_access_key", "session_token"):
         assert s3_properties[secret_field]["x-secret"] is True, f"s3.{secret_field} must never reach the prompt"
     # The s3 block itself stays non-secret so its non-credential leaves are
     # TUI-editable (they surface as dotted fields: s3.region, ...).
     assert {"api_base_url", "username", "dags_folder", "s3"} <= _non_secret_fields()
+
+
+def test_config_schema_exposes_the_scope_fields_to_the_prompt():
+    """dag_id_prefix / allow_commands must stay non-secret: the system prompt
+    has to show the agent which boundary it is operating under."""
+    assert {"dag_id_prefix", "allow_commands"} <= _non_secret_fields()
+
+
+def test_command_groups_constant_matches_the_parser():
+    """`allow_commands` is validated against config.COMMAND_GROUPS, and the
+    manifest's commands catalogue / permission patterns are validated against
+    the unfiltered parser. A new group must land in both, or one of them lies."""
+    from datus_airflow_plugin.cli import build_parser
+    from datus_airflow_plugin.config import COMMAND_GROUPS
+
+    assert set(_subparser_choices(build_parser())) == set(COMMAND_GROUPS)
 
 
 def test_config_schema_s3_matches_the_runtime_keys():
@@ -128,6 +151,8 @@ def test_config_schema_accepts_a_real_profile_and_requires_api_base_url():
         "verify_ssl": True,
         "timeout": 30,
         "dags_folder": "s3://bucket/dags/",
+        "dag_id_prefix": "team_a_",
+        "allow_commands": "dags,tasks,version",
         "s3": {"region": "us-east-1", "secret_access_key": "${AWS_SECRET_ACCESS_KEY}"},
     }
     assert list(validator.iter_errors(profile)) == []
@@ -220,6 +245,28 @@ def test_prompt_lists_environments_without_secrets():
     for secret in ("s3cr3t-password", "very-secret-jwt", "AKIAXXX", "aws-secret-key", "admin"):
         assert secret not in text
     assert "- prod: " in text and "- staging: " in text  # one line per environment
+
+
+def test_prompt_surfaces_scope_limits_per_environment():
+    text = _render_prompt({
+        "team_a": {
+            "name": "team_a",
+            "api_base_url": "https://airflow.example.com",
+            "allow_commands": "dags,tasks,version",
+            "dag_id_prefix": "team_a_",
+        },
+        "ops": {"name": "ops", "api_base_url": "https://airflow.example.com"},
+    })
+    assert "commands=dags,tasks,version" in text
+    assert "dag_prefix=team_a_" in text
+    assert "Scope limits apply per environment." in text
+    # the unrestricted environment stays a plain line
+    assert "- ops: api=https://airflow.example.com, auth=token" in text
+
+
+def test_prompt_omits_the_scope_note_when_nothing_is_limited():
+    text = _render_prompt({"prod": {"name": "prod", "api_base_url": "https://airflow.example.com"}})
+    assert "Scope limits" not in text
 
 
 def test_prompt_handles_a_profile_missing_optional_fields():

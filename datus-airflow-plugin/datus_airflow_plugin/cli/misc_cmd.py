@@ -12,25 +12,33 @@ from ..output import render_one, render_rows
 from . import Context, add_output_option
 
 
-def register(sub: argparse._SubParsersAction) -> None:
+def register_version(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("version", help="show server and plugin versions")
     add_output_option(p)
     p.set_defaults(func=cmd_version)
 
+
+def register_health(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("health", help="health of metadatabase, scheduler, triggerer, dag processor")
     add_output_option(p)
     p.set_defaults(func=cmd_health)
 
+
+def register_providers(sub: argparse._SubParsersAction) -> None:
     providers = sub.add_parser("providers", help="provider packages installed on the server")
     pgroup = providers.add_subparsers(dest="subcommand", required=True, metavar="<subcommand>")
     p = pgroup.add_parser("list", help="list providers")
     add_output_option(p)
     p.set_defaults(func=cmd_providers)
 
+
+def register_plugins(sub: argparse._SubParsersAction) -> None:
     p = sub.add_parser("plugins", help="list plugins loaded by the server")
     add_output_option(p)
     p.set_defaults(func=cmd_plugins)
 
+
+def register_config(sub: argparse._SubParsersAction) -> None:
     config = sub.add_parser("config", help="inspect server configuration (requires expose_config)")
     cgroup = config.add_subparsers(dest="subcommand", required=True, metavar="<subcommand>")
     p = cgroup.add_parser("list", help="list configuration options")
@@ -42,6 +50,8 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("option")
     p.set_defaults(func=cmd_config_get_value)
 
+
+def register_jobs(sub: argparse._SubParsersAction) -> None:
     jobs = sub.add_parser("jobs", help="query server jobs")
     jgroup = jobs.add_subparsers(dest="subcommand", required=True, metavar="<subcommand>")
     p = jgroup.add_parser("check", help="exit 0 when matching alive jobs exist, 1 otherwise")

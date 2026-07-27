@@ -84,6 +84,7 @@ def _ti_path(dag_id: str, run_id: str, task_id: str, map_index: int | None = Non
 
 
 def cmd_list(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     data = ctx.client.request("GET", f"/dags/{quote_path_part(ns.dag_id)}/tasks")
     rows = data.get("tasks", [])
     columns = ["task_id", "operator_name", "trigger_rule", "retries", "downstream_task_ids"]
@@ -92,12 +93,14 @@ def cmd_list(ctx: Context, ns) -> int:
 
 
 def cmd_state(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     ti = ctx.client.request("GET", _ti_path(ns.dag_id, ns.run_id, ns.task_id, ns.map_index))
     print(ti.get("state"))
     return 0
 
 
 def cmd_states_for_dag_run(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     rows = ctx.client.paginate(
         f"/dags/{quote_path_part(ns.dag_id)}/dagRuns/{quote_path_part(ns.run_id)}/taskInstances",
         "task_instances",
@@ -107,6 +110,7 @@ def cmd_states_for_dag_run(ctx: Context, ns) -> int:
 
 
 def cmd_clear(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     body: Dict[str, Any] = {
         # the API defaults only_failed to true; send both flags explicitly so the
         # CLI behaves like `airflow tasks clear` (clear everything unless narrowed)
@@ -156,6 +160,7 @@ def _matching_task_ids(ctx: Context, dag_id: str, pattern: str) -> List[str]:
 
 
 def cmd_failed_deps(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     path = _ti_path(ns.dag_id, ns.run_id, ns.task_id, ns.map_index) + "/dependencies"
     data = ctx.client.request("GET", path)
     deps = (data or {}).get("dependencies", [])
@@ -167,6 +172,7 @@ def cmd_failed_deps(ctx: Context, ns) -> int:
 
 
 def cmd_logs(ctx: Context, ns) -> int:
+    ctx.check_dag_id(ns.dag_id)
     try_number = ns.try_number
     if try_number is None:
         ti = ctx.client.request("GET", _ti_path(ns.dag_id, ns.run_id, ns.task_id, ns.map_index))

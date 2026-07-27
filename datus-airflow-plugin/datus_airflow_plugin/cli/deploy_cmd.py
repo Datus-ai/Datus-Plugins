@@ -120,6 +120,9 @@ def cmd_deploy(ctx: Context, ns) -> int:
 
     target = make_target(dest, ctx.settings)
     verify_ids: List[str] = ns.verify or []
+    # dag_id_prefix scopes dag_ids, not file paths — the destination stays
+    # governed by --dest / --prefix (see the profile scope docs).
+    ctx.check_dag_ids(verify_ids)
 
     # capture pre-deploy parse markers first, so "re-parsed" means "changed after upload"
     pre_state = {}

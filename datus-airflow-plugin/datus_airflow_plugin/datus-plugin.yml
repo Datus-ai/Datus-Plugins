@@ -173,10 +173,6 @@ config_schema:
       enum: [auto, v1, v2]
       description: "REST API generation; auto infers a URL suffix and otherwise defaults to v2"
       default: auto
-    token:
-      type: string
-      description: "Static JWT API token (alternative to username/password); use a ${ENV_VAR} reference"
-      x-secret: true
     username:
       type: string
       description: "Login username, exchanged for a JWT at POST /auth/token"
@@ -184,9 +180,6 @@ config_schema:
       type: string
       description: "Login password; use a ${ENV_VAR} reference"
       x-secret: true
-    auth_token_url:
-      type: string
-      description: "Override the token-exchange endpoint (default: <api_base_url>/auth/token)"
     verify_ssl:
       type: ["boolean", "string"]
       description: "true, false, or a CA bundle path for self-signed TLS"
@@ -198,6 +191,15 @@ config_schema:
     dags_folder:
       type: string
       description: "Default target for `dags deploy` (s3://bucket/prefix/ or a local/mounted path)"
+    # Scope guardrails. Both are non-secret on purpose: the system prompt has to
+    # show them so the agent knows the boundary up front. They constrain THIS
+    # CLI only — they are not a security boundary (see the airflow skill).
+    dag_id_prefix:
+      type: string
+      description: "Limit every dag_id-taking command to DAGs with this prefix (comma-separated for several); list output is filtered to it"
+    allow_commands:
+      type: string
+      description: "Comma-separated allowlist of top-level command groups (dags, tasks, variables, connections, pools, assets, backfill, version, health, providers, plugins, config, jobs); empty means all"
     s3:
       # boto3 overrides for `dags deploy` to an s3:// target. Nested fields
       # surface in the /plugins TUI as dotted names (s3.region, ...); the
@@ -238,14 +240,6 @@ config_schema:
         external_id:
           type: string
           description: "ExternalId for AssumeRole"
-    cache_token:
-      type: ["boolean", "string"]
-      description: "Cache the exchanged JWT under cache_dir"
-      default: true
-    cache_dir:
-      type: string
-      description: "Token cache directory"
-      default: "~/.cache/datus-airflow-plugin"
 
 # Descriptive CLI catalogue powering the '!airflow' REPL completer (see plugin dev skill). Kept in sync with the permissions tree and cli/.
 commands:

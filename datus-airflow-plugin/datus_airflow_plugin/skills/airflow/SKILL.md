@@ -18,6 +18,34 @@ datus airflow [--profile <env>] <group> <subcommand> [args...]
 show a curated column subset). Destructive commands prompt for confirmation —
 always pass `-y/--yes` when running non-interactively.
 
+## Profile scope limits
+
+An environment may restrict itself. The `## Airflow` prompt section shows this
+per environment as `commands=...` and `dag_prefix=...`; check it before
+composing a command rather than discovering the limit by failing.
+
+- **`dag_prefix=<prefix>`** — every `dag_id` argument must start with it.
+  Out-of-scope ids exit 2 *without contacting the server*, so a rejection tells
+  you nothing about whether that DAG exists. `dags list`, `dags list-runs`
+  (across all DAGs) and `assets events` silently drop rows outside the prefix
+  and report the count on stderr. Because they carry no `dag_id` to check,
+  `assets materialize` and `backfill pause|unpause|cancel` are unavailable —
+  use `dags trigger <dag_id>` instead of materializing an asset.
+- **`commands=<groups>`** — only those top-level groups exist. Anything else
+  exits 2 with a policy error; it is not a typo, do not retry variations.
+
+Not covered by `dag_prefix`: `variables`, `connections` and `pools` are
+instance-wide objects in Airflow, so their list/get/export output is never
+filtered — treat what you see there as shared with other teams. `dags
+list-import-errors` is also unfiltered (errors are keyed by filename, which
+does not map to a dag_id). `dags deploy` / `undeploy` target *file paths*, which
+the prefix does not constrain — only the `--verify <dag_id>` argument is checked.
+
+These limits are guardrails for you, not a security boundary; never work around
+one by, say, deploying a file that defines an out-of-scope DAG. If a task
+genuinely needs something outside the scope, say so and let the user widen the
+profile.
+
 ## DAGs
 
 ```
