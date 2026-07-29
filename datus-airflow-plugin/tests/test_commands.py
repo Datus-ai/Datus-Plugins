@@ -32,21 +32,51 @@ def test_dags_list_table_and_filters(run_cli, fake_session, capsys):
 
 def test_dags_trigger_sends_nullable_logical_date_and_conf(run_cli, fake_session, capsys):
     fake_session.add(
+        "GET", "/api/v2/dags/etl", FakeResponse(json_data={"dag_id": "etl", "is_paused": False})
+    )
+    fake_session.add(
         "POST",
         "/api/v2/dags/etl/dagRuns",
         FakeResponse(json_data={"dag_run_id": "manual__1", "state": "queued"}),
     )
     rc = run_cli(["dags", "trigger", "etl", "-c", '{"k": 1}', "--note", "from test"])
     assert rc == 0
-    body = fake_session.calls[0]["json"]
+    body = fake_session.calls_to("POST", "/api/v2/dags/etl/dagRuns")[0]["json"]
     assert body["logical_date"] is None  # required-but-nullable field always present
     assert body["conf"] == {"k": 1}
     assert body["note"] == "from test"
     assert "manual__1" in capsys.readouterr().out
 
 
+def test_dags_trigger_rejects_paused_dag_before_posting(run_cli, fake_session):
+    fake_session.add(
+        "GET", "/api/v2/dags/etl", FakeResponse(json_data={"dag_id": "etl", "is_paused": True})
+    )
+    with pytest.raises(UsageError, match="is paused"):
+        run_cli(["dags", "trigger", "etl"])
+    # no run created: a queued run on a paused DAG would hang `--wait` forever
+    assert fake_session.calls_to("POST", "/api/v2/dags/etl/dagRuns") == []
+
+
+def test_dags_trigger_proceeds_when_paused_state_is_unreadable(run_cli, fake_session):
+    # RBAC may hide GET /dags/{id}; the guardrail must not break trigger then
+    fake_session.add(
+        "GET", "/api/v2/dags/etl", FakeResponse(403, json_data={"detail": "forbidden"})
+    )
+    fake_session.add(
+        "POST",
+        "/api/v2/dags/etl/dagRuns",
+        FakeResponse(json_data={"dag_run_id": "manual__1", "state": "queued"}),
+    )
+    assert run_cli(["dags", "trigger", "etl"]) == 0
+    assert len(fake_session.calls_to("POST", "/api/v2/dags/etl/dagRuns")) == 1
+
+
 def test_dags_trigger_wait_polls_until_terminal(run_cli, fake_session, monkeypatch, capsys):
     monkeypatch.setattr("time.sleep", lambda s: None)
+    fake_session.add(
+        "GET", "/api/v2/dags/etl", FakeResponse(json_data={"dag_id": "etl", "is_paused": False})
+    )
     fake_session.add(
         "POST", "/api/v2/dags/etl/dagRuns", FakeResponse(json_data={"dag_run_id": "r1", "state": "queued"})
     )
@@ -80,6 +110,7 @@ def test_v1_dag_lifecycle_uses_stable_api_shapes(
     settings.token = None
     settings.username = "admin"
     settings.password = "pw"
+    # also serves trigger's paused pre-flight check, which stays on /api/v1
     fake_session.add(
         "GET", "/api/v1/dags/etl",
         FakeResponse(json_data={"dag_id": "etl", "is_paused": False}),
