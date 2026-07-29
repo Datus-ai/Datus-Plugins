@@ -327,7 +327,7 @@ commands:
           - {name: --only-failed, description: "only clear failed task instances"}
           - {name: --dry-run, description: "only show what would be cleared"}
       - name: trigger
-        description: "Trigger a new DAG run"
+        description: "Trigger a new DAG run (rejected when the DAG is paused)"
         args:
           - {name: dag_id, required: true, description: "DAG id"}
           - {name: --conf, description: "JSON dict passed to the run as conf"}

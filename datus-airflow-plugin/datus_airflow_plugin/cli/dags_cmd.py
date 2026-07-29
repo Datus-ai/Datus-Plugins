@@ -7,9 +7,10 @@ import sys
 import time
 from typing import Any, Dict, List
 
-from ..errors import PluginError, UsageError
+from ..errors import ApiError, PluginError, UsageError
 from ..output import render_one, render_rows
 from . import (
+    PROG,
     Context,
     add_output_option,
     confirm,
@@ -267,6 +268,7 @@ def cmd_pause(ctx: Context, ns) -> int:
 
 def cmd_trigger(ctx: Context, ns) -> int:
     ctx.check_dag_id(ns.dag_id)
+    _reject_when_paused(ctx, ns.dag_id)
     body: Dict[str, Any] = {}
     if ns.logical_date:
         date_key = "execution_date" if ctx.client.is_v1 else "logical_date"
@@ -291,6 +293,25 @@ def cmd_trigger(ctx: Context, ns) -> int:
     if not ns.wait:
         return 0
     return _wait_for_run(ctx, ns.dag_id, run["dag_run_id"], ns.interval, ns.timeout)
+
+
+def _reject_when_paused(ctx: Context, dag_id: str) -> None:
+    """Refuse to trigger a paused DAG — the scheduler never picks such a run up.
+
+    Airflow happily creates the run and leaves it `queued` forever, so without
+    this check `--wait` burns its whole timeout on a run that cannot start.
+    Best-effort: a server that hides `GET /dags/{dag_id}` must not break
+    trigger, so only a definite ``is_paused: true`` aborts.
+    """
+    try:
+        dag = ctx.client.request("GET", f"/dags/{quote_path_part(dag_id)}")
+    except ApiError:
+        return
+    if (dag or {}).get("is_paused"):
+        raise UsageError(
+            f"DAG {dag_id!r} is paused: the run would stay queued and never start — "
+            f"run `{PROG} dags unpause {dag_id}` first"
+        )
 
 
 def _wait_for_run(ctx: Context, dag_id: str, run_id: str, interval: float, timeout: float) -> int:

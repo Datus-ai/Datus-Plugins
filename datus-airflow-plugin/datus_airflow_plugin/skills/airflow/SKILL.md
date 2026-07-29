@@ -64,6 +64,9 @@ datus airflow dags list-import-errors
 ```
 
 `trigger --wait` polls until the run finishes: exit 0 = success, 1 = failed.
+Triggering a **paused** DAG exits 2 before creating any run — the scheduler
+would leave that run `queued` forever; `dags unpause <dag_id>` first (and ask
+the user before unpausing something they did not mention).
 Omit `<dag_id>` in `list-runs` to list runs across all DAGs.
 
 ## Deploying DAG files
