@@ -15,7 +15,7 @@ picks them up automatically.
 
 ## What's inside
 
-Eleven plugins, each its own independently versioned distribution. All currently
+Twelve plugins, each its own independently versioned distribution. All currently
 ship at `0.1.x` — 🧪 **Experimental** (functional and contract-tested, but the
 command surface and config schema may still change; see
 [Versioning & maturity](#versioning--maturity)).
@@ -33,6 +33,7 @@ command surface and config schema may still change; see
 | `datus cloudwatch` | `datus-cloudwatch-plugin` | `0.1.0` | Query CloudWatch logs (incl. Logs Insights), metrics, alarms and dashboards | [↗](datus-aws-plugins/datus-cloudwatch-plugin/README.md) |
 | `datus quicksight` | `datus-quicksight-plugin` | `0.1.0` | Browse QuickSight datasets/dashboards/analyses and refresh SPICE ingestions | [↗](datus-aws-plugins/datus-quicksight-plugin/README.md) |
 | `datus mwaa` | `datus-mwaa-plugin` | `0.1.0` | Inspect MWAA environments, mint tokens, and run the Airflow CLI over REST | [↗](datus-aws-plugins/datus-mwaa-plugin/README.md) |
+| `datus k8s` | `datus-k8s-plugin` | `0.1.0` | Inspect and operate namespace-scoped Kubernetes data workloads with a kubectl-style CLI | [↗](datus-k8s-plugin/README.md) |
 
 The nine AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)
 (boto3 session/AssumeRole, config, error mapping, output rendering) — an internal
