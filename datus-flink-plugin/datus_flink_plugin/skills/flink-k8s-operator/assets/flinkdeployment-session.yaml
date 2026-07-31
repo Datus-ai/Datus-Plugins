@@ -1,0 +1,20 @@
+apiVersion: __FLINK_API_VERSION__
+kind: FlinkDeployment
+metadata:
+  name: __SESSION_CLUSTER_NAME__
+  namespace: __NAMESPACE__
+spec:
+  image: __IMAGE__
+  imagePullPolicy: __IMAGE_PULL_POLICY__
+  flinkVersion: __FLINK_VERSION__
+  serviceAccount: __SERVICE_ACCOUNT__
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "__TASK_SLOTS__"
+  jobManager:
+    resource:
+      memory: __JOB_MANAGER_MEMORY__
+      cpu: __JOB_MANAGER_CPU__
+  taskManager:
+    resource:
+      memory: __TASK_MANAGER_MEMORY__
+      cpu: __TASK_MANAGER_CPU__

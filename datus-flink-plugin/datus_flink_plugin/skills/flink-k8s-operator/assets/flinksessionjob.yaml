@@ -1,0 +1,14 @@
+apiVersion: __FLINK_API_VERSION__
+kind: FlinkSessionJob
+metadata:
+  name: __JOB_NAME__
+  namespace: __NAMESPACE__
+spec:
+  deploymentName: __SESSION_CLUSTER_NAME__
+  job:
+    jarURI: __OPERATOR_ACCESSIBLE_JOB_URI__
+    entryClass: __ENTRY_CLASS__
+    args: []
+    parallelism: __PARALLELISM__
+    upgradeMode: __UPGRADE_MODE__
+    state: running

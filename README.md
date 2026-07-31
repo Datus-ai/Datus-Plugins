@@ -1,8 +1,8 @@
 # Datus Plugins
 
 Official plugins for [**Datus**](https://github.com/Datus-ai/Datus-agent) — the
-data-engineering agent. Each plugin wraps an SDK, REST API, or cloud service as a
-`datus <command>` subcommand that both you and the agent can drive.
+data-engineering agent. A plugin can add a `datus <command>` subcommand, bundled
+agent skills, or both.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.12-blue.svg)](https://www.python.org/)
@@ -15,12 +15,12 @@ picks them up automatically.
 
 ## What's inside
 
-Twelve plugins, each its own independently versioned distribution. All currently
+Thirteen plugins, each its own independently versioned distribution. All currently
 ship at `0.1.x` — 🧪 **Experimental** (functional and contract-tested, but the
 command surface and config schema may still change; see
 [Versioning & maturity](#versioning--maturity)).
 
-| Command | Distribution | Version | What it does | Docs |
+| Command / skill | Distribution | Version | What it does | Docs |
 |---|---|:---:|---|:---:|
 | `datus airflow` | `datus-airflow-plugin` | `0.3.0` | Drive remote Apache Airflow 2.x/3.x over REST API v1/v2, with DAG deploy to S3 or a dags folder and per-profile DAG/command scoping | [↗](datus-airflow-plugin/README.md) |
 | `datus statsig` | `datus-statsig-plugin` | `0.1.0` | Read Statsig metrics & experiment results, author warehouse-native metric SQL, drive ETL ingestion (Console API) | [↗](datus-statsig-plugin/README.md) |
@@ -34,6 +34,7 @@ command surface and config schema may still change; see
 | `datus quicksight` | `datus-quicksight-plugin` | `0.1.0` | Browse QuickSight datasets/dashboards/analyses and refresh SPICE ingestions | [↗](datus-aws-plugins/datus-quicksight-plugin/README.md) |
 | `datus mwaa` | `datus-mwaa-plugin` | `0.1.0` | Inspect MWAA environments, mint tokens, and run the Airflow CLI over REST | [↗](datus-aws-plugins/datus-mwaa-plugin/README.md) |
 | `datus k8s` | `datus-k8s-plugin` | `0.1.0` | Inspect and operate namespace-scoped Kubernetes data workloads with a kubectl-style CLI | [↗](datus-k8s-plugin/README.md) |
+| `flink-k8s-operator` skill | `datus-flink-plugin` | `0.1.0` | Build and operate FlinkDeployment, FlinkSessionJob, and FlinkStateSnapshot resources through `datus k8s` | [↗](datus-flink-plugin/README.md) |
 
 The nine AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)
 (boto3 session/AssumeRole, config, error mapping, output rendering) — an internal

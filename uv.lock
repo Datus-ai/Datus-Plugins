@@ -10,6 +10,7 @@ members = [
     "datus-ecs-plugin",
     "datus-emr-plugin",
     "datus-emr-serverless-plugin",
+    "datus-flink-plugin",
     "datus-glue-plugin",
     "datus-iam-plugin",
     "datus-k8s-plugin",
@@ -272,6 +273,24 @@ requires-dist = [
     { name = "datus-aws-common", editable = "datus-aws-plugins/datus-aws-common" },
     { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "datus-flink-plugin"
+version = "0.1.0"
+source = { editable = "datus-flink-plugin" }
+
+[package.optional-dependencies]
+dev = [
+    { name = "pytest" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
 ]
 provides-extras = ["dev"]
 

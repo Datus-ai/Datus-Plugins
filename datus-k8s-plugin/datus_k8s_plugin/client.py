@@ -225,11 +225,14 @@ class LoadedClient:
         for resource in found:
             if not bool(getattr(resource, "namespaced", False)):
                 continue
+            kind = str(getattr(resource, "kind", "") or "")
+            if kind.endswith("List"):
+                continue
             row = {
                 "name": getattr(resource, "name", ""),
                 "shortNames": list(getattr(resource, "short_names", []) or []),
                 "apiVersion": getattr(resource, "group_version", ""),
-                "kind": getattr(resource, "kind", ""),
+                "kind": kind,
                 "verbs": list(getattr(resource, "verbs", []) or []),
             }
             key = (str(row["name"]), str(row["apiVersion"]), str(row["kind"]))

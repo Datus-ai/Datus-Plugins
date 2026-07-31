@@ -1,0 +1,26 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkDeployment
+metadata:
+  name: datus-flink-app-smoke
+  namespace: datus-flink-operator-test
+spec:
+  image: flink:1.20
+  imagePullPolicy: IfNotPresent
+  flinkVersion: v1_20
+  serviceAccount: flink
+  flinkConfiguration:
+    taskmanager.numberOfTaskSlots: "1"
+    execution.checkpointing.savepoint-dir: file:///tmp/flink-savepoints
+  jobManager:
+    resource:
+      memory: 1024m
+      cpu: 0.5
+  taskManager:
+    resource:
+      memory: 1024m
+      cpu: 0.5
+  job:
+    jarURI: local:///opt/flink/examples/streaming/StateMachineExample.jar
+    parallelism: 1
+    upgradeMode: stateless
+    state: running

@@ -1,0 +1,8 @@
+ARG FLINK_IMAGE=__FLINK_BASE_IMAGE__
+FROM ${FLINK_IMAGE}
+
+USER root
+RUN mkdir -p /opt/flink/usrlib
+COPY __JOB_JAR__ /opt/flink/usrlib/job.jar
+RUN chown -R flink:flink /opt/flink/usrlib
+USER flink

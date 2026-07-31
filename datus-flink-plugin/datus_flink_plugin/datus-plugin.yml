@@ -1,0 +1,5 @@
+manifest_version: 1
+
+description: "Build and operate Apache Flink jobs through bundled runtime-specific skills."
+
+skills: skills

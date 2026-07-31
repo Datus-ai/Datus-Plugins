@@ -110,7 +110,15 @@ def test_api_resources_deduplicates_discovery_results(tmp_path):
         kind="Pod",
         verbs=["get", "list"],
     )
-    resources = SimpleNamespace(search=lambda: [pod, pod])
+    pod_list = SimpleNamespace(
+        namespaced=True,
+        name="pods",
+        short_names=["po"],
+        group_version="v1",
+        kind="PodList",
+        verbs=["get", "list"],
+    )
+    resources = SimpleNamespace(search=lambda: [pod, pod, pod_list])
     loaded = LoadedClient(
         settings(kubeconfig),
         kubeconfig,
