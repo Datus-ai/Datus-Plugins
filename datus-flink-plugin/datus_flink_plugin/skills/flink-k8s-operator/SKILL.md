@@ -228,6 +228,72 @@ fetches the artifact and submits it to the Session Cluster.
 Building a local JAR does not publish it. Ask for the approved artifact
 repository and destination before uploading.
 
+### Delivering into an unmodified base image
+
+When an image cannot be built or pushed — no registry access, no Docker daemon,
+or a requirement to keep the official image untouched — deliver the job with init
+containers that write into shared `emptyDir` volumes. This works, but the official
+image's entrypoint and the Operator's own mounts collide with it in seven specific
+ways. Each fails at pod start or at the first SQL statement, and each has one
+correct fix. Do not rediscover them one redeploy at a time.
+
+1. **The entrypoint rewrites the config it was given.** `docker-entrypoint.sh`
+   runs `config-parser-utils.sh`, which writes back to
+   `/opt/flink/conf/flink-conf.yaml`, while the Operator mounts that directory
+   from a read-only ConfigMap: `flink-conf.yaml: Read-only file system`. Bypass
+   the Docker entrypoint and run the Kubernetes launchers directly —
+   `kubernetes-jobmanager.sh kubernetes-application` for the JobManager and
+   `kubernetes-taskmanager.sh` for the TaskManager. The entrypoint only translates
+   Docker-style environment variables and is not needed under the Operator.
+
+2. **Do not try to make the config directory writable.** Declaring a volume named
+   `flink-config-volume` in the pod template collides with the one the Operator
+   injects, and Kubernetes rejects the Deployment with
+   `Duplicate value: "flink-config-volume"`. Bypass the entrypoint instead.
+
+3. **Artifacts an init container writes must be world-readable.** Init containers
+   usually run as root while the Flink container runs as `flink`, so a jar left at
+   `0440 root:root` yields `JAR file can't be read '/opt/flink/usrlib/job.jar'`.
+   Use `0444` for jars and SQL files and `0555` for directories. Never `chown`
+   inside the running container.
+
+4. **`ADD JAR` only accepts a filesystem Flink has registered, and `https` is not
+   one**: `UnsupportedFileSystemSchemeException: scheme 'https'`. Download in an
+   init container, verify a pinned SHA-256, and reference the result as
+   `ADD JAR 'file:///...'`.
+
+5. **`s3://` in `ADD JAR` needs Flink's own S3 filesystem, not the connector's.**
+   A table-format artifact such as `paimon-s3` does not register a Flink
+   FileSystem. Copy `flink-s3-fs-hadoop-*.jar` out of the image's own
+   `/opt/flink/opt` into a shared `/opt/flink/plugins/s3-fs-hadoop/` so both
+   JobManager and TaskManager preload it. Prefer `file://` for job artifacts and
+   keep `s3://` for checkpoints and table data.
+
+6. **IRSA needs its credentials provider named explicitly.** The Operator injects
+   `AWS_ROLE_ARN` and `AWS_WEB_IDENTITY_TOKEN_FILE`, but Hadoop S3A's default
+   credential chain does not include the web-identity provider, so S3 access
+   fails even with a correct service-account annotation. Set
+   `fs.s3a.aws.credentials.provider` to
+   `com.amazonaws.auth.WebIdentityTokenCredentialsProvider`, and let checkpoints,
+   job artifacts, and table data all use that one role.
+
+7. **A jar loaded through `ADD JAR` cannot see classes inside an isolated plugin
+   classloader**, which surfaces as `NoClassDefFoundError` for a Hadoop or
+   filesystem class the plugin clearly contains. Prefer copying the table format
+   and its Hadoop runtime into `/opt/flink/lib` with an init container so they
+   load in the parent classloader. Setting `classloader.resolve-order:
+   parent-first` also works but gives up user-code isolation for the whole job;
+   record that trade-off if you take it.
+
+One more, when the job is a SQL file executed by a Java entry class: the Table
+API does not accept SQL Client statements. `SET 'key' = 'value'` passed to
+`TableEnvironment.executeSql()` fails. The runner must recognise `SET` and apply
+it through `tableEnv.getConfig().getConfiguration().setString(...)`, executing
+only DDL and DML through `executeSql()`. Validate that runner with the
+`flink-local-dev` skill before deploying: a MiniCluster run rejects the statement
+in seconds, whereas the same mistake costs a full build, upload, and restart
+cycle here.
+
 ## 6. Render the custom resources
 
 Resource selection:
@@ -249,6 +315,20 @@ fields the discovered CRD schema does not support, and keep the namespace
 explicit. Confirm the named service account exists. Never put registry
 credentials, object-store secrets, passwords, or tokens directly in a manifest;
 reference existing Kubernetes Secrets.
+
+The Operator's own permissions are not the job's permissions. In Application mode
+the JobManager creates and watches its TaskManagers itself, so its service
+account needs, within the namespace: `pods` and `pods/log`, `services` and
+`configmaps` (get/list/watch/create/delete/patch/update), and `get`/`list`/`watch`
+on `apps/deployments` — without the last one, TaskManager pods are never created
+because they cannot inherit their owner reference. A cloud identity binding such
+as IRSA grants nothing in Kubernetes; it covers the cloud provider only. Verify
+before deploying, impersonating the job's own identity:
+
+```bash
+datus k8s --profile <profile> auth can-i list pods -n <namespace> \
+  --as system:serviceaccount:<namespace>:<service-account>
+```
 
 ### flinkdeployment-application.yaml
 
@@ -355,6 +435,16 @@ and external storage before applying. For a new Session stack, apply the Session
 FlinkDeployment first and wait for `status.jobManagerDeploymentStatus=READY`
 before applying FlinkSessionJob.
 
+Wait on the status field itself; never poll with `sleep` and a repeated `get`.
+Flink CRs report readiness outside `status.conditions`, so use a jsonpath wait:
+
+```bash
+datus k8s --profile <profile> wait flinkdeployment/<name> -n <namespace> \
+  --for='jsonpath={.status.jobManagerDeploymentStatus}=READY' --timeout=10m
+datus k8s --profile <profile> wait flinkdeployment/<name> -n <namespace> \
+  --for='jsonpath={.status.jobStatus.state}=RUNNING' --timeout=10m
+```
+
 ## 7. Observe and diagnose
 
 ```bash
@@ -386,6 +476,15 @@ error, events, image pull, service account/RBAC, artifact availability,
 JobManager logs, TaskManager logs, Flink version mismatch, then checkpoint or
 savepoint storage.
 
+Read a restarting container's previous instance with `--previous`, and filter for
+`ERROR`, `Exception`, `Caused by`, `NoClassDefFound`, and `Unsupported` rather
+than reading a whole log. When a log claims a class, connector, catalog, or
+filesystem scheme is missing while the artifact is demonstrably present, stop
+redeploying and use the `k8s-jvm-classpath` skill: it separates an absent JAR from
+an absent SPI entry, from classloader isolation, from a class that loaded and then
+rejected its configuration. Those four produce nearly identical messages and need
+different fixes.
+
 ## 8. Change the lifecycle safely
 
 Use JSON merge patch for Operator CRDs; strategic merge patch is not supported
@@ -404,6 +503,14 @@ datus k8s --profile <profile> patch flinkdeployment <name> \
 Read the current nonce first and use a different integer. Never reuse a nonce and
 never patch status.
 
+The Operator reconciles the spec, not the bytes an artifact URI points at.
+Overwriting the object behind an unchanged `jarURI` — or behind an init
+container's fixed download URL — starts nothing new, and the pod keeps running the
+previous build. Either publish each build under an immutable, content-addressed
+URI so a new build is a new spec, or bump `restartNonce` explicitly after every
+re-upload. Do not conclude a fix failed until you have confirmed which build is
+actually running.
+
 For an image, arguments, parallelism, or resource upgrade, edit the
 source-controlled manifest and apply it rather than assembling a large inline
 patch. Preserve the explicitly chosen `spec.job.upgradeMode`, and verify its
@@ -417,6 +524,13 @@ prerequisites first:
 
 Do not claim an exactly-once or stateful upgrade when these prerequisites are not
 verified.
+
+Order matters while a job has never started successfully. `savepoint` and
+`last-state` both ask the Operator to recover state that does not exist yet, which
+turns a first-deploy failure into a redeployment loop that hides the original
+error. Bring a new job up with `stateless`, confirm the job reaches `RUNNING` and
+that checkpoints are actually being written to durable storage, then switch to the
+intended mode and verify HA/checkpoint metadata is configured.
 
 ## 9. Snapshot and recover
 
