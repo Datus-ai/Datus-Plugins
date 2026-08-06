@@ -30,6 +30,7 @@ permissions:
       - "rollout restart:*"
       - "label:*"
       - "annotate:*"
+      - "exec:*"
   auto:
     allow:
       - "version:*"
@@ -53,6 +54,7 @@ permissions:
       - "rollout restart:*"
       - "label:*"
       - "annotate:*"
+      - "exec:*"
 
 config_schema:
   type: object
@@ -125,6 +127,14 @@ commands:
       - {name: --follow}
       - {name: --previous}
       - {name: --tail}
+  - name: exec
+    description: "Run one non-interactive command in a pod; stdin and TTY are disabled"
+    args:
+      - {name: pod, required: true}
+      - {name: -c}
+      - {name: -n}
+      - {name: --timeout}
+      - {name: -- COMMAND, required: true}
   - name: events
     description: "List namespace events"
     args:
@@ -153,7 +163,7 @@ commands:
           - {name: -n}
           - {name: --list}
   - name: wait
-    description: "Wait for creation, deletion, or a status condition"
+    description: "Wait for creation, deletion, a status condition, or a jsonpath value"
     args:
       - {name: resource, required: true}
       - {name: names, required: true}

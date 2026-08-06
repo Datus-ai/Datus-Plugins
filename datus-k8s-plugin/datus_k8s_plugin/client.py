@@ -6,9 +6,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Iterator
 
+import yaml
+
 from .config import Settings
 from .errors import ApiError, ConfigError, MissingDependencyError, UsageError
 from .output import plain
+
+#: SPDY/WebSocket channel the API server uses for the exec termination status.
+EXEC_ERROR_CHANNEL = 3
 
 
 def _import_kubernetes():
@@ -22,6 +27,35 @@ def _import_kubernetes():
             "the `kubernetes` dependency is not installed; reinstall datus-k8s-plugin"
         ) from exc
     return kubernetes, client, config, dynamic, watch, ApiException, DynamicApiError, ResourceNotFoundError
+
+
+def exec_exit_code(payload: str) -> int:
+    """Translate the exec error channel's status frame into a process exit code.
+
+    The API server closes a successful exec with ``status: Success`` and a failed
+    one with a ``NonZeroExitCode`` cause carrying the code. An empty frame means
+    the stream ended without the server reporting anything — a timeout or a lost
+    connection — and must never be reported as success.
+    """
+    text = str(payload or "").strip()
+    if not text:
+        raise ApiError("pod exec ended without a status frame (timed out or connection lost)")
+    try:
+        status = yaml.safe_load(text)
+    except yaml.YAMLError as exc:
+        raise ApiError(f"pod exec returned an unreadable status frame: {text}") from exc
+    if not isinstance(status, dict):
+        raise ApiError(f"pod exec returned an unreadable status frame: {text}")
+    if str(status.get("status")) == "Success":
+        return 0
+    for cause in (status.get("details") or {}).get("causes") or []:
+        if not isinstance(cause, dict) or str(cause.get("reason")) != "ExitCode":
+            continue
+        try:
+            return int(str(cause.get("message")))
+        except (TypeError, ValueError):
+            break
+    raise ApiError(str(status.get("message") or text))
 
 
 @dataclass
@@ -180,6 +214,55 @@ class LoadedClient:
             kwargs["timeout_seconds"] = max(1, int(self.request_timeout() or 0))
         for event in watcher.stream(resource.get, **kwargs):
             yield {"type": event.get("type"), "object": plain(event.get("object"))}
+
+    def exec_in_pod(
+        self,
+        *,
+        pod: str,
+        namespace: str,
+        command: list[str],
+        container: str | None = None,
+        timeout: float | None = None,
+    ) -> tuple[str, str, int]:
+        """Run one non-interactive command in a pod; return (stdout, stderr, exit_code).
+
+        stdin and TTY are always disabled. This exists so a diagnostic probe can
+        read what a running JVM actually sees — its classpath, the JARs on disk,
+        an SPI file — and never as an interactive shell. The caller decides what
+        to do with a non-zero exit code; a rejection by the API server itself
+        (missing container, denied subresource) raises :class:`ApiError`.
+        """
+        try:
+            from kubernetes.stream import stream as open_stream
+        except ImportError as exc:  # pragma: no cover - mirrors _import_kubernetes
+            raise MissingDependencyError(
+                "the `kubernetes` dependency is not installed; reinstall datus-k8s-plugin"
+            ) from exc
+        api = self.typed.CoreV1Api(self.api_client)
+        kwargs: dict[str, Any] = {
+            "command": list(command),
+            "stdout": True,
+            "stderr": True,
+            "stdin": False,
+            "tty": False,
+            "_preload_content": False,
+        }
+        if container:
+            kwargs["container"] = container
+        session = open_stream(
+            api.connect_get_namespaced_pod_exec,
+            pod,
+            namespace,
+            **kwargs,
+        )
+        try:
+            session.run_forever(timeout=timeout)
+            stdout = session.read_stdout(timeout=1) or ""
+            stderr = session.read_stderr(timeout=1) or ""
+            status = session.read_channel(EXEC_ERROR_CHANNEL, timeout=1) or ""
+        finally:
+            session.close()
+        return stdout, stderr, exec_exit_code(status)
 
     def manifest_resource(self, document: dict[str, Any]) -> tuple[Any, str, str]:
         api_version = str(document.get("apiVersion") or "")

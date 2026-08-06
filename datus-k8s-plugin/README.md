@@ -41,12 +41,32 @@ datus k8s top pod -n analytics
 datus k8s rollout status deployment/worker -n analytics
 ```
 
+Waiting is a first-class command, so nothing needs to poll with `sleep`. Custom
+resources that report readiness outside `status.conditions` are covered by a
+jsonpath condition:
+
+```bash
+datus k8s wait job/daily-etl --for=condition=Complete --timeout=30m -n analytics
+datus k8s wait flinkdeployment/orders -n analytics \
+  --for='jsonpath={.status.jobStatus.state}=RUNNING' --timeout=10m
+```
+
 State-changing commands (`create`, `apply`, `delete`, `patch`, `scale`,
 `rollout restart`, `label`, and `annotate`) always require agent confirmation.
+So does `exec`, which runs one non-interactive command in a pod so a diagnostic
+probe can read what a running process actually sees:
+
+```bash
+datus k8s exec fe-0 -n analytics -c fe -- sh -c 'ls -1 /opt/lib/*.jar'
+```
+
+stdin and TTY are always disabled and the pod's exit code is propagated, so
+`exec` cannot be used as a shell.
 
 This is a deliberate kubectl-style subset. It does not support cluster-scoped
-resources, `-A`, exec/attach/cp, port-forward/proxy, Kustomize, kubeconfig
-mutation, JSONPath, Go templates, or kubectl plugins.
+resources, `-A`, interactive exec, attach/cp, port-forward/proxy, Kustomize,
+kubeconfig mutation, Go templates, or kubectl plugins. `wait --for=jsonpath=` is
+the only JSONPath surface, and it accepts `.field` and `[index]` steps only.
 
 ## Develop
 

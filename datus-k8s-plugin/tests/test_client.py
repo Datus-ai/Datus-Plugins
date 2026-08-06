@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import sys
 from types import SimpleNamespace
 
 import pytest
+import yaml
 
-from datus_k8s_plugin.client import LoadedClient
+from datus_k8s_plugin.client import LoadedClient, exec_exit_code
 from datus_k8s_plugin.config import Settings
-from datus_k8s_plugin.errors import UsageError
+from datus_k8s_plugin.errors import ApiError, UsageError
 
 
 def settings(path, **overrides):
@@ -228,3 +230,125 @@ def test_openapi_all_of_reference_is_expanded(tmp_path):
     )
     schema = loaded.explain_schema(resource, "spec.replicas")
     assert schema["type"] == "integer"
+
+
+class FakeExecSession:
+    """Stand-in for kubernetes.stream's WSClient with a scripted set of channels."""
+
+    def __init__(self, stdout="", stderr="", status="{\"status\": \"Success\"}"):
+        self.frames = {1: stdout, 2: stderr, 3: status}
+        self.ran_with = None
+        self.closed = False
+
+    def run_forever(self, timeout=None):
+        self.ran_with = timeout
+
+    def read_stdout(self, timeout=None):
+        return self.frames.pop(1, "")
+
+    def read_stderr(self, timeout=None):
+        return self.frames.pop(2, "")
+
+    def read_channel(self, channel, timeout=None):
+        return self.frames.pop(channel, "")
+
+    def close(self):
+        self.closed = True
+
+
+def loaded_client_for_exec(tmp_path, monkeypatch, session):
+    """A LoadedClient whose CoreV1Api/stream pair is fully faked.
+
+    ``kubernetes`` is injected through ``monkeypatch.setitem`` so the stub is
+    removed afterwards and cannot make a later test believe the real client is
+    installed (or missing).
+    """
+    kubeconfig = tmp_path / "config"
+    kubeconfig.write_text("apiVersion: v1\n", encoding="utf-8")
+    connect = object()
+    typed = SimpleNamespace(
+        CoreV1Api=lambda _api_client: SimpleNamespace(
+            connect_get_namespaced_pod_exec=connect
+        )
+    )
+    calls = {}
+
+    def open_stream(func, pod, namespace, **kwargs):
+        calls.update({"func": func, "pod": pod, "namespace": namespace, **kwargs})
+        return session
+
+    stream_module = SimpleNamespace(stream=open_stream)
+    monkeypatch.setitem(sys.modules, "kubernetes", SimpleNamespace(stream=stream_module))
+    monkeypatch.setitem(sys.modules, "kubernetes.stream", stream_module)
+    loaded = LoadedClient(
+        settings(kubeconfig),
+        kubeconfig,
+        "dev",
+        object(),
+        SimpleNamespace(),
+        typed,
+        object(),
+        SimpleNamespace(resources=SimpleNamespace()),
+    )
+    return loaded, calls, connect
+
+
+def test_exec_in_pod_disables_stdin_and_tty_and_returns_the_exit_code(tmp_path, monkeypatch):
+    session = FakeExecSession(stdout="CLASSPATH=/opt/lib/a.jar\n")
+    loaded, calls, connect = loaded_client_for_exec(tmp_path, monkeypatch, session)
+
+    stdout, stderr, code = loaded.exec_in_pod(
+        pod="fe-0",
+        namespace="analytics",
+        command=["sh", "-c", "echo hi"],
+        container="fe",
+        timeout=30.0,
+    )
+
+    assert (stdout, stderr, code) == ("CLASSPATH=/opt/lib/a.jar\n", "", 0)
+    assert calls["func"] is connect
+    assert (calls["pod"], calls["namespace"]) == ("fe-0", "analytics")
+    assert calls["command"] == ["sh", "-c", "echo hi"]
+    assert calls["container"] == "fe"
+    assert calls["stdin"] is False and calls["tty"] is False
+    assert calls["_preload_content"] is False
+    assert session.ran_with == 30.0
+    assert session.closed is True
+
+
+def test_exec_in_pod_omits_the_container_when_none_is_requested(tmp_path, monkeypatch):
+    loaded, calls, _connect = loaded_client_for_exec(tmp_path, monkeypatch, FakeExecSession())
+    loaded.exec_in_pod(pod="fe-0", namespace="analytics", command=["ls"])
+    assert "container" not in calls
+
+
+def test_exec_in_pod_closes_the_session_even_when_the_status_frame_is_missing(tmp_path, monkeypatch):
+    session = FakeExecSession(status="")
+    loaded, _calls, _connect = loaded_client_for_exec(tmp_path, monkeypatch, session)
+    with pytest.raises(ApiError, match="without a status frame"):
+        loaded.exec_in_pod(pod="fe-0", namespace="analytics", command=["ls"])
+    assert session.closed is True
+
+
+def test_exec_exit_code_reads_a_non_zero_exit_from_the_status_frame():
+    payload = yaml.safe_dump(
+        {
+            "status": "Failure",
+            "reason": "NonZeroExitCode",
+            "details": {"causes": [{"reason": "ExitCode", "message": "127"}]},
+        }
+    )
+    assert exec_exit_code(payload) == 127
+
+
+def test_exec_exit_code_surfaces_a_server_rejection_instead_of_inventing_a_code():
+    payload = yaml.safe_dump(
+        {"status": "Failure", "message": "container fe is not valid for pod fe-0"}
+    )
+    with pytest.raises(ApiError, match="not valid for pod"):
+        exec_exit_code(payload)
+
+
+def test_exec_exit_code_rejects_an_unreadable_status_frame():
+    with pytest.raises(ApiError, match="unreadable status frame"):
+        exec_exit_code("Success")

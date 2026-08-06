@@ -13,8 +13,10 @@ authorization checks, manifests, scaling, and rollout restart/status.
 - Select the Datus environment before the Kubernetes command:
   `datus k8s --profile <profile> get pods -n <namespace>`.
 - Only namespaces listed by the selected profile are accessible.
-- `-A`, cluster-scoped resources, kubeconfig overrides, impersonation, exec,
-  attach, cp, proxy, and port-forward are intentionally unavailable.
+- `-A`, cluster-scoped resources, kubeconfig overrides, impersonation, attach,
+  cp, proxy, and port-forward are intentionally unavailable.
+- `exec` runs one non-interactive command with stdin and TTY disabled. Datus asks
+  before every exec, in every permission profile.
 - Read-only commands are safe to run. Datus asks before every mutating command.
 - The output formats are `table`, `wide`, `json`, `yaml`, and `name`.
 
@@ -31,6 +33,68 @@ datus k8s --profile prod auth can-i create jobs -n analytics
 ```
 
 Use `-o json` or `-o yaml` when subsequent reasoning needs full object fields.
+
+Confirm which cluster you are on before the first command of a session, and again
+whenever a task spans two environments. A profile is bound to one kubeconfig
+context; switching clusters means switching profile, never editing kubeconfig:
+
+```bash
+datus k8s --profile prod version
+```
+
+When a container keeps restarting, read its previous instance rather than the
+fresh one, and filter server-side instead of dumping everything:
+
+```bash
+datus k8s --profile prod logs worker-abcde -n analytics -c app --previous --tail 300
+datus k8s --profile prod logs worker-abcde -n analytics -c app --since 10m
+```
+
+## Wait instead of polling
+
+Never poll with `sleep` and a repeated `get`. Every wait belongs in `wait`, which
+takes a deadline and fails loudly when it is missed:
+
+```bash
+datus k8s --profile prod wait job/daily-etl --for=condition=Complete --timeout=30m -n analytics
+datus k8s --profile prod wait pods -l job-name=daily-etl --for=delete --timeout=5m -n analytics
+```
+
+Custom resources usually report readiness in their own status fields and never
+populate `status.conditions`, so `condition=` cannot express their state. Use a
+jsonpath expression against the field the CRD actually sets:
+
+```bash
+datus k8s --profile prod wait flinkdeployment/orders -n analytics \
+  --for='jsonpath={.status.jobManagerDeploymentStatus}=READY' --timeout=10m
+datus k8s --profile prod wait flinkdeployment/orders -n analytics \
+  --for='jsonpath={.status.jobStatus.state}=RUNNING' --timeout=10m
+```
+
+Only `.field` and `[index]` steps are supported. Read the object once with
+`-o yaml` to learn the real field path before waiting on it. Omit `=VALUE` to
+wait until the field merely becomes non-empty. When the resource itself may not
+exist yet, chain `--for=create` first.
+
+## Inspect what a container actually sees
+
+`exec` answers questions no manifest can: which JARs are on disk, what the
+running process's real environment is, whether a file the config promises is
+present. Keep each probe read-only and single-purpose.
+
+```bash
+datus k8s --profile prod exec fe-0 -n analytics -c fe -- ls -1 /opt/lib
+datus k8s --profile prod exec fe-0 -n analytics -- sh -c 'ls -1 /opt/lib/*.jar | head -50'
+```
+
+The command goes after `--`. stdin and TTY are disabled, so interactive shells,
+editors, and pagers cannot be used; wrap anything needing a pipeline in
+`sh -c '...'`. The pod's exit code becomes the command's exit code, and a
+non-zero one is reported as `command terminated with exit code N`.
+
+Do not use `exec` to change a running container. Configuration, files, and
+permissions belong in the manifest or image, so that a restart does not silently
+undo the fix. When a probe proves something is missing, fix the source.
 
 ## Change a workload
 

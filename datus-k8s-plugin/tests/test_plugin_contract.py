@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import subprocess
 import sys
 import tomllib
@@ -92,6 +93,9 @@ def test_permissions_cover_every_leaf_and_writes_are_never_allowed():
         "rollout restart",
         "label",
         "annotate",
+        # Running a command inside a pod is arbitrary in-cluster execution: it
+        # must stay behind a prompt in every profile, including `auto`.
+        "exec",
     }
     for profile in ("normal", "auto"):
         rules = data["permissions"][profile]
@@ -144,6 +148,17 @@ def test_skills_and_setup_mutability_marker():
     assert (skills / "k8s" / "SKILL.md").is_file()
     setup = (skills / "k8s-setup" / "SKILL.md").read_text(encoding="utf-8")
     assert "requires_mutable_config: true" in setup
+
+
+def test_bundled_skills_never_fall_back_to_a_kubectl_binary():
+    """The plugin exists so an agent never needs kubectl; the skills must agree.
+
+    A skill that reaches for `kubectl` silently escapes the profile's namespace
+    allowlist and permission prompts, which is exactly what this plugin replaces.
+    """
+    for path in (PKG / manifest()["skills"]).rglob("SKILL.md"):
+        text = path.read_text(encoding="utf-8")
+        assert re.search(r"(?m)^\s*kubectl(?:\s|$)", text) is None, path
 
 
 def test_package_never_imports_datus():

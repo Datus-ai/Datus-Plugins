@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -100,6 +101,22 @@ def build_parser() -> argparse.ArgumentParser:
     _namespace(p)
     p.set_defaults(func=_cmd_logs)
 
+    p = sub.add_parser(
+        "exec",
+        help="run one non-interactive command in a pod",
+        description=(
+            "Run a single command in a pod and print its output. Put the command "
+            "after `--`, for example: exec pod-a -c app -- sh -c 'ls -1 /opt/lib'. "
+            "stdin and TTY are always disabled; the pod's exit code is returned."
+        ),
+    )
+    p.add_argument("pod")
+    p.add_argument("-c", "--container")
+    p.add_argument("--timeout", help="give up after this duration, such as 30s or 2m")
+    p.add_argument("command", nargs="*", metavar="-- COMMAND [ARG ...]")
+    _namespace(p)
+    p.set_defaults(func=_cmd_exec)
+
     p = sub.add_parser("events", help="list namespace events")
     p.add_argument("--for", dest="for_object")
     p.add_argument("--types")
@@ -132,7 +149,17 @@ def build_parser() -> argparse.ArgumentParser:
 
     p = sub.add_parser("wait", help="wait for a resource condition")
     _target(p)
-    p.add_argument("--for", dest="condition", required=True)
+    p.add_argument(
+        "--for",
+        dest="condition",
+        required=True,
+        metavar="CONDITION",
+        help=(
+            "create, delete, condition=NAME[=VALUE], or "
+            "jsonpath={.path.to.field}[=VALUE] for custom resources that report "
+            "readiness outside status.conditions"
+        ),
+    )
     p.add_argument("--timeout", default="30s")
     _selectors(p)
     p.set_defaults(func=_cmd_wait)
@@ -427,6 +454,32 @@ def _cmd_logs(ctx: Context, ns: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_exec(ctx: Context, ns: argparse.Namespace) -> int:
+    namespace = _scope(ctx, ns)
+    command = [str(token) for token in (ns.command or [])]
+    if not command:
+        raise UsageError(
+            "exec requires a command after `--`, for example: exec pod-a -- ls -1 /opt/flink/lib"
+        )
+    timeout = _parse_wait_timeout(ns.timeout) if ns.timeout else ctx.client.request_timeout()
+    stdout, stderr, code = ctx.client.exec_in_pod(
+        pod=ns.pod,
+        namespace=namespace,
+        container=ns.container,
+        command=command,
+        timeout=timeout or None,
+    )
+    if stdout:
+        print(stdout, end="" if stdout.endswith("\n") else "\n")
+    if stderr:
+        print(stderr, end="" if stderr.endswith("\n") else "\n", file=sys.stderr)
+    if code:
+        # Mirror kubectl's wording so a non-zero exit is never mistaken for one of
+        # this CLI's own exit codes (2 usage, 3 config, 8 missing dependency).
+        print(f"error: command terminated with exit code {code}", file=sys.stderr)
+    return code
+
+
 def _cmd_events(ctx: Context, ns: argparse.Namespace) -> int:
     namespace = _scope(ctx, ns)
     selector = None
@@ -559,6 +612,62 @@ def _parse_wait_timeout(raw: str) -> float:
     return duration_seconds(raw)
 
 
+_JSONPATH_STEP = re.compile(r"\.(?P<field>[A-Za-z0-9_-]+)|\[(?P<index>\d+)\]")
+
+
+def _jsonpath_value(item: dict[str, Any], expression: str) -> Any:
+    """Resolve a kubectl-style ``{.a.b[0].c}`` expression against one object.
+
+    Only field and list-index steps are supported — enough to read any status
+    field, which is what waiting needs. Filters, wildcards, ranges, and escaped
+    dots are rejected rather than silently mis-evaluated. A step that runs off
+    the end of the object yields ``None`` (the field simply is not there yet).
+    """
+    body = expression.strip()
+    if body.startswith("{") and body.endswith("}"):
+        body = body[1:-1].strip()
+    if not body.startswith("."):
+        raise UsageError(
+            f"unsupported jsonpath {expression!r}: it must start with '.', as in {{.status.phase}}"
+        )
+    current: Any = item
+    position = 0
+    while position < len(body):
+        step = _JSONPATH_STEP.match(body, position)
+        if step is None:
+            raise UsageError(
+                f"unsupported jsonpath {expression!r}: only .field and [index] steps are supported"
+            )
+        position = step.end()
+        field, index = step.group("field"), step.group("index")
+        if field is not None:
+            if not isinstance(current, dict):
+                return None
+            current = current.get(field)
+        else:
+            if not isinstance(current, list) or int(index) >= len(current):
+                return None
+            current = current[int(index)]
+    return current
+
+
+def _split_jsonpath_condition(raw: str) -> tuple[str, str | None]:
+    """Split ``{.status.phase}=Running`` into its expression and expected value."""
+    text = raw.strip()
+    if text.startswith("{"):
+        close = text.find("}")
+        if close < 0:
+            raise UsageError(f"unsupported jsonpath {raw!r}: the closing '}}' is missing")
+        expression, remainder = text[: close + 1], text[close + 1 :].strip()
+        if remainder and not remainder.startswith("="):
+            raise UsageError(
+                f"unsupported jsonpath {raw!r}: expected =VALUE after the expression"
+            )
+        return expression, remainder[1:] if remainder else None
+    expression, separator, expected = text.partition("=")
+    return expression, expected if separator else None
+
+
 def _condition_met(item: dict[str, Any], condition: str) -> bool:
     if condition.startswith("condition="):
         raw = condition[len("condition=") :]
@@ -571,7 +680,19 @@ def _condition_met(item: dict[str, Any], condition: str) -> bool:
             if str(value.get("type", "")).casefold() == name.casefold():
                 return str(value.get("status", "")).casefold() == expected.casefold()
         return False
-    raise UsageError("--for must be create, delete, or condition=NAME[=VALUE]")
+    if condition.startswith("jsonpath="):
+        # Custom resources such as FlinkDeployment report readiness in their own
+        # status fields and never populate status.conditions, so condition= alone
+        # cannot express "wait until this job is RUNNING".
+        expression, expected = _split_jsonpath_condition(condition[len("jsonpath=") :])
+        value = _jsonpath_value(item, expression)
+        if expected is None:
+            return value not in (None, "", [], {}, False)
+        return str(value) == expected
+    raise UsageError(
+        "--for must be create, delete, condition=NAME[=VALUE], "
+        "or jsonpath={.path.to.field}[=VALUE]"
+    )
 
 
 def _cmd_wait(ctx: Context, ns: argparse.Namespace) -> int:
