@@ -436,25 +436,44 @@ FlinkDeployment first and wait for `status.jobManagerDeploymentStatus=READY`
 before applying FlinkSessionJob.
 
 Wait on the status field itself; never poll with `sleep` and a repeated `get`.
-Flink CRs report readiness outside `status.conditions`, so use a jsonpath wait:
+Flink CRs report readiness outside `status.conditions`, so use a jsonpath wait —
+and wait on the **job** state, not the JobManager's:
 
 ```bash
 datus k8s --profile <profile> wait flinkdeployment/<name> -n <namespace> \
-  --for='jsonpath={.status.jobManagerDeploymentStatus}=READY' --timeout=10m
-datus k8s --profile <profile> wait flinkdeployment/<name> -n <namespace> \
-  --for='jsonpath={.status.jobStatus.state}=RUNNING' --timeout=10m
+  --for='jsonpath={.status.jobStatus.state}=RUNNING' \
+  --fail-on='jsonpath={.status.jobStatus.state}=FAILED' --timeout=10m
 ```
+
+`status.jobManagerDeploymentStatus=READY` means the JobManager pod started. It
+goes `READY` while the job inside it is failing, so a wait on it reports success
+over a dead job — do not treat it as the deployment's outcome. `--fail-on` also
+defaults to aborting on a non-empty `status.error`, which is where the Operator
+records a job that never started; without it a first-deploy failure looks like a
+hang for the whole timeout.
 
 ## 7. Observe and diagnose
 
 ```bash
-datus k8s --profile <profile> get flinkdeployment <name> -n <namespace> -o yaml
-datus k8s --profile <profile> get flinksessionjob <name> -n <namespace> -o yaml
+datus k8s --profile <profile> get flinkdeployment <name> -n <namespace> -o wide
 datus k8s --profile <profile> get pods -n <namespace> -l app=<deployment-name> -o wide
 datus k8s --profile <profile> events -n <namespace> --for flinkdeployment/<name>
 ```
 
-Read the complete CR and inspect `metadata.generation`,
+`-o wide` puts `status.lifecycleState` in the STATUS column and the truncated
+`status.error` in MESSAGE, and `get pods` shows `READY`/`RESTARTS` plus an
+`Init:CrashLoopBackOff`-style status, so the three-layer picture — job, CR, pod —
+costs three commands. Read individual fields directly rather than fetching the
+whole document:
+
+```bash
+datus k8s --profile <profile> get flinkdeployment <name> -n <namespace> \
+  -o 'jsonpath={.status.jobStatus.state}'
+datus k8s --profile <profile> get flinkdeployment <name> -n <namespace> \
+  -o 'jsonpath={.status.error}'
+```
+
+Then read the complete CR and inspect `metadata.generation`,
 `status.observedGeneration`, `status.lifecycleState`,
 `status.jobManagerDeploymentStatus`, `status.jobStatus.{jobId,state}`,
 `status.reconciliationStatus`, and `status.error`. For FlinkStateSnapshot inspect
@@ -465,10 +484,13 @@ JobManager to be ready and, for a job resource, the Flink job to reach its
 expected running or terminal state. A non-empty `status.error` takes precedence
 over a stale ready field.
 
-Find the actual JobManager pod before reading logs:
+Find the actual JobManager pod before reading logs. When the pod delivers its
+dependencies through init containers, read those too — a pod stuck at `Pending` is
+usually an init container failing, and its log is the only place that says why:
 
 ```bash
 datus k8s --profile <profile> logs <jobmanager-pod> -n <namespace> --tail 300
+datus k8s --profile <profile> logs <jobmanager-pod> -n <namespace> --all-containers --tail 100
 ```
 
 If the CR never becomes ready, diagnose in this order: Operator reconciliation

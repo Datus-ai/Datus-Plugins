@@ -25,6 +25,7 @@ implementation is present and simply refused to initialise.
 ```bash
 datus k8s --profile <profile> logs <pod> -n <namespace> -c <container> --tail 400
 datus k8s --profile <profile> logs <pod> -n <namespace> -c <container> --previous --tail 400
+datus k8s --profile <profile> logs <pod> -n <namespace> --all-containers --tail 100
 ```
 
 Keep the whole `Caused by` chain. The last cause names the interface or scheme
@@ -123,8 +124,14 @@ and wait on the resource's own status field:
 datus k8s --profile <profile> apply -f <manifest> -n <namespace> --dry-run server -o yaml
 datus k8s --profile <profile> apply -f <manifest> -n <namespace>
 datus k8s --profile <profile> wait <kind>/<name> -n <namespace> \
-  --for='jsonpath={.status.<readiness-field>}=<expected>' --timeout=10m
+  --for='jsonpath={.status.<readiness-field>}=<expected>' \
+  --fail-on='jsonpath={.status.<readiness-field>}=<failed-value>' --timeout=10m
 ```
+
+Wait on the field that reports the workload, not the one that reports its
+container, and always pair it with the failure value. A classpath fix that did not
+work fails in seconds; without `--fail-on` the wait hides that for the whole
+timeout, and the next probe runs against a resource whose state you have not read.
 
 Re-run the probe that failed. A fix is confirmed by the probe changing its
 answer, not by the absence of the old log line.

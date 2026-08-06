@@ -7,7 +7,9 @@ a pod. The command surface is kubectl-style but intentionally excludes
 cluster-scoped resources, all-namespaces access, interactive exec/attach, cp,
 port forwarding, and kubeconfig mutation.
 
-Never poll with `sleep`; use `datus k8s wait --for=...` with a `--timeout`.
+Never poll with `sleep`, and never wrap `datus k8s` in a script that re-parses
+`-o json`: use `datus k8s wait --for=... --fail-on=... --timeout=...` to wait, and
+`-o jsonpath={.path.to.field}` to read one field.
 
 {% if profiles %}
 Configured Kubernetes environments:

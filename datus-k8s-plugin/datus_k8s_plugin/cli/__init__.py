@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import argparse
-import re
 import sys
 import time
 from datetime import datetime, timezone
@@ -13,16 +12,31 @@ from typing import Any
 
 import yaml
 
+from .. import jsonpath
 from ..client import Context, format_api_exception
 from ..config import Settings
 from ..errors import EXIT_USAGE, ApiError, ConfigError, PluginError, UsageError
-from ..output import FORMATS, plain, print_rendered
+from ..output import FORMATS, output_format, plain, print_rendered
 
 PROG = "datus k8s"
 
+#: Default `wait --fail-on`. Standard resources never set `status.error`; a custom
+#: resource that does is reporting a failure, and waiting past it is pointless.
+FAIL_ON_STATUS_ERROR = "jsonpath={.status.error}"
+
 
 def _output(parser: argparse.ArgumentParser, default: str = "table") -> None:
-    parser.add_argument("-o", "--output", choices=FORMATS, default=default)
+    parser.add_argument(
+        "-o",
+        "--output",
+        type=output_format,
+        default=default,
+        metavar="FORMAT",
+        help=(
+            f"one of {', '.join(FORMATS)}, or jsonpath={{.path.to.field}} to print "
+            "a single field per object instead of the whole document"
+        ),
+    )
 
 
 def _namespace(parser: argparse.ArgumentParser) -> None:
@@ -92,6 +106,12 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("logs", help="print pod logs")
     p.add_argument("pod")
     p.add_argument("-c", "--container")
+    p.add_argument(
+        "--all-containers",
+        dest="all_containers",
+        action="store_true",
+        help="print every container's log in turn, init containers first",
+    )
     p.add_argument("-f", "--follow", action="store_true")
     p.add_argument("--previous", action="store_true")
     p.add_argument("--since")
@@ -160,7 +180,24 @@ def build_parser() -> argparse.ArgumentParser:
             "readiness outside status.conditions"
         ),
     )
+    p.add_argument(
+        "--fail-on",
+        dest="fail_on",
+        action="append",
+        metavar="CONDITION",
+        help=(
+            "abort as soon as this condition holds instead of waiting out the "
+            "timeout; same forms as --for, repeatable. Defaults to "
+            f"{FAIL_ON_STATUS_ERROR}, which aborts once the resource reports a "
+            "non-empty status.error. Pass --fail-on=none to wait regardless."
+        ),
+    )
     p.add_argument("--timeout", default="30s")
+    p.add_argument(
+        "--quiet",
+        action="store_true",
+        help="do not report observed values on stderr while waiting",
+    )
     _selectors(p)
     p.set_defaults(func=_cmd_wait)
 
@@ -414,8 +451,37 @@ def _cmd_describe(ctx: Context, ns: argparse.Namespace) -> int:
     return 0
 
 
+def _pod_containers(ctx: Context, pod: str, namespace: str) -> list[str]:
+    """Every container in a pod, init containers first, in start order."""
+    spec = plain(ctx.client.get("pods", [pod], namespace))["items"][0].get("spec") or {}
+    names = [
+        container.get("name")
+        for group in ("initContainers", "init_containers", "containers")
+        for container in spec.get(group) or []
+    ]
+    return [str(name) for name in dict.fromkeys(names) if name]
+
+
 def _cmd_logs(ctx: Context, ns: argparse.Namespace) -> int:
     namespace = _scope(ctx, ns)
+    if ns.all_containers:
+        if ns.container:
+            raise UsageError("--all-containers cannot be combined with -c/--container")
+        if ns.follow:
+            raise UsageError("--all-containers cannot be combined with -f/--follow")
+        failures = 0
+        for container in _pod_containers(ctx, ns.pod, namespace):
+            one = argparse.Namespace(**vars(ns))
+            one.all_containers, one.container = False, container
+            print(f"==== {ns.pod}/{container} ====")
+            try:
+                _cmd_logs(ctx, one)
+            except Exception as exc:
+                # One container that has not started yet must not hide the logs of
+                # the container that explains why.
+                print(f"error: {format_api_exception(exc)}", file=sys.stderr)
+                failures += 1
+        return 0 if failures == 0 else 1
     kwargs: dict[str, Any] = {
         "name": ns.pod,
         "namespace": namespace,
@@ -612,62 +678,6 @@ def _parse_wait_timeout(raw: str) -> float:
     return duration_seconds(raw)
 
 
-_JSONPATH_STEP = re.compile(r"\.(?P<field>[A-Za-z0-9_-]+)|\[(?P<index>\d+)\]")
-
-
-def _jsonpath_value(item: dict[str, Any], expression: str) -> Any:
-    """Resolve a kubectl-style ``{.a.b[0].c}`` expression against one object.
-
-    Only field and list-index steps are supported — enough to read any status
-    field, which is what waiting needs. Filters, wildcards, ranges, and escaped
-    dots are rejected rather than silently mis-evaluated. A step that runs off
-    the end of the object yields ``None`` (the field simply is not there yet).
-    """
-    body = expression.strip()
-    if body.startswith("{") and body.endswith("}"):
-        body = body[1:-1].strip()
-    if not body.startswith("."):
-        raise UsageError(
-            f"unsupported jsonpath {expression!r}: it must start with '.', as in {{.status.phase}}"
-        )
-    current: Any = item
-    position = 0
-    while position < len(body):
-        step = _JSONPATH_STEP.match(body, position)
-        if step is None:
-            raise UsageError(
-                f"unsupported jsonpath {expression!r}: only .field and [index] steps are supported"
-            )
-        position = step.end()
-        field, index = step.group("field"), step.group("index")
-        if field is not None:
-            if not isinstance(current, dict):
-                return None
-            current = current.get(field)
-        else:
-            if not isinstance(current, list) or int(index) >= len(current):
-                return None
-            current = current[int(index)]
-    return current
-
-
-def _split_jsonpath_condition(raw: str) -> tuple[str, str | None]:
-    """Split ``{.status.phase}=Running`` into its expression and expected value."""
-    text = raw.strip()
-    if text.startswith("{"):
-        close = text.find("}")
-        if close < 0:
-            raise UsageError(f"unsupported jsonpath {raw!r}: the closing '}}' is missing")
-        expression, remainder = text[: close + 1], text[close + 1 :].strip()
-        if remainder and not remainder.startswith("="):
-            raise UsageError(
-                f"unsupported jsonpath {raw!r}: expected =VALUE after the expression"
-            )
-        return expression, remainder[1:] if remainder else None
-    expression, separator, expected = text.partition("=")
-    return expression, expected if separator else None
-
-
 def _condition_met(item: dict[str, Any], condition: str) -> bool:
     if condition.startswith("condition="):
         raw = condition[len("condition=") :]
@@ -684,8 +694,8 @@ def _condition_met(item: dict[str, Any], condition: str) -> bool:
         # Custom resources such as FlinkDeployment report readiness in their own
         # status fields and never populate status.conditions, so condition= alone
         # cannot express "wait until this job is RUNNING".
-        expression, expected = _split_jsonpath_condition(condition[len("jsonpath=") :])
-        value = _jsonpath_value(item, expression)
+        expression, expected = jsonpath.split_condition(condition[len("jsonpath=") :])
+        value = jsonpath.resolve(item, expression)
         if expected is None:
             return value not in (None, "", [], {}, False)
         return str(value) == expected
@@ -695,17 +705,69 @@ def _condition_met(item: dict[str, Any], condition: str) -> bool:
     )
 
 
+def _observed(item: dict[str, Any], condition: str) -> str:
+    """Describe what the resource currently reports for ``condition``.
+
+    A wait that prints nothing is indistinguishable from a hung command, and a
+    timeout that names only the resource does not say why it never arrived. Both
+    need the value that was actually read.
+    """
+    if condition.startswith("jsonpath="):
+        expression, _ = jsonpath.split_condition(condition[len("jsonpath=") :])
+        body = expression.strip().strip("{}").lstrip(".")
+        return f"{body}={jsonpath.display(jsonpath.resolve(item, expression)) or '<none>'}"
+    if condition.startswith("condition="):
+        name = condition[len("condition=") :].split("=", 1)[0]
+        for value in (item.get("status") or {}).get("conditions") or []:
+            if str(value.get("type", "")).casefold() == name.casefold():
+                reason = value.get("reason") or ""
+                seen = f"{name}={value.get('status')}"
+                return f"{seen} ({reason})" if reason else seen
+        return f"{name}=<absent>"
+    return "exists"
+
+
+def _fail_on_conditions(raw: list[str] | None) -> list[str]:
+    """Resolve ``--fail-on`` into the conditions that abort a wait.
+
+    Waiting for success without watching for failure is what turns a job that
+    died in ten seconds into a ten-minute silence, so a default is on: no
+    standard resource carries ``status.error``, and a custom resource that does
+    is reporting a failure by definition. ``--fail-on=none`` opts out.
+    """
+    if raw is None:
+        return [FAIL_ON_STATUS_ERROR]
+    conditions = [value for value in raw if value != "none"]
+    if any(value == "none" for value in raw) and conditions:
+        raise UsageError("--fail-on=none cannot be combined with another --fail-on condition")
+    return conditions
+
+
+def _failure_detail(item: dict[str, Any]) -> str:
+    """The failure text a resource carries, for the message that ends the wait."""
+    error = (item.get("status") or {}).get("error")
+    if isinstance(error, (dict, list)):
+        error = jsonpath.display(error)
+    text = " ".join(str(error or "").split())
+    return text if len(text) <= 400 else text[:399] + "…"
+
+
 def _cmd_wait(ctx: Context, ns: argparse.Namespace) -> int:
     namespace = _scope(ctx, ns)
     resource_name, embedded = _split_resource(ns.resource)
     names = embedded + ns.names
     if not names:
         raise UsageError("wait requires at least one named resource")
+    fail_on = _fail_on_conditions(ns.fail_on)
     timeout = _parse_wait_timeout(ns.timeout)
     deadline = None if timeout == 0 else time.monotonic() + timeout
+    started = time.monotonic()
     pending = set(names)
+    reported: dict[str, str] = {}
+    last_seen: dict[str, str] = {}
     while pending:
         for name in list(pending):
+            item: dict[str, Any] = {}
             try:
                 data = ctx.client.get(resource_name, [name], namespace)
                 item = plain(data)["items"][0]
@@ -718,12 +780,35 @@ def _cmd_wait(ctx: Context, ns: argparse.Namespace) -> int:
                     met = False
                 else:
                     raise
+            if item:
+                last_seen[name] = _observed(item, ns.condition)
+                # Success in the same observation wins: a resource that already
+                # satisfies --for has arrived, whatever else its status carries.
+                for failure in [] if met else fail_on:
+                    if not _condition_met(item, failure):
+                        continue
+                    detail = _failure_detail(item)
+                    message = (
+                        f"{resource_name}/{name} failed while waiting: {last_seen[name]}"
+                        f" matched --fail-on={failure}"
+                    )
+                    raise ApiError(f"{message}: {detail}" if detail else message)
+                if not ns.quiet and reported.get(name) != last_seen[name]:
+                    reported[name] = last_seen[name]
+                    elapsed = int(time.monotonic() - started)
+                    print(
+                        f"waiting for {resource_name}/{name}: {last_seen[name]} ({elapsed}s)",
+                        file=sys.stderr,
+                    )
             if met:
                 print(f"{resource_name}/{name} condition met")
                 pending.remove(name)
         if pending:
             if deadline is not None and time.monotonic() >= deadline:
-                raise ApiError(f"timed out waiting for: {', '.join(sorted(pending))}")
+                observed = ", ".join(
+                    f"{name} ({last_seen.get(name, 'never observed')})" for name in sorted(pending)
+                )
+                raise ApiError(f"timed out after {ns.timeout} waiting for: {observed}")
             time.sleep(1)
     return 0
 
@@ -979,6 +1064,11 @@ def main(argv: list[str], profile: dict[str, Any]) -> int:
         ns = parser.parse_args(argv)
     except SystemExit as exc:
         return int(exc.code or 0) if isinstance(exc.code, int) else EXIT_USAGE
+    except PluginError as exc:
+        # An argument validator (such as -o) rejected a value; report it the way
+        # every other usage error is reported rather than as a traceback.
+        print(f"error: {exc}", file=sys.stderr)
+        return exc.exit_code
     try:
         settings = Settings.from_profile(profile)
         return int(ns.func(Context(settings), ns) or 0)

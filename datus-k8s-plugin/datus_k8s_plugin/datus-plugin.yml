@@ -123,6 +123,7 @@ commands:
     args:
       - {name: pod, required: true}
       - {name: -c}
+      - {name: --all-containers}
       - {name: -n}
       - {name: --follow}
       - {name: --previous}
@@ -168,7 +169,9 @@ commands:
       - {name: resource, required: true}
       - {name: names, required: true}
       - {name: --for, required: true}
+      - {name: --fail-on}
       - {name: --timeout}
+      - {name: --quiet}
       - {name: -n}
   - name: rollout
     description: "Inspect or restart workload rollouts"
