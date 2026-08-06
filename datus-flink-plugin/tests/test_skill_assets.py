@@ -1,15 +1,14 @@
-"""Validate the reusable Flink Operator templates and their documented invariants."""
+"""Validate the Flink Operator templates the skill file carries inline."""
 
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import yaml
+from skill_blocks import blocks, languages, render
 
 ROOT = Path(__file__).resolve().parents[1]
-SKILL = ROOT / "datus_flink_plugin" / "skills" / "flink-k8s-operator"
-ASSETS = SKILL / "assets"
+SKILL = ROOT / "datus_flink_plugin" / "skills" / "flink-k8s-operator" / "SKILL.md"
 FIXTURES = ROOT / "tests" / "fixtures"
 
 VALUES = {
@@ -39,11 +38,26 @@ VALUES = {
 
 
 def render_yaml(name: str) -> dict:
-    text = (ASSETS / name).read_text(encoding="utf-8")
-    for placeholder, value in VALUES.items():
-        text = text.replace(placeholder, value)
-    assert re.search(r"__[A-Za-z0-9_]+__", text) is None, text
-    return yaml.safe_load(text)
+    return yaml.safe_load(render(blocks(SKILL)[name], VALUES))
+
+
+def test_skill_file_carries_every_template_inline():
+    assert set(blocks(SKILL)) == {
+        "flinkdeployment-application.yaml",
+        "flinkdeployment-session.yaml",
+        "flinksessionjob.yaml",
+        "flinkstatesnapshot.yaml",
+        "Dockerfile.jvm",
+        "Dockerfile.pyflink",
+    }
+    assert languages(SKILL) == {
+        "flinkdeployment-application.yaml": "yaml",
+        "flinkdeployment-session.yaml": "yaml",
+        "flinksessionjob.yaml": "yaml",
+        "flinkstatesnapshot.yaml": "yaml",
+        "Dockerfile.jvm": "dockerfile",
+        "Dockerfile.pyflink": "dockerfile",
+    }
 
 
 def test_application_template():
@@ -81,23 +95,22 @@ def test_snapshot_template_preserves_savepoint_data_by_default():
     assert data["spec"]["savepoint"]["disposeOnDelete"] is False
 
 
-def test_dockerfile_assets_are_templates_for_non_root_runtime_images():
-    jvm = (ASSETS / "Dockerfile.jvm").read_text(encoding="utf-8")
-    python = (ASSETS / "Dockerfile.pyflink").read_text(encoding="utf-8")
+def test_dockerfile_templates_are_non_root_runtime_images():
+    jvm = blocks(SKILL)["Dockerfile.jvm"]
+    python = blocks(SKILL)["Dockerfile.pyflink"]
     assert "COPY __JOB_JAR__ /opt/flink/usrlib/job.jar" in jvm
     assert "COPY __PYTHON_PROJECT__/ /opt/flink/usrlib/python/" in python
     assert jvm.rstrip().endswith("USER flink")
     assert python.rstrip().endswith("USER flink")
 
 
-def test_references_pin_stable_docs_but_require_runtime_discovery():
-    crds = (SKILL / "references" / "operator-crds.md").read_text(encoding="utf-8")
-    build = (SKILL / "references" / "build-and-images.md").read_text(encoding="utf-8")
-    assert "Operator 1.15" in crds
-    assert "always discover" in crds
-    assert "server-side dry-run" in crds
-    assert "Operator pod itself" in build
-    assert "present only in the Session Cluster image" in build
+def test_skill_pins_stable_docs_but_requires_runtime_discovery():
+    text = SKILL.read_text(encoding="utf-8")
+    assert "Operator 1.15" in text
+    assert "always discover" in text
+    assert "server-side dry-run" in text
+    assert "Operator pod itself" in text
+    assert "present only in the Session Cluster image" in text
 
 
 def test_minikube_smoke_fixtures_are_valid_operator_resources():

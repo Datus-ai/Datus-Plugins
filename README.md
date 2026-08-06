@@ -34,6 +34,7 @@ command surface and config schema may still change; see
 | `datus quicksight` | `datus-quicksight-plugin` | `0.1.0` | Browse QuickSight datasets/dashboards/analyses and refresh SPICE ingestions | [↗](datus-aws-plugins/datus-quicksight-plugin/README.md) |
 | `datus mwaa` | `datus-mwaa-plugin` | `0.1.0` | Inspect MWAA environments, mint tokens, and run the Airflow CLI over REST | [↗](datus-aws-plugins/datus-mwaa-plugin/README.md) |
 | `datus k8s` | `datus-k8s-plugin` | `0.1.0` | Inspect and operate namespace-scoped Kubernetes data workloads with a kubectl-style CLI | [↗](datus-k8s-plugin/README.md) |
+| `flink-local-dev` skill | `datus-flink-plugin` | `0.1.0` | Validate a Flink SQL job locally in an in-process MiniCluster — bounded dev sources, shadowed sinks — before it is deployed | [↗](datus-flink-plugin/README.md) |
 | `flink-k8s-operator` skill | `datus-flink-plugin` | `0.1.0` | Build and operate FlinkDeployment, FlinkSessionJob, and FlinkStateSnapshot resources through `datus k8s` | [↗](datus-flink-plugin/README.md) |
 
 The nine AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)

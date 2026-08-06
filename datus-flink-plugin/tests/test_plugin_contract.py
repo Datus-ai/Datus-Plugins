@@ -13,15 +13,17 @@ import yaml
 PLUGIN_NAME = "flink"
 ROOT = Path(__file__).resolve().parents[1]
 PKG = ROOT / "datus_flink_plugin"
-SKILL = PKG / "skills" / "flink-k8s-operator"
+SKILLS = PKG / "skills"
+SKILL = SKILLS / "flink-k8s-operator"
+LOCAL_DEV = SKILLS / "flink-local-dev"
 
 
 def manifest() -> dict:
     return yaml.safe_load((PKG / "datus-plugin.yml").read_text(encoding="utf-8"))
 
 
-def skill_frontmatter() -> dict:
-    text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+def skill_frontmatter(skill: Path = SKILL) -> dict:
+    text = (skill / "SKILL.md").read_text(encoding="utf-8")
     match = re.match(r"^---\n(.*?)\n---\n", text, flags=re.DOTALL)
     assert match is not None
     return yaml.safe_load(match.group(1))
@@ -31,7 +33,10 @@ def test_manifest_is_intentionally_skill_only():
     data = manifest()
     assert data == {
         "manifest_version": 1,
-        "description": "Build and operate Apache Flink jobs through bundled runtime-specific skills.",
+        "description": (
+            "Validate Apache Flink jobs locally and build, deploy, and operate them "
+            "through bundled runtime-specific skills."
+        ),
         "skills": "skills",
     }
     assert (PKG / data["skills"]).is_dir()
@@ -55,7 +60,7 @@ def test_entry_point_is_one_bare_package_mapping_with_no_runtime_dependencies():
     assert ":" not in data["project"]["entry-points"]["datus.plugins"][PLUGIN_NAME]
 
 
-def test_skill_frontmatter_and_progressive_resources():
+def test_operator_skill_frontmatter():
     assert skill_frontmatter() == {
         "name": "flink-k8s-operator",
         "description": (
@@ -67,21 +72,63 @@ def test_skill_frontmatter_and_progressive_resources():
             "recovery, or deletion. Delegate every Kubernetes workload operation to `datus k8s`."
         ),
     }
-    for relative in (
-        "references/operator-crds.md",
-        "references/build-and-images.md",
-        "assets/flinkdeployment-application.yaml",
-        "assets/flinkdeployment-session.yaml",
-        "assets/flinksessionjob.yaml",
-        "assets/flinkstatesnapshot.yaml",
-        "assets/Dockerfile.jvm",
-        "assets/Dockerfile.pyflink",
+
+
+def test_local_dev_skill_frontmatter():
+    frontmatter = skill_frontmatter(LOCAL_DEV)
+    assert set(frontmatter) == {"name", "description"}
+    assert frontmatter["name"] == "flink-local-dev"
+    for phrase in (
+        "in-process MiniCluster",
+        "SQL Client",
+        "before promoting it to production",
+        "flink-k8s-operator",
+        "never writes to a production sink",
     ):
-        assert (SKILL / relative).is_file(), relative
+        assert phrase in frontmatter["description"], phrase
+
+
+def test_bundled_skills_are_exactly_the_two_documented_runtimes():
+    assert sorted(path.name for path in SKILLS.iterdir()) == [
+        "flink-k8s-operator",
+        "flink-local-dev",
+    ]
+
+
+def test_every_skill_is_one_self_contained_file():
+    """Datus discovers a skill's SKILL.md only — no assets/ or references/ directory.
+
+    Everything a skill hands to a project (manifests, Dockerfiles, SQL overlays,
+    the runner script) must therefore be inlined in that single file.
+    """
+    for skill in (SKILL, LOCAL_DEV):
+        assert [path.name for path in skill.iterdir()] == ["SKILL.md"], sorted(
+            path.name for path in skill.iterdir()
+        )
+        text = (skill / "SKILL.md").read_text(encoding="utf-8")
+        # No links to sibling files that cannot ship with the skill.
+        assert re.search(r"\]\((?!https?://|#)[^)]+\)", text) is None, skill
+
+
+def test_local_dev_hands_production_deployment_to_the_operator_skill():
+    skill = (LOCAL_DEV / "SKILL.md").read_text(encoding="utf-8")
+    assert "flink-k8s-operator" in skill
+    # The local skill validates; it never deploys or builds production images.
+    for forbidden in ("datus k8s ", "docker build", "docker push"):
+        assert forbidden not in skill, forbidden
+
+
+def test_local_dev_never_recommends_a_remote_execution_target():
+    text = (LOCAL_DEV / "SKILL.md").read_text(encoding="utf-8")
+    for line in text.splitlines():
+        assert not re.search(
+            r"^\s*(SET\s+'execution\.target'\s*=\s*'(?!local)|-Dexecution\.target=(?!local))",
+            line,
+        ), line
 
 
 def test_workload_examples_never_invoke_kubectl():
-    for path in SKILL.rglob("*.md"):
+    for path in SKILLS.rglob("*.md"):
         text = path.read_text(encoding="utf-8")
         assert re.search(r"(?m)^\s*kubectl(?:\s|$)", text) is None, path
 
