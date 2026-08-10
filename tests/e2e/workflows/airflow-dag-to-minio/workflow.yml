@@ -1,0 +1,21 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: airflow-dag-to-minio
+  description: Reference workflow for generating, deploying, and triggering a deterministic Airflow DAG.
+  tags: [reference, nightly, airflow, minio]
+spec:
+  target: {distribution: datus-airflow-plugin, path: datus-airflow-plugin, name: airflow}
+  supportPlugins:
+    - {distribution: datus-s3-plugin, path: datus-aws-plugins/datus-s3-plugin, name: s3}
+  agent: {prompt: prompt.md, timeoutSeconds: 1800}
+  environment: {components: [airflow, minio], lock: environment.lock.yml}
+  workspace:
+    outputs: [dags/*.py, results/airflow-run.json]
+  permissions:
+    bashAllow: ["datus airflow dags deploy:*", "datus airflow dags trigger:*", "datus airflow dags wait:*", "datus airflow dags get:*", "datus airflow tasks logs:*"]
+  oracles:
+    - {type: files, config: {patterns: [dags/*.py, results/airflow-run.json]}}
+    - {type: airflow_run, config: {dagId: "e2e_{{RUN_ID}}", state: success, outputRows: 10}}
+  efficiency: {maxToolCalls: 14, maxLlmTurns: 8, maxTokens: 80000, maxUnexpectedFailures: 0}
+  cleanup: {deleteNamespace: true, deleteBucketPrefix: true}

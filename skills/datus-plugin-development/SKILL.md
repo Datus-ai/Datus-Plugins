@@ -1,14 +1,6 @@
 ---
 name: datus-plugin-development
 description: Wrap a user-provided SDK / REST API / documentation into an installable Datus plugin. Produces a design draft FIRST (config schema, CLI command list with doc citations + permission rules, bundled-skill plan), then STOPS for user confirmation before writing any code. Fully self-contained — the entire datus-plugin.yml manifest contract is inlined below.
-triggers:
-  - datus plugin
-  - build a datus plugin
-  - wrap sdk into plugin
-  - wrap api into plugin
-  - create datus plugin
-  - plugin development
-argument-hint: "[path or URL to the SDK / API / docs to wrap, plus the desired command name]"
 ---
 
 # Datus Plugin Development Skill
@@ -229,7 +221,19 @@ scoping. Show both halves:
 End with an explicit prompt: "Confirm this scope, or tell me which excluded
 capabilities to include."
 
-### 6. Open questions
+### 6. End-to-end testability
+
+- Deterministic user goal: <one bounded task the plugin must complete through `datus -p`>.
+- Environment fixtures: <minikube / MinIO / Flink Operator / other pinned services, or none>.
+- Independent oracle: <exact external state, schema, count, checksum, or resource fields to verify without calling the tested plugin>.
+- Generated artifacts: <workspace-relative output patterns to preserve>.
+- Support plugins and minimum permission prefixes: <only what the workflow needs>.
+- Efficiency signals: <expected command sequence plus tool-call / turn / token / unexpected-failure budgets>.
+- Feasibility: <runnable now | reference workflow pending fixture/oracle>, including prerequisites.
+
+This section becomes the input to `$build-datus-plugin-e2e` after implementation. The E2E oracle, not the LLM's narrative, owns the correctness verdict.
+
+### 7. Open questions
 
 - <anything the docs did not resolve: auth details, pagination, rate limits,
   command-name conflicts, or scope calls you are unsure about …>
@@ -285,6 +289,10 @@ Implement in this order:
 8. **Tests** — call `main(argv, profile)` with a plain dict (no `agent.yml`,
    no Datus imports); validate the manifest with `yaml.safe_load` and render
    the template with plain Jinja2. See [Testing your plugin](#testing-your-plugin).
+9. **E2E handoff** — after unit and manifest-contract tests pass, invoke
+   `$build-datus-plugin-e2e` when end-to-end coverage is in scope. Implement the
+   approved §6 deterministic goal through the repository's pytest harness; do
+   not add a standalone test CLI and do not use LLM judgment as the oracle.
 
 ### Verify against the constraints checklist
 
@@ -305,7 +313,9 @@ Before declaring done, confirm every item in
 
 Summarize: the package created, entry-point name, manifest contents (config
 schema, CLI commands and their permission posture, skills), and the checklist +
-verification results. Note any open questions still outstanding.
+verification results. Note any open questions still outstanding. Include the
+deterministic E2E target and either the `$build-datus-plugin-e2e` result or the
+exact handoff still required.
 
 ---
 

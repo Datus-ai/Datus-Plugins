@@ -1,0 +1,9 @@
+agent:
+  repo: https://github.com/Datus-ai/Datus-agent.git
+  ref: main
+  config: /absolute/path/to/agent.yml
+pluginRoot: /absolute/path/to/Datus-Plugins
+repeats: 1
+keepSuite: false
+artifactsRoot: /absolute/path/to/Datus-Plugins/.datus-e2e/runs
+cacheRoot: /absolute/path/to/Datus-Plugins/.datus-e2e/cache

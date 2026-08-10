@@ -1,0 +1,28 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: flink-paimon-recovery
+  description: Reference workflow for diagnosing and repairing a seeded failed FlinkDeployment.
+  tags: [reference, nightly, flink, diagnosis]
+spec:
+  target: {distribution: datus-flink-plugin, path: datus-flink-plugin, name: flink}
+  supportPlugins:
+    - {distribution: datus-k8s-plugin, path: datus-k8s-plugin, name: k8s}
+  agent: {prompt: prompt.md, timeoutSeconds: 1800}
+  environment: {components: [minikube, minio, flink-operator, flink-paimon-runner], lock: environment.lock.yml}
+  workspace:
+    seed: seed
+    outputs: [recovery/*.yaml, recovery/diagnosis.md]
+  permissions:
+    bashAllow: ["datus k8s get:*", "datus k8s logs:*", "datus k8s events:*", "datus k8s wait:*", "datus k8s apply:*"]
+  oracles:
+    - {type: files, config: {patterns: [recovery/*.yaml, recovery/diagnosis.md]}}
+    - {type: flink_paimon, config: {deployment: "recovery-{{RUN_ID}}", database: e2e, table: recovered_events, count: 100}}
+  efficiency:
+    maxToolCalls: 18
+    maxLlmTurns: 10
+    maxTokens: 100000
+    maxUnexpectedFailures: 1
+    forbiddenCommands: ["(^|\\s)kubectl(\\s|$)", "sleep\\s+[0-9]"]
+    expectedCommands: ["^datus k8s events", "^datus k8s logs"]
+  cleanup: {deleteNamespace: true, deleteBucketPrefix: true}

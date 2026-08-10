@@ -113,13 +113,16 @@ datus s3 --profile staging cat s3://my-bucket/report.json
 
 ## Develop your own plugin
 
-### Use the development skill (recommended)
+### Use the plugin engineering skills (recommended)
 
-`datus-plugin-development` is a bundled agent skill that turns any SDK / REST API
-/ documentation into an installable plugin. It is **design-first**: it produces a
-design draft (config schema, command list with doc citations + permission rules,
-bundled-skill plan) and **stops for your confirmation** before writing any code.
-The full plugin contract is inlined in the skill, so it needs no external docs.
+One marketplace installation provides three skills that Claude Code or Codex
+runs directly—there is no additional framework CLI:
+
+| Skill | Purpose |
+|---|---|
+| `datus-plugin-development` | Produce a design draft, stop for confirmation, then implement the plugin. |
+| `build-datus-plugin-e2e` | Define and run a deterministic `datus -p` workflow through the pytest harness. |
+| `optimize-datus-plugin` | Analyze oracle/session/generated-file evidence and iterate on the plugin. |
 
 #### Claude Code
 
@@ -128,10 +131,12 @@ The full plugin contract is inlined in the skill, so it needs no external docs.
 /plugin install datus-plugin-development@datus-plugin
 ```
 
-Then invoke it with the SDK / API / docs to wrap:
+Then invoke the required workflow:
 
 ```
 /datus-plugin-development <path or URL to the SDK / API / docs, plus the desired command name>
+/build-datus-plugin-e2e <plugin path and deterministic goal>
+/optimize-datus-plugin <E2E run artifact path>
 ```
 
 #### Codex
@@ -145,7 +150,15 @@ then start a new session and invoke the skill:
 
 ```
 $datus-plugin-development <path or URL to the SDK / API / docs, plus the desired command name>
+$build-datus-plugin-e2e <plugin path and deterministic goal>
+$optimize-datus-plugin <E2E run artifact path>
 ```
+
+The reusable implementation is under [`tests/e2e`](tests/e2e/README.md). Live
+runs resolve a requested datus-agent branch to an immutable SHA, pack the
+current plugin checkout with that agent, install the resulting `zip:` bundle,
+and invoke `datus -p`. Programmatic oracles determine correctness; session
+analysis is used only to diagnose quality and efficiency.
 
 ### The plugin contract
 

@@ -212,6 +212,9 @@ tempCodeRunnerFile.py
 # PyPI configuration file
 .pypirc
 
+# Datus plugin LLM E2E runs (sessions, generated files, local kubeconfigs)
+.datus-e2e/
+
 # Marimo
 marimo/_static/
 marimo/_lsp/

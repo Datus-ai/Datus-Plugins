@@ -25,9 +25,10 @@ uv run --package datus-airflow-plugin pytest datus-airflow-plugin
 uv run --package datus-s3-plugin      pytest datus-aws-plugins/datus-s3-plugin
 ```
 
-> ⚠️ **Do not run `pytest` from the repo root.** Every plugin has an identically
+> ⚠️ **Do not run unscoped `pytest` from the repo root.** Every plugin has an identically
 > named `tests/test_plugin_contract.py`; collecting them together triggers a
-> pytest module-name collision error. Always scope to one package.
+> pytest module-name collision error. Always scope to one package, or explicitly
+> select the repository-owned `tests/e2e/` suite.
 
 ## Repository layout
 
@@ -129,6 +130,19 @@ convention: `0` success · `1` runtime/API error · `2` usage · `3` config erro
 - **Integration tests are deterministic** — no real LLM or live-service calls.
 - Test-only deps (`pytest`, `jinja2`, `jsonschema`) live in the `dev` optional
   dependencies of each `pyproject.toml`.
+
+The LLM-driven E2E harness is invoked by `build-datus-plugin-e2e` and
+`optimize-datus-plugin`, not by a standalone CLI. Its offline contracts are safe
+for ordinary development:
+
+```bash
+uv run --group e2e pytest tests/e2e/test_workflow_contracts.py tests/e2e/test_harness_unit.py -q
+```
+
+Live minikube/LLM tests are opt-in with `--run-live`; see
+[`tests/e2e/README.md`](tests/e2e/README.md). The deterministic oracle is the
+correctness gate. LLM/session analysis may score efficiency but cannot override
+the oracle.
 
 ### Pre-submit checklist
 

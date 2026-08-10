@@ -20,6 +20,12 @@ members = [
     "datus-statsig-plugin",
 ]
 
+[manifest.dependency-groups]
+e2e = [
+    { name = "pytest", specifier = ">=8.0" },
+    { name = "pyyaml", specifier = ">=6.0" },
+]
+
 [[package]]
 name = "attrs"
 version = "26.1.0"
