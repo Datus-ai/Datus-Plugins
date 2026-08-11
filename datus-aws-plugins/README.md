@@ -1,11 +1,13 @@
 # datus-aws-plugins
 
-The [Datus](https://datus.ai) **AWS plugins** — nine independently published
-plugins plus the shared `datus-aws-common` library, grouped under this one
-directory. Unlike `datus-airflow-plugin` and `datus-statsig-plugin` (which sit at
-the repo root), the AWS plugins are collected here because they all build on the
-same boto3/session/output layer — but each is still its **own distribution** with
-its own `pyproject.toml`, version, and `datus.plugins` entry point.
+The [Datus](https://datus.ai) **AWS plugins** are independently published
+service plugins plus the shared `datus-aws-common` library, grouped under this
+one directory. Each plugin is its own distribution, profile namespace, and
+`datus.plugins` entry point, while sharing the same boto3/session/output layer.
+
+`datus-eks-plugin` also implements the provider wire protocol consumed by
+`datus-k8s-plugin`: EKS owns cluster selection and AWS authentication, while a
+small same-named k8s profile owns namespace policy. No AWS CLI is required.
 
 Install only the plugins you need:
 
@@ -20,6 +22,7 @@ Each plugin depends on `datus-aws-common`, so it is installed automatically.
 
 | Command | Distribution | Import package | Docs |
 |---|---|---|---|
+| `datus eks` | `datus-eks-plugin` | `datus_eks_plugin` | [README](datus-eks-plugin/README.md) |
 | `datus s3` | `datus-s3-plugin` | `datus_s3_plugin` | [README](datus-s3-plugin/README.md) |
 | `datus glue` | `datus-glue-plugin` | `datus_glue_plugin` | [README](datus-glue-plugin/README.md) |
 | `datus iam` | `datus-iam-plugin` | `datus_iam_plugin` | [README](datus-iam-plugin/README.md) |
