@@ -87,10 +87,13 @@ class EnvironmentContext:
             self.created_suite = True
         self.kubectl(["config", "use-context", self.profile], "select-owned-context")
         self.kubectl(["create", "namespace", self.namespace], "create-run-namespace", check=False)
+        if "flink-operator" in self.components:
+            self._up_flink_service_account()
 
         if "minio" in self.components:
             self._up_minio()
         if "flink-operator" in self.components:
+            self._up_cert_manager()
             self._up_flink_operator()
         if "flink-paimon-runner" in self.components:
             self._build_runner_image()
@@ -107,6 +110,24 @@ class EnvironmentContext:
             "PAIMON_WAREHOUSE": f"s3://warehouse/{self.run_id}",
             "FLINK_RUNNER_IMAGE": f"datus-e2e/flink-paimon-runner:{self.suite_id}",
         }
+
+    def _up_flink_service_account(self) -> None:
+        self.kubectl(
+            ["-n", self.namespace, "create", "serviceaccount", "flink"],
+            "flink-service-account",
+        )
+        self.kubectl(
+            [
+                "-n",
+                self.namespace,
+                "create",
+                "rolebinding",
+                "flink-edit",
+                "--clusterrole=edit",
+                f"--serviceaccount={self.namespace}:flink",
+            ],
+            "flink-role-binding",
+        )
 
     def _up_minio(self) -> None:
         manifest_path = self.repo_root / "tests/e2e/environments/minio.yaml"
@@ -144,6 +165,19 @@ class EnvironmentContext:
             timeout=900,
         )
 
+    def _up_cert_manager(self) -> None:
+        version = str(self.lock["certManagerChart"])
+        repository = str(self.lock["certManagerRepository"])
+        self.command(
+            [
+                "helm", "upgrade", "--install", "cert-manager", "cert-manager",
+                "--repo", repository, "--version", version, "--namespace", "cert-manager", "--create-namespace",
+                "--set", "crds.enabled=true", "--wait", "--timeout", "10m",
+            ],
+            "cert-manager-install",
+            timeout=900,
+        )
+
     def _build_runner_image(self) -> None:
         source = self.repo_root / "tests/e2e/environments/flink-paimon-runner"
         tag = f"datus-e2e/flink-paimon-runner:{self.suite_id}"
@@ -152,6 +186,7 @@ class EnvironmentContext:
                 "minikube", "-p", self.profile, "image", "build", "-t", tag,
                 "--build-opt", f"build-arg=FLINK_VERSION={self.lock['flink']}",
                 "--build-opt", f"build-arg=PAIMON_VERSION={self.lock['paimon']}",
+                "--build-opt", f"build-arg=HADOOP_VERSION={self.lock['hadoop']}",
                 str(source),
             ],
             "flink-runner-image",
@@ -277,8 +312,13 @@ def load_environment_lock(workflow_dir: Path, environment: dict[str, Any]) -> di
         raise ValueError("environment lock must be a mapping")
     required_by_component = {
         "minio": {"minioImage", "mcImage"},
-        "flink-operator": {"flinkOperatorChart", "flinkOperatorRepository"},
-        "flink-paimon-runner": {"flink", "paimon"},
+        "flink-operator": {
+            "certManagerChart",
+            "certManagerRepository",
+            "flinkOperatorChart",
+            "flinkOperatorRepository",
+        },
+        "flink-paimon-runner": {"flink", "hadoop", "paimon"},
     }
     for component in environment.get("components") or []:
         missing = required_by_component.get(component, set()) - set(value)

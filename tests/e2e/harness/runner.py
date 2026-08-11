@@ -72,7 +72,23 @@ def run_attempt(workflow: Workflow, run_config: RunConfig, *, repo_root: Path, a
         config_dir.mkdir(exist_ok=True)
         if environment.kubeconfig.exists():
             owned_kubeconfig = config_dir / "kubeconfig"
-            shutil.copy2(environment.kubeconfig, owned_kubeconfig)
+            flattened = environment.command(
+                [
+                    "kubectl",
+                    "--kubeconfig",
+                    environment.kubeconfig,
+                    "config",
+                    "view",
+                    "--flatten",
+                    "--minify",
+                    "--raw",
+                ],
+                "flatten-owned-kubeconfig",
+                timeout=60,
+            )
+            owned_kubeconfig.write_text(flattened.stdout, encoding="utf-8")
+            if os.name != "nt":
+                owned_kubeconfig.chmod(0o600)
             variables["KUBECONFIG"] = str(owned_kubeconfig)
         prompt = render_prompt(workflow, variables)
         (run_dir / "prompt.md").write_text(prompt, encoding="utf-8")

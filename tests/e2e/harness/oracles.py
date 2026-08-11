@@ -116,6 +116,7 @@ def _minio_object(config: dict[str, Any], *, environment: EnvironmentContext, wo
 def _wait_flink_finished(environment: EnvironmentContext, deployment: str, timeout: int) -> tuple[bool, dict[str, Any]]:
     deadline = time.monotonic() + timeout
     last: dict[str, Any] = {}
+    missing = 0
     while time.monotonic() < deadline:
         result = environment.kubectl(
             ["-n", environment.namespace, "get", "flinkdeployment", deployment, "-o", "json"],
@@ -123,6 +124,7 @@ def _wait_flink_finished(environment: EnvironmentContext, deployment: str, timeo
             check=False,
         )
         if result.returncode == 0:
+            missing = 0
             try:
                 last = json.loads(result.stdout)
             except json.JSONDecodeError:
@@ -131,6 +133,10 @@ def _wait_flink_finished(environment: EnvironmentContext, deployment: str, timeo
             if state == "FINISHED":
                 return True, last
             if state in {"FAILED", "FAILING"}:
+                return False, last
+        else:
+            missing += 1
+            if missing >= 3:
                 return False, last
         time.sleep(5)
     return False, last

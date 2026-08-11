@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import subprocess
 from pathlib import Path
 
 import pytest
 import yaml
 
-from tests.e2e.harness.agent import _write_configs, agent_install_source, resolve_agent_sha
+from tests.e2e.harness.agent import _write_configs, prepare_agent_source, resolve_agent_sha
 from tests.e2e.harness.artifacts import capture_generated, export_session, redact, sha256, snapshot_text
 from tests.e2e.harness.process import check_efficiency, diagnose, load_payloads
 from tests.e2e.harness.schema import ContractError, RunConfig, Workflow
@@ -77,6 +78,7 @@ def test_jsonl_process_diagnostics_and_efficiency(tmp_path: Path):
     assert process["duplicate_commands"] == [{"command": "datus k8s get pods", "count": 2}]
     assert process["unexpected_failures"] == [{"tool": "bash", "status": "failed"}]
     assert process["total_tokens"] == 42
+    assert process["effective_tokens"] == 42
 
     failures = check_efficiency(
         process,
@@ -107,7 +109,13 @@ def test_process_understands_datus_message_payload_shape():
                 },
                 {
                     "type": "usage",
-                    "payload": {"requests": 2, "input_tokens": 10, "output_tokens": 3, "total_tokens": 13},
+                    "payload": {
+                        "requests": 2,
+                        "input_tokens": 10,
+                        "output_tokens": 3,
+                        "total_tokens": 13,
+                        "cached_tokens": 7,
+                    },
                 },
             ],
         }
@@ -120,6 +128,10 @@ def test_process_understands_datus_message_payload_shape():
     assert process["unexpected_failures"] == [{"tool": "bash", "status": "false"}]
     assert process["llm_turns"] == 2
     assert process["total_tokens"] == 13
+    assert process["cached_input_tokens"] == 7
+    assert process["effective_tokens"] == 6
+    assert check_efficiency(process, {"maxTokens": 6}) == []
+    assert check_efficiency(process, {"maxTokens": 5}) == ["effective tokens: 6 exceeds 5"]
 
 
 def test_export_session_aggregates_usage_and_redacts(tmp_path: Path):
@@ -134,16 +146,28 @@ def test_export_session_aggregates_usage_and_redacts(tmp_path: Path):
             (json.dumps({"role": "user", "api_key": "top-secret", "text": "Bearer abc.def"}),),
         )
         conn.execute(
-            "CREATE TABLE turn_usage (requests INTEGER, input_tokens INTEGER, output_tokens INTEGER, total_tokens INTEGER)"
+            "CREATE TABLE turn_usage (requests INTEGER, input_tokens INTEGER, output_tokens INTEGER, "
+            "total_tokens INTEGER, input_tokens_details JSON)"
         )
-        conn.executemany("INSERT INTO turn_usage VALUES (?, ?, ?, ?)", [(1, 10, 3, 13), (1, 7, 2, 9)])
+        conn.executemany(
+            "INSERT INTO turn_usage VALUES (?, ?, ?, ?, ?)",
+            [(1, 10, 3, 13, '{"cached_tokens": 6}'), (1, 7, 2, 9, '{"cached_tokens": 4}')],
+        )
     (session_dir / "latest.sysprompt.json").write_text(
         json.dumps({"token": "secret", "template": "use OPENAI_API_KEY"}), encoding="utf-8"
     )
 
     result = export_session(home, tmp_path / "export")
 
-    assert result["usage"] == {"requests": 2, "input_tokens": 17, "output_tokens": 5, "total_tokens": 22}
+    assert result["usage"] == {
+        "requests": 2,
+        "input_tokens": 17,
+        "output_tokens": 5,
+        "total_tokens": 22,
+        "cached_input_tokens": 10,
+        "uncached_input_tokens": 7,
+        "effective_tokens": 12,
+    }
     assert result["messages"] == 1
     message = json.loads((tmp_path / "export/session.jsonl").read_text(encoding="utf-8"))
     assert message == {"role": "user", "api_key": "<redacted>", "text": "Bearer <redacted>"}
@@ -180,12 +204,28 @@ def test_redact_handles_nested_secret_values():
     }
 
 
-def test_local_agent_source_is_pinned_to_sha(tmp_path: Path):
+def test_local_agent_source_is_exported_at_pinned_sha_without_git_metadata(tmp_path: Path):
     repo = tmp_path / "agent checkout"
     repo.mkdir()
-    sha = "a" * 40
+    subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.name", "E2E Test"], cwd=repo, check=True)
+    subprocess.run(["git", "config", "user.email", "e2e@example.test"], cwd=repo, check=True)
+    tracked = repo / "version.txt"
+    tracked.write_text("pinned\n", encoding="utf-8")
+    subprocess.run(["git", "add", "version.txt"], cwd=repo, check=True)
+    subprocess.run(["git", "commit", "-qm", "pinned"], cwd=repo, check=True)
+    sha = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=repo, check=True, capture_output=True, text=True
+    ).stdout.strip()
+    tracked.write_text("working tree change\n", encoding="utf-8")
 
-    assert agent_install_source(str(repo), sha) == f"git+{repo.resolve().as_uri()}@{sha}"
+    source = prepare_agent_source(
+        str(repo), sha, cache_root=tmp_path / "cache", repo_root=tmp_path, log_dir=tmp_path / "logs"
+    )
+
+    assert (source / "version.txt").read_text(encoding="utf-8") == "pinned\n"
+    assert (source / ".datus-source-sha").read_text(encoding="utf-8").strip() == sha
+    assert not (source / ".git").exists()
 
 
 def test_remote_annotated_tag_resolves_to_peeled_commit(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
@@ -231,6 +271,7 @@ def test_agent_config_is_visible_to_child_datus_commands(tmp_path: Path):
     assert home == run_dir / "datus-home"
     agent = yaml.safe_load(config_path.read_text(encoding="utf-8"))["agent"]
     assert agent["home"] == str(home)
+    assert agent["config_mutable"] is False
     assert agent["plugins"]["sample"]["e2e"]["default"] is True
     assert agent["bash"]["sandbox"] == {"enabled": True, "mode": "strict", "deny_network": False}
     config_path.parent.chmod(0o700)

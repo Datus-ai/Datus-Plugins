@@ -107,7 +107,8 @@ def test_dockerfile_templates_are_non_root_runtime_images():
 def test_skill_pins_stable_docs_but_requires_runtime_discovery():
     text = SKILL.read_text(encoding="utf-8")
     assert "Operator 1.15" in text
-    assert "always discover" in text
+    assert "target cluster is authoritative" in text
+    assert "one CRD discovery check" in text
     assert "server-side dry-run" in text
     assert "Operator pod itself" in text
     assert "present only in the Session Cluster image" in text

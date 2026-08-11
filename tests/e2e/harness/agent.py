@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import os
 import re
+import shutil
+import shlex
+import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -82,13 +85,47 @@ def resolve_agent_sha(repo: str, ref: str, *, repo_root: Path, log_dir: Path) ->
     return sha
 
 
-def agent_install_source(repo: str, sha: str) -> str:
-    """Return a PEP 508 VCS source that always installs the resolved commit."""
+def prepare_agent_source(repo: str, sha: str, *, cache_root: Path, repo_root: Path, log_dir: Path) -> Path:
+    """Export an immutable source tree without initializing unrelated Git submodules."""
+    source_root = cache_root / "agents" / sha
+    source = source_root / "source"
+    marker = source / ".datus-source-sha"
+    if marker.is_file() and marker.read_text(encoding="utf-8").strip() == sha:
+        return source
+    if source.exists():
+        raise RuntimeError(f"agent source cache is incomplete: {source}")
+    source_root.mkdir(parents=True, exist_ok=True)
+    archive = source_root / "source.tar"
     local = Path(repo).expanduser()
-    location = local.resolve().as_uri() if local.exists() else repo
-    if location.startswith("git+"):
-        location = location.removeprefix("git+")
-    return f"git+{location}@{sha}"
+    if local.exists():
+        git_dir = local.resolve()
+    else:
+        git_dir = source_root / "repository.git"
+        if not git_dir.exists():
+            run_command(["git", "init", "--bare", git_dir], cwd=repo_root, log_dir=log_dir, name="agent-source-init")
+        run_command(
+            ["git", "-C", git_dir, "fetch", "--depth=1", repo, sha],
+            cwd=repo_root,
+            log_dir=log_dir,
+            name="agent-source-fetch",
+            timeout=1800,
+        )
+    run_command(
+        ["git", "-C", git_dir, "archive", "--format=tar", f"--output={archive}", sha],
+        cwd=repo_root,
+        log_dir=log_dir,
+        name="agent-source-archive",
+    )
+    temporary = Path(tempfile.mkdtemp(prefix="source-", dir=source_root))
+    try:
+        shutil.unpack_archive(archive, temporary)
+        (temporary / ".datus-source-sha").write_text(sha + "\n", encoding="utf-8")
+        temporary.replace(source)
+    finally:
+        archive.unlink(missing_ok=True)
+        if temporary.exists():
+            shutil.rmtree(temporary)
+    return source
 
 
 def prepare_agent_venv(config: RunConfig, sha: str, *, repo_root: Path, log_dir: Path) -> tuple[Path, Path, Path]:
@@ -96,10 +133,37 @@ def prepare_agent_venv(config: RunConfig, sha: str, *, repo_root: Path, log_dir:
     python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
     datus = venv / ("Scripts/datus.exe" if os.name == "nt" else "bin/datus")
     if datus.is_file():
+        pip_check = run_command(
+            [python, "-m", "pip", "--version"],
+            cwd=repo_root,
+            log_dir=log_dir,
+            name="agent-pip-check",
+            check=False,
+        )
+        if pip_check.returncode:
+            run_command(
+                ["uv", "pip", "install", "--python", python, "pip"],
+                cwd=repo_root,
+                log_dir=log_dir,
+                name="agent-pip-install",
+                timeout=300,
+            )
         return venv, python, datus
     venv.parent.mkdir(parents=True, exist_ok=True)
-    run_command(["uv", "venv", str(venv), "--python", "3.12"], cwd=repo_root, log_dir=log_dir, name="agent-venv", timeout=300)
-    source = agent_install_source(config.agent_repo, sha)
+    run_command(
+        ["uv", "venv", str(venv), "--python", "3.12", "--seed"],
+        cwd=repo_root,
+        log_dir=log_dir,
+        name="agent-venv",
+        timeout=300,
+    )
+    source = prepare_agent_source(
+        config.agent_repo,
+        sha,
+        cache_root=config.cache_root,
+        repo_root=repo_root,
+        log_dir=log_dir,
+    )
     run_command(["uv", "pip", "install", "--python", str(python), source], cwd=repo_root, log_dir=log_dir, name="agent-install", timeout=1800)
     if not datus.is_file():
         raise RuntimeError("installed agent did not provide the datus executable")
@@ -123,6 +187,7 @@ def _write_configs(
     home.mkdir(parents=True, exist_ok=True)
     agent["home"] = str(home)
     agent["project_name"] = variables["RUN_ID"].replace("-", "_")
+    agent["config_mutable"] = False
     services = agent.setdefault("services", {})
     if not isinstance(services, dict):
         raise ValueError("base agent config agent.services key must be a mapping")
@@ -244,6 +309,23 @@ def render_prompt(workflow: Workflow, variables: dict[str, str]) -> str:
 
 
 def run_datus(runtime: AgentRuntime, workflow: Workflow, prompt: str, run_dir: Path):
+    child_home = runtime.workspace / ".datus-child-home"
+    child_home.mkdir(exist_ok=True)
+    child_bin = runtime.workspace / ".datus-bin"
+    child_bin.mkdir(exist_ok=True)
+    child_datus = child_bin / ("datus.cmd" if os.name == "nt" else "datus")
+    if os.name == "nt":
+        child_datus.write_text(f'@set "HOME={child_home}"\r\n@"{runtime.datus}" %*\r\n', encoding="utf-8")
+    else:
+        child_datus.write_text(
+            "#!/bin/sh\n"
+            f"HOME={shlex.quote(str(child_home))}\n"
+            "export HOME\n"
+            f"exec {shlex.quote(str(runtime.datus))} \"$@\"\n",
+            encoding="utf-8",
+        )
+        child_datus.chmod(0o700)
+    child_path = os.pathsep.join((str(child_bin), str(runtime.datus.parent), os.environ.get("PATH", "")))
     result = run_command(
         [
             runtime.datus,
@@ -258,6 +340,7 @@ def run_datus(runtime: AgentRuntime, workflow: Workflow, prompt: str, run_dir: P
         cwd=runtime.workspace,
         log_dir=run_dir,
         name="datus",
+        env={"PATH": child_path},
         timeout=workflow.timeout_seconds,
         check=False,
     )

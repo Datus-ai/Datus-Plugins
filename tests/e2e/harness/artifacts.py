@@ -56,11 +56,26 @@ def export_session(home: Path, destination: Path) -> dict[str, Any]:
                 except (json.JSONDecodeError, TypeError):
                     messages.append(redact({"raw": str(raw)}))
         if "turn_usage" in tables:
-            row = conn.execute(
-                "SELECT COALESCE(SUM(requests),0), COALESCE(SUM(input_tokens),0), "
-                "COALESCE(SUM(output_tokens),0), COALESCE(SUM(total_tokens),0) FROM turn_usage"
-            ).fetchone()
-            usage = dict(zip(("requests", "input_tokens", "output_tokens", "total_tokens"), map(int, row or (0, 0, 0, 0))))
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(turn_usage)")}
+            detail_column = ", input_tokens_details" if "input_tokens_details" in columns else ""
+            cached_input_tokens = 0
+            totals = [0, 0, 0, 0]
+            for row in conn.execute(
+                "SELECT requests, input_tokens, output_tokens, total_tokens"
+                f"{detail_column} FROM turn_usage"
+            ):
+                for index, value in enumerate(row[:4]):
+                    totals[index] += int(value or 0)
+                if detail_column and row[4]:
+                    try:
+                        details = json.loads(row[4]) if isinstance(row[4], str) else row[4]
+                        cached_input_tokens += int(details.get("cached_tokens") or 0)
+                    except (AttributeError, json.JSONDecodeError, TypeError, ValueError):
+                        pass
+            usage = dict(zip(("requests", "input_tokens", "output_tokens", "total_tokens"), totals))
+            usage["cached_input_tokens"] = min(cached_input_tokens, usage["input_tokens"])
+            usage["uncached_input_tokens"] = usage["input_tokens"] - usage["cached_input_tokens"]
+            usage["effective_tokens"] = usage["uncached_input_tokens"] + usage["output_tokens"]
     with (destination / "session.jsonl").open("w", encoding="utf-8") as handle:
         for message in messages:
             handle.write(json.dumps(message, ensure_ascii=False) + "\n")

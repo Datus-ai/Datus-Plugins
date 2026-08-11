@@ -11,8 +11,30 @@ Do not use `kubectl` for workload operations and do not install the Operator,
 CRDs, webhooks, or cluster RBAC.
 
 The templates below follow the stable Apache Flink Kubernetes Operator 1.15
-docs, but the target cluster is authoritative — always discover the served API
-version and let server-side dry-run reject an unsupported schema before apply.
+docs, but the target cluster is authoritative. Production and partially
+specified targets require full discovery and server-side validation; the
+bounded path below uses its caller-provided values plus one CRD discovery check.
+
+## Bounded, fully specified run
+
+Use this compact path when the caller provides the exact profile, namespace,
+served Flink API version, image/artifact, Flink version, service account, and
+manifest fields, and explicitly says the isolated environment, image, and RBAC
+are already provisioned. Caller-provided values are authoritative:
+
+1. Create all requested deliverables; issue independent file writes together
+   when the client supports parallel tool calls.
+2. Run one `api-resources --api-group flink.apache.org` check.
+3. Apply directly, wait on the requested job state, and read the CR exactly once
+   with `get ... -o wide`.
+4. On a successful wait and an error-free wide result, write the requested
+   summary immediately and stop.
+
+Do not add `version`, `api-versions`, `auth can-i`, server-side dry-run, logs, events,
+pod reads, or a second CR read to this path. A successful isolated apply is the
+authorization/schema check, and `wait` is fail-closed on `status.error`. If any
+required value or provisioning guarantee is missing, use the full preflight and
+diagnostic flow below.
 
 ## 1. Establish the target
 
@@ -40,7 +62,8 @@ skill before deploying it here.
 
 ## 2. Run fail-closed preflight
 
-Always select the Kubernetes environment explicitly:
+For production or a partially specified target, select the Kubernetes
+environment explicitly:
 
 ```bash
 datus k8s --profile <profile> version
@@ -423,7 +446,8 @@ spec:
     formatType: CANONICAL
 ```
 
-Validate without persisting, then apply through the same profile:
+Outside the bounded fully specified path, validate without persisting, then
+apply through the same profile:
 
 ```bash
 datus k8s --profile <profile> apply -f <manifest> -n <namespace> --dry-run server -o yaml
@@ -465,6 +489,13 @@ datus k8s --profile <profile> events -n <namespace> --for flinkdeployment/<name>
 `Init:CrashLoopBackOff`-style status, so the three-layer picture — job, CR, pod —
 costs three commands. Read individual fields directly rather than fetching the
 whole document:
+
+For a bounded success path, a successful `wait` on the expected job state is
+already fail-closed on a non-empty `status.error`. Follow it with exactly one
+`get flinkdeployment ... -o wide` to record lifecycle state and message, then
+stop. Do not add a second `get` for `status.error` unless the wait failed or the
+wide output reports an error. The commands below are for diagnosis when the
+bounded success path did not complete:
 
 ```bash
 datus k8s --profile <profile> get flinkdeployment <name> -n <namespace> \

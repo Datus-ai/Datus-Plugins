@@ -133,6 +133,16 @@ def test_workload_examples_never_invoke_kubectl():
         assert re.search(r"(?m)^\s*kubectl(?:\s|$)", text) is None, path
 
 
+def test_operator_success_path_avoids_redundant_status_reads():
+    text = (SKILL / "SKILL.md").read_text(encoding="utf-8")
+    assert "Bounded, fully specified run" in text
+    assert "Do not add `version`, `api-versions`, `auth can-i`, server-side dry-run" in text
+    assert "Apply directly, wait on the requested job state, and read the CR exactly once" in text
+    assert "successful `wait`" in text
+    assert "exactly one" in text
+    assert "Do not add a second `get` for `status.error`" in text
+
+
 def test_package_never_imports_datus():
     package_text = "\n".join(
         path.read_text(encoding="utf-8")

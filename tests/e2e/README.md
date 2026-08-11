@@ -37,3 +37,9 @@ Each attempt writes `summary.json`, `oracle.json`, `process.json`, redacted
 `session/session.jsonl`, the generated file manifest and patch, bundle hashes,
 and subprocess logs under the configured artifact root. `oracle.json` owns the
 correctness verdict; `process.json` records efficiency separately.
+
+`process.json` preserves the provider-reported cumulative `total_tokens` and
+also records cache-aware `effective_tokens` (`input_tokens -
+cached_input_tokens + output_tokens`). Workflow `maxTokens` gates the latter;
+`maxLlmTurns` independently limits repeated model/tool round trips. This avoids
+counting the same cached prompt prefix as fresh work on every tool response.

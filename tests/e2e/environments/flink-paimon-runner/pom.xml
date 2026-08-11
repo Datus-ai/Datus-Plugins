@@ -10,6 +10,7 @@
     <maven.compiler.release>17</maven.compiler.release>
     <flink.version>1.20.1</flink.version>
     <paimon.version>1.0.1</paimon.version>
+    <hadoop.version>3.3.6</hadoop.version>
     <jackson.version>2.19.2</jackson.version>
   </properties>
   <dependencies>
@@ -34,6 +35,16 @@
       <groupId>org.apache.paimon</groupId>
       <artifactId>paimon-s3</artifactId>
       <version>${paimon.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client-api</artifactId>
+      <version>${hadoop.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>org.apache.hadoop</groupId>
+      <artifactId>hadoop-client-runtime</artifactId>
+      <version>${hadoop.version}</version>
     </dependency>
     <dependency>
       <groupId>com.fasterxml.jackson.core</groupId>

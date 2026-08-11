@@ -76,7 +76,7 @@ def diagnose(payloads: list[dict[str, Any]], usage: dict[str, Any] | None = None
                     failed.append({"tool": str(detail.get("toolName") or "unknown"), "status": status or "false"})
                 continue
             if node_type == "usage" and isinstance(node.get("payload"), dict):
-                for field in ("requests", "input_tokens", "output_tokens", "total_tokens"):
+                for field in ("requests", "input_tokens", "output_tokens", "total_tokens", "cached_tokens"):
                     try:
                         streamed_usage[field] = max(streamed_usage.get(field, 0), int(node["payload"].get(field) or 0))
                     except (TypeError, ValueError):
@@ -101,6 +101,15 @@ def diagnose(payloads: list[dict[str, Any]], usage: dict[str, Any] | None = None
     command_counts = Counter(commands)
     duplicates = [{"command": cmd, "count": count} for cmd, count in command_counts.items() if count > 1]
     usage = usage or streamed_usage
+    input_tokens = int(usage.get("input_tokens") or 0)
+    output_tokens = int(usage.get("output_tokens") or 0)
+    total_tokens = int(usage.get("total_tokens") or 0)
+    cached_input_tokens = min(
+        input_tokens,
+        int(usage.get("cached_input_tokens") or usage.get("cached_tokens") or 0),
+    )
+    uncached_input_tokens = int(usage.get("uncached_input_tokens") or (input_tokens - cached_input_tokens))
+    effective_tokens = int(usage.get("effective_tokens") or (uncached_input_tokens + output_tokens))
     return {
         "tool_sequence": tools,
         "tool_calls": len(tools),
@@ -109,9 +118,12 @@ def diagnose(payloads: list[dict[str, Any]], usage: dict[str, Any] | None = None
         "duplicate_commands": duplicates,
         "unexpected_failures": failed,
         "llm_turns": int(usage.get("requests") or usage.get("llm_turns") or 0),
-        "input_tokens": int(usage.get("input_tokens") or 0),
-        "output_tokens": int(usage.get("output_tokens") or 0),
-        "total_tokens": int(usage.get("total_tokens") or 0),
+        "input_tokens": input_tokens,
+        "cached_input_tokens": cached_input_tokens,
+        "uncached_input_tokens": uncached_input_tokens,
+        "output_tokens": output_tokens,
+        "total_tokens": total_tokens,
+        "effective_tokens": effective_tokens,
     }
 
 
@@ -120,7 +132,7 @@ def check_efficiency(process: dict[str, Any], contract: dict[str, Any]) -> list[
     bounds = {
         "maxToolCalls": ("tool_calls", "tool calls"),
         "maxLlmTurns": ("llm_turns", "LLM turns"),
-        "maxTokens": ("total_tokens", "tokens"),
+        "maxTokens": ("effective_tokens", "effective tokens"),
         "maxUnexpectedFailures": ("unexpected_failures", "unexpected failed calls"),
     }
     for option, (field, label) in bounds.items():
