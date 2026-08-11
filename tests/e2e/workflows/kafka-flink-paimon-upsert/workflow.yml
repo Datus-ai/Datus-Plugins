@@ -1,0 +1,21 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: kafka-flink-paimon-upsert
+  description: Reference workflow for validating keyed Kafka updates through Flink into Paimon.
+  tags: [reference, nightly, kafka, flink, paimon]
+spec:
+  target: {distribution: datus-flink-plugin, path: datus-flink-plugin, name: flink}
+  supportPlugins:
+    - {distribution: datus-k8s-plugin, path: datus-k8s-plugin, name: k8s}
+  agent: {prompt: prompt.md, timeoutSeconds: 2400}
+  environment: {components: [minikube, minio, redpanda, flink-operator, flink-paimon-runner], lock: environment.lock.yml}
+  workspace:
+    outputs: [deploy/kafka-paimon/*.sql, deploy/kafka-paimon/*.yaml, results/upsert.md]
+  permissions:
+    bashAllow: ["datus k8s apply:*", "datus k8s get:*", "datus k8s wait:*", "datus k8s logs:*"]
+  oracles:
+    - {type: files, config: {patterns: [deploy/kafka-paimon/*.sql, deploy/kafka-paimon/*.yaml]}}
+    - {type: kafka_paimon, config: {inputEvents: 120, finalKeys: 100, checksumFixture: golden/final.json}}
+  efficiency: {maxToolCalls: 20, maxLlmTurns: 10, maxTokens: 120000, maxUnexpectedFailures: 0}
+  cleanup: {deleteNamespace: true, deleteBucketPrefix: true}

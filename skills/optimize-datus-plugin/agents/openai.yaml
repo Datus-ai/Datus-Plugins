@@ -1,0 +1,4 @@
+interface:
+  display_name: "Optimize Datus Plugin"
+  short_description: "Iterate on plugins from E2E evidence"
+  default_prompt: "Use $optimize-datus-plugin to analyze the latest E2E artifacts and improve this plugin."

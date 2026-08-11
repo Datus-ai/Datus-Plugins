@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datus Plugin Development"
+  short_description: "Design and implement installable Datus plugins"
+  default_prompt: "Use $datus-plugin-development to design a Datus plugin from these SDK or API docs before implementation."
