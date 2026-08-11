@@ -1,0 +1,42 @@
+manifest_version: 1
+description: "Browse and move Azure Blob and ADLS Gen2 data from datus adls."
+cli: datus_adls_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+permissions:
+  normal:
+    allow: ["ls:*", "stat:*", "cat:*", "head:*", "filesystems list:*", "acl get:*"]
+    ask: ["cp:*", "sync:*", "mv:*", "rm:*", "sas:*", "acl set:*"]
+  auto:
+    allow: ["ls:*", "stat:*", "cat:*", "head:*", "filesystems list:*", "acl get:*", "cp:*", "sync:*", "mv:*"]
+    ask: ["rm:*", "sas:*", "acl set:*"]
+config_schema:
+  type: object
+  required: [account_url]
+  additionalProperties: false
+  properties:
+    account_url: {type: string, description: "ADLS dfs endpoint, e.g. https://account.dfs.core.windows.net"}
+    container: {type: string, description: "Default filesystem/container"}
+    cloud: {type: string, enum: [public, china, government], default: public}
+    tenant_id: {type: string, description: "Service-principal tenant ID"}
+    client_id: {type: string, description: "Service principal or managed identity client ID"}
+    client_secret: {type: string, description: "Service-principal secret", x-secret: true}
+    managed_identity_client_id: {type: string, description: "User-assigned managed identity client ID"}
+    account_key: {type: string, description: "Storage account key", x-secret: true}
+    sas_token: {type: string, description: "Existing account/container SAS", x-secret: true}
+    timeout: {type: string, default: "60"}
+    max_attempts: {type: string, default: "3"}
+commands:
+  - {name: ls, args: [{name: uri}, {name: --recursive}, {name: --limit}]}
+  - {name: stat, args: [{name: uri, required: true}]}
+  - {name: cat, args: [{name: uri, required: true}, {name: --max-bytes}]}
+  - {name: head, args: [{name: uri, required: true}, {name: --lines}]}
+  - {name: cp, args: [{name: src, required: true}, {name: dst, required: true}, {name: --recursive}]}
+  - {name: sync, args: [{name: src, required: true}, {name: dst, required: true}]}
+  - {name: mv, args: [{name: src, required: true}, {name: dst, required: true}, {name: --recursive}]}
+  - {name: rm, args: [{name: uri, required: true}, {name: --recursive}, {name: --yes}]}
+  - {name: sas, args: [{name: uri, required: true}, {name: --permissions}, {name: --expires}]}
+  - name: filesystems
+    subcommands: [{name: list}]
+  - name: acl
+    subcommands: [{name: get, args: [{name: uri, required: true}]}, {name: set, args: [{name: uri, required: true}, {name: --acl, required: true}, {name: --yes}]}]

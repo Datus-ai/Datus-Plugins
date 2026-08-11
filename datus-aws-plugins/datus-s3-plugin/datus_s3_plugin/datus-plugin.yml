@@ -58,6 +58,7 @@ config_schema:
     access_key_id:
       type: string
       description: "Static AWS access key ID (omit to use the standard credential chain)"
+      x-secret: true
     secret_access_key:
       type: string
       description: "AWS secret access key"
@@ -75,9 +76,23 @@ config_schema:
     external_id:
       type: string
       description: "ExternalId for AssumeRole"
+      x-secret: true
     endpoint_url:
       type: string
       description: "Custom AWS endpoint URL (testing/VPC endpoints)"
+    compatibility:
+      type: string
+      enum: [aws, minio, aliyun-oss]
+      default: aws
+      description: "Backend compatibility mode; aliyun-oss disables unsupported AWS-only operations"
+    signature_version:
+      type: string
+      description: "Botocore signature version override, normally s3v4 for compatible stores"
+    addressing_style:
+      type: string
+      enum: [auto, virtual, path]
+      default: auto
+      description: "S3 bucket addressing style"
     timeout:
       type: string
       description: "HTTP timeout in seconds"

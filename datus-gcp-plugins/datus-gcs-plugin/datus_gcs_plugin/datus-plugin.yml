@@ -1,0 +1,40 @@
+manifest_version: 1
+description: "Browse and move Google Cloud Storage data from datus gcs."
+cli: datus_gcs_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+permissions:
+  normal:
+    allow: ["ls:*", "stat:*", "cat:*", "head:*", "buckets list:*", "buckets location:*", "lifecycle get:*"]
+    ask: ["cp:*", "sync:*", "mv:*", "rm:*", "signurl:*", "lifecycle set:*"]
+  auto:
+    allow: ["ls:*", "stat:*", "cat:*", "head:*", "buckets list:*", "buckets location:*", "lifecycle get:*", "cp:*", "sync:*", "mv:*"]
+    ask: ["rm:*", "signurl:*", "lifecycle set:*"]
+config_schema:
+  type: object
+  required: [project]
+  additionalProperties: false
+  properties:
+    project: {type: string, description: "GCP project ID"}
+    bucket: {type: string, description: "Default GCS bucket for bare keys"}
+    credentials_file: {type: string, description: "ADC credential file path via an environment-variable reference", x-secret: true}
+    impersonate_service_account: {type: string, description: "Service account email to impersonate"}
+    quota_project: {type: string, description: "Quota project"}
+    scopes: {type: string, description: "Comma-separated OAuth scopes"}
+    api_endpoint: {type: string, description: "Optional GCS API endpoint or emulator"}
+    timeout: {type: string, default: "60"}
+    max_attempts: {type: string, default: "3"}
+commands:
+  - {name: ls, args: [{name: uri}, {name: --recursive}, {name: --limit}]}
+  - {name: stat, args: [{name: uri, required: true}]}
+  - {name: cat, args: [{name: uri, required: true}, {name: --max-bytes}]}
+  - {name: head, args: [{name: uri, required: true}, {name: --lines}]}
+  - {name: cp, args: [{name: src, required: true}, {name: dst, required: true}, {name: --recursive}]}
+  - {name: sync, args: [{name: src, required: true}, {name: dst, required: true}]}
+  - {name: mv, args: [{name: src, required: true}, {name: dst, required: true}, {name: --recursive}]}
+  - {name: rm, args: [{name: uri, required: true}, {name: --recursive}, {name: --yes}]}
+  - {name: signurl, args: [{name: uri, required: true}, {name: --method}, {name: --expires}]}
+  - name: buckets
+    subcommands: [{name: list}, {name: location, args: [{name: bucket, required: true}]}]
+  - name: lifecycle
+    subcommands: [{name: get}, {name: set, args: [{name: --file, required: true}, {name: --yes}]}]

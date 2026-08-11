@@ -1,0 +1,10 @@
+## Azure Kubernetes Service
+Use `datus aks` for provider inspection and `datus k8s` for namespace-scoped workloads.
+{% if profiles %}
+{% for name, cfg in profiles.items() %}
+- {{ name }}: subscription={{ cfg.get("subscription_id", "?") }}, resource_group={{ cfg.get("resource_group", "?") }}, cluster={{ cfg.get("cluster", "?") }}, cloud={{ cfg.get("cloud", "public") }}
+{% endfor %}
+{% else %}
+Installed but not configured.
+{% if config_mutable %}Run the `aks-setup` skill.{% else %}Ask the deployment administrator to configure it.{% endif %}
+{% endif %}

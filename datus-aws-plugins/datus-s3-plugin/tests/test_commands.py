@@ -54,6 +54,23 @@ def test_select_streams_records(run_cli, s3, capsys):
     assert kwargs["InputSerialization"] == {"CSV": {"FileHeaderInfo": "NONE"}}
 
 
+def test_aliyun_oss_rejects_s3_select(run_cli, s3, capsys):
+    profile = {
+        "region": "cn-hangzhou",
+        "endpoint_url": "https://oss-cn-hangzhou.aliyuncs.com",
+        "compatibility": "aliyun-oss",
+        "signature_version": "s3v4",
+        "addressing_style": "virtual",
+    }
+    rc = run_cli(
+        ["select", "s3://b/a.csv", "--sql", "select * from s3object"],
+        profile,
+    )
+    assert rc == 2
+    assert "not available" in capsys.readouterr().err
+    assert not s3.calls_to("select_object_content")
+
+
 def test_cp_upload_local_to_s3(run_cli, s3, tmp_path, capsys):
     f = tmp_path / "hello.txt"
     f.write_text("hi")

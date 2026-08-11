@@ -1,0 +1,10 @@
+## Google Kubernetes Engine
+Use `datus gke` for provider inspection and `datus k8s` for namespace-scoped workloads.
+{% if profiles %}
+{% for name, cfg in profiles.items() %}
+- {{ name }}: project={{ cfg.get("project", "?") }}, location={{ cfg.get("location", "?") }}, cluster={{ cfg.get("cluster", "?") }}, endpoint={{ cfg.get("endpoint_mode", "auto") }}
+{% endfor %}
+{% else %}
+Installed but not configured.
+{% if config_mutable %}Run the `gke-setup` skill.{% else %}Ask the deployment administrator to configure it.{% endif %}
+{% endif %}

@@ -7,6 +7,11 @@ members = [
     "datus-*-plugin",
     "datus-aws-plugins/datus-aws-common",
     "datus-aws-plugins/datus-*-plugin",
+    "datus-gcp-plugins/datus-gcp-common",
+    "datus-gcp-plugins/datus-*-plugin",
+    "datus-azure-plugins/datus-azure-common",
+    "datus-azure-plugins/datus-*-plugin",
+    "datus-aliyun-plugins/datus-*-plugin",
 ]
 
 [dependency-groups]

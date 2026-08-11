@@ -1,0 +1,41 @@
+manifest_version: 1
+description: "Inspect Azure Kubernetes Service and authenticate datus-k8s without az or kubelogin."
+cli: datus_aks_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+permissions:
+  normal: &permissions
+    allow: ["clusters list:*", "clusters describe:*", "nodepools list:*", "nodepools describe:*", "upgrades list:*", "maintenance list:*", "maintenance describe:*", "auth check:*", "kubernetes cluster:*"]
+    ask: []
+    deny: ["kubernetes credential:*"]
+  auto: *permissions
+config_schema:
+  type: object
+  required: [subscription_id, resource_group, cluster]
+  additionalProperties: false
+  properties:
+    subscription_id: {type: string, description: "Azure subscription ID"}
+    resource_group: {type: string, description: "AKS resource group"}
+    cluster: {type: string, description: "AKS cluster name"}
+    cloud: {type: string, enum: [public, china, government], default: public}
+    tenant_id: {type: string, description: "Service-principal tenant ID"}
+    client_id: {type: string, description: "Service principal or managed identity client ID"}
+    client_secret: {type: string, description: "Service-principal secret via an environment-variable reference", x-secret: true}
+    managed_identity_client_id: {type: string, description: "User-assigned managed identity client ID"}
+    kubernetes_server_id: {type: string, description: "AKS API server application ID override"}
+    use_private_endpoint: {type: string, enum: ["true", "false"], default: "false"}
+    timeout: {type: string, default: "60"}
+    max_attempts: {type: string, default: "3"}
+commands:
+  - name: clusters
+    subcommands: [{name: list}, {name: describe}]
+  - name: nodepools
+    subcommands: [{name: list}, {name: describe, args: [{name: name, required: true}]}]
+  - name: upgrades
+    subcommands: [{name: list}]
+  - name: maintenance
+    subcommands: [{name: list}, {name: describe, args: [{name: name, required: true}]}]
+  - name: auth
+    subcommands: [{name: check}]
+  - name: kubernetes
+    subcommands: [{name: cluster}, {name: credential}]

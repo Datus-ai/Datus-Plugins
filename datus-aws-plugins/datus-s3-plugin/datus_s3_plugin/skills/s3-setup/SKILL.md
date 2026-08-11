@@ -7,7 +7,7 @@ requires_mutable_config: true
 # S3 Setup
 
 Use this skill when `datus s3` is installed but has no configured environment,
-or to add another environment (another account/region, or a MinIO endpoint).
+or to add another environment (another account/region, MinIO, or Alibaba OSS).
 
 ## Config structure
 
@@ -34,6 +34,25 @@ agent:
         endpoint_url: http://minio:9000   # S3-compatible stores (MinIO, etc.)
 ```
 
+Alibaba Cloud OSS uses the existing S3 plugin rather than a separate plugin:
+
+```yaml
+agent:
+  plugins:
+    s3:
+      aliyun-prod:
+        region: cn-hangzhou
+        endpoint_url: https://oss-cn-hangzhou.aliyuncs.com
+        compatibility: aliyun-oss
+        signature_version: s3v4
+        addressing_style: virtual
+        access_key_id: ${ALIBABA_CLOUD_ACCESS_KEY_ID}
+        secret_access_key: ${ALIBABA_CLOUD_ACCESS_KEY_SECRET}
+```
+
+OSS compatibility covers bucket/object list, read, write, copy, delete, and
+presigned URLs. S3 Select and AWS SSE-KMS are rejected explicitly.
+
 ## Steps
 
 1. Ask for `region` and the auth method (prefer the AWS chain; use `${VAR}` for
@@ -53,4 +72,5 @@ agent:
   `region` (see above).
 - `AccessDenied` on read — the principal lacks `s3:GetObject`/`s3:ListBucket`
   on that bucket/prefix.
-- MinIO or other S3-compatible store — set `endpoint_url`.
+- MinIO or other S3-compatible store — set `endpoint_url`; use the explicit
+  compatibility/signature/addressing fields for Alibaba OSS.

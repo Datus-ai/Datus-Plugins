@@ -31,6 +31,8 @@ AWS_KEYS = frozenset(
         "role_session_name",
         "external_id",
         "endpoint_url",
+        "signature_version",
+        "addressing_style",
         "timeout",
         "max_attempts",
     }
@@ -59,6 +61,8 @@ class AwsSettings:
     role_session_name: Optional[str] = None
     external_id: Optional[str] = None
     endpoint_url: Optional[str] = None
+    signature_version: Optional[str] = None
+    addressing_style: Optional[str] = None
     timeout: float = DEFAULT_TIMEOUT
     max_attempts: int = DEFAULT_MAX_ATTEMPTS
 
@@ -76,6 +80,8 @@ class AwsSettings:
             "role_session_name",
             "external_id",
             "endpoint_url",
+            "signature_version",
+            "addressing_style",
         ):
             value = data.get(key)
             if value is not None and str(value) != "":

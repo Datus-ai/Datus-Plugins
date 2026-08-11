@@ -1,0 +1,6 @@
+## Google Cloud Storage
+Use `datus gcs` for object data and lifecycle inspection.
+{% if profiles %}
+{% for name, cfg in profiles.items() %}- {{ name }}: project={{ cfg.get("project", "?") }}, bucket={{ cfg.get("bucket", "<none>") }}
+{% endfor %}
+{% else %}Installed but not configured. {% if config_mutable %}Run `gcs-setup`.{% else %}Ask the administrator to configure it.{% endif %}{% endif %}

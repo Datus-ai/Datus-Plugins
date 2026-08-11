@@ -1,0 +1,40 @@
+manifest_version: 1
+description: "Inspect Google Kubernetes Engine and authenticate datus-k8s without gcloud."
+cli: datus_gke_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+permissions:
+  normal: &permissions
+    allow: ["clusters list:*", "clusters describe:*", "nodepools list:*", "nodepools describe:*", "operations list:*", "operations describe:*", "server-config describe:*", "auth check:*", "kubernetes cluster:*"]
+    ask: []
+    deny: ["kubernetes credential:*"]
+  auto: *permissions
+config_schema:
+  type: object
+  required: [project, location, cluster]
+  additionalProperties: false
+  properties:
+    project: {type: string, description: "GCP project ID"}
+    location: {type: string, description: "GKE region, zone, or -"}
+    cluster: {type: string, description: "GKE cluster name"}
+    credentials_file: {type: string, description: "ADC credential file path via an environment-variable reference", x-secret: true}
+    impersonate_service_account: {type: string, description: "Service account email to impersonate"}
+    quota_project: {type: string, description: "Quota project"}
+    scopes: {type: string, description: "Comma-separated OAuth scopes"}
+    endpoint_mode: {type: string, enum: [auto, public, private, dns], default: auto}
+    api_endpoint: {type: string, description: "Optional Container API endpoint"}
+    timeout: {type: string, default: "60"}
+    max_attempts: {type: string, default: "3"}
+commands:
+  - name: clusters
+    subcommands: [{name: list}, {name: describe}]
+  - name: nodepools
+    subcommands: [{name: list}, {name: describe, args: [{name: name, required: true}]}]
+  - name: operations
+    subcommands: [{name: list}, {name: describe, args: [{name: name, required: true}]}]
+  - name: server-config
+    subcommands: [{name: describe}]
+  - name: auth
+    subcommands: [{name: check}]
+  - name: kubernetes
+    subcommands: [{name: cluster}, {name: credential}]

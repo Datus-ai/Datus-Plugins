@@ -14,8 +14,8 @@ the deployment administrator instead.
 
 ## Information to collect
 
-For managed Kubernetes collect the provider plugin (`eks`, later `gke`, `aks`,
-or `ack`), provider profile, and namespace. The provider profile owns the
+For managed Kubernetes collect the provider plugin (`eks`, `gke`, `aks`, or
+`ack`), provider profile, and namespace. The provider profile owns the
 cluster name/ID. When provider and k8s profile names match, omit
 `provider_profile`.
 
@@ -49,6 +49,18 @@ agent:
         # context: prod-cluster       # optional; otherwise current-context
         namespace: analytics
         allowed_namespaces: analytics,analytics-staging
+
+      gcp-prod:
+        provider: gke
+        namespace: analytics
+
+      azure-prod:
+        provider: aks
+        namespace: analytics
+
+      aliyun-prod:
+        provider: ack
+        namespace: analytics
         request_timeout: 30s
         field_manager: datus-k8s
 ```
