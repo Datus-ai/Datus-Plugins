@@ -21,7 +21,7 @@ Browse and move S3 data through `datus s3 <command>` (`--profile <env>` first).
 Commands: `ls`, `stat`, `cat`, `head`, `presign`, `select` (S3 Select SQL over CSV/JSON/Parquet), `cp`/`sync`/`mv` (object writes), `rm` (delete, prompts unless `-y`), `buckets list|location`. URIs are `s3://bucket/key`. Add `-o json` for machine-readable output. Consult the `s3` skill before non-trivial commands.
 Environments ({{ profiles | length }}):
 {% for name, cfg in profiles.items() -%}
-- {{ name }}: {{ aws_summary(cfg, ["bucket"]) }}
+- {{ name }}: {{ aws_summary(cfg, ["bucket", "compatibility"]) }}
 {% endfor -%}
 {% else %}
 ## S3 (installed, not configured)

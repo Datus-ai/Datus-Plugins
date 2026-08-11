@@ -1,0 +1,10 @@
+## Alibaba Cloud ACK
+Use `datus ack` for provider inspection and `datus k8s` for namespace-scoped workloads.
+{% if profiles %}
+{% for name, cfg in profiles.items() %}
+- {{ name }}: region={{ cfg.get("region_id", "?") }}, cluster={{ cfg.get("cluster_id", "?") }}, private_endpoint={{ cfg.get("use_private_endpoint", "false") }}
+{% endfor %}
+{% else %}
+Installed but not configured.
+{% if config_mutable %}Run the `ack-setup` skill.{% else %}Ask the deployment administrator to configure it.{% endif %}
+{% endif %}

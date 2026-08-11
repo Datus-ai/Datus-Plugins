@@ -1,0 +1,6 @@
+## Azure Data Lake Storage
+Use `datus adls` for Blob/ADLS Gen2 data and ACL inspection.
+{% if profiles %}
+{% for name, cfg in profiles.items() %}- {{ name }}: account={{ cfg.get("account_url", "?") }}, container={{ cfg.get("container", "<none>") }}, cloud={{ cfg.get("cloud", "public") }}
+{% endfor %}
+{% else %}Installed but not configured. {% if config_mutable %}Run `adls-setup`.{% else %}Ask the administrator to configure it.{% endif %}{% endif %}

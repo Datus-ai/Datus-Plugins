@@ -27,6 +27,11 @@ agent:
         # credentials: standard AWS chain, or profile / keys / role_arn
 ```
 
+Alibaba OSS is supported through its S3-compatible endpoint with
+`compatibility: aliyun-oss`, `signature_version: s3v4`, and
+`addressing_style: virtual`. AWS-only S3 Select and SSE-KMS are intentionally
+disabled in this mode.
+
 ## Commands
 
 | Command | Purpose |

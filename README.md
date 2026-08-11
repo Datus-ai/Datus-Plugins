@@ -15,7 +15,7 @@ picks them up automatically.
 
 ## What's inside
 
-Fourteen plugins, each its own independently versioned distribution. All currently
+Nineteen plugins, each its own independently versioned distribution. All currently
 ship at `0.1.x` — 🧪 **Experimental** (functional and contract-tested, but the
 command surface and config schema may still change; see
 [Versioning & maturity](#versioning--maturity)).
@@ -35,12 +35,21 @@ command surface and config schema may still change; see
 | `datus quicksight` | `datus-quicksight-plugin` | `0.1.0` | Browse QuickSight datasets/dashboards/analyses and refresh SPICE ingestions | [↗](datus-aws-plugins/datus-quicksight-plugin/README.md) |
 | `datus mwaa` | `datus-mwaa-plugin` | `0.1.0` | Inspect MWAA environments, mint tokens, and run the Airflow CLI over REST | [↗](datus-aws-plugins/datus-mwaa-plugin/README.md) |
 | `datus k8s` | `datus-k8s-plugin` | `0.1.0` | Inspect and operate namespace-scoped Kubernetes data workloads with a kubectl-style CLI | [↗](datus-k8s-plugin/README.md) |
+| `datus gke` | `datus-gke-plugin` | `0.1.0` | Inspect GKE and authenticate `datus k8s` through ADC | [↗](datus-gcp-plugins/datus-gke-plugin/README.md) |
+| `datus gcs` | `datus-gcs-plugin` | `0.1.0` | Browse, copy, sync and lifecycle-manage GCS object data | [↗](datus-gcp-plugins/datus-gcs-plugin/README.md) |
+| `datus aks` | `datus-aks-plugin` | `0.1.0` | Inspect AKS and authenticate `datus k8s` through Entra ID | [↗](datus-azure-plugins/datus-aks-plugin/README.md) |
+| `datus adls` | `datus-adls-plugin` | `0.1.0` | Browse and move Blob/ADLS Gen2 data and inspect ACLs | [↗](datus-azure-plugins/datus-adls-plugin/README.md) |
+| `datus ack` | `datus-ack-plugin` | `0.1.0` | Inspect Alibaba ACK and authenticate `datus k8s` with temporary credentials | [↗](datus-aliyun-plugins/datus-ack-plugin/README.md) |
 | `flink-local-dev` skill | `datus-flink-plugin` | `0.1.0` | Validate a Flink SQL job locally in an in-process MiniCluster — bounded dev sources, shadowed sinks — before it is deployed | [↗](datus-flink-plugin/README.md) |
 | `flink-k8s-operator` skill | `datus-flink-plugin` | `0.1.0` | Build and operate FlinkDeployment, FlinkSessionJob, and FlinkStateSnapshot resources through `datus k8s` | [↗](datus-flink-plugin/README.md) |
 
 The ten AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)
 (boto3 session/AssumeRole, config, error mapping, output rendering) — an internal
 library, not a plugin, installed automatically as a dependency.
+
+GKE/GCS share `datus-gcp-common`; AKS/ADLS share `datus-azure-common`. Alibaba
+OSS is served by the existing S3 plugin through its S3-compatible endpoint,
+while ACK is a standalone provider plugin.
 
 ## Requirements
 

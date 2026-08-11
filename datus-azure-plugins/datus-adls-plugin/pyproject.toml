@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datus-adls-plugin"
+version = "0.1.0"
+description = "Datus plugin: browse and move Azure Blob and ADLS Gen2 data"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Datus" }]
+dependencies = [
+    "datus-azure-common>=0.1",
+    "azure-storage-file-datalake>=12.16",
+    "azure-storage-blob>=12.21",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "jinja2>=3.1", "jsonschema>=4.0"]
+
+[project.entry-points."datus.plugins"]
+adls = "datus_adls_plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datus_adls_plugin"]
+
+[tool.uv.sources]
+datus-azure-common = { workspace = true }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

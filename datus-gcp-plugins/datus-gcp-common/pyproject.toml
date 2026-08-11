@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datus-gcp-common"
+version = "0.1.0"
+description = "Shared authentication, error, output, and CLI helpers for Datus GCP plugins"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{ name = "Datus" }]
+dependencies = [
+    "google-auth>=2.30",
+    "google-api-core>=2.19",
+    "PyYAML>=6.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["datus_gcp_common"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

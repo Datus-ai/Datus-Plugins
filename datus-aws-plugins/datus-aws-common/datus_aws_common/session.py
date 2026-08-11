@@ -67,11 +67,16 @@ def build_client(settings: AwsSettings, service: str, session: Optional[Any] = N
 
     session = session or build_session(settings)
     if "config" not in client_kwargs:
-        client_kwargs["config"] = Config(
-            retries={"max_attempts": settings.max_attempts, "mode": "standard"},
-            connect_timeout=settings.timeout,
-            read_timeout=settings.timeout,
-        )
+        config_kwargs = {
+            "retries": {"max_attempts": settings.max_attempts, "mode": "standard"},
+            "connect_timeout": settings.timeout,
+            "read_timeout": settings.timeout,
+        }
+        if settings.signature_version:
+            config_kwargs["signature_version"] = settings.signature_version
+        if service == "s3" and settings.addressing_style:
+            config_kwargs["s3"] = {"addressing_style": settings.addressing_style}
+        client_kwargs["config"] = Config(**config_kwargs)
     if settings.endpoint_url and "endpoint_url" not in client_kwargs:
         client_kwargs["endpoint_url"] = settings.endpoint_url
     return session.client(service, **client_kwargs)

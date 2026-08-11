@@ -1,0 +1,42 @@
+manifest_version: 1
+description: "Inspect Alibaba Cloud ACK and authenticate datus-k8s with temporary credentials."
+cli: datus_ack_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+permissions:
+  normal: &permissions
+    allow: ["clusters list:*", "clusters describe:*", "nodepools list:*", "nodepools describe:*", "addons list:*", "addons describe:*", "tasks list:*", "tasks describe:*", "auth check:*", "kubernetes cluster:*"]
+    ask: []
+    deny: ["kubernetes credential:*"]
+  auto: *permissions
+config_schema:
+  type: object
+  required: [region_id, cluster_id]
+  additionalProperties: false
+  properties:
+    region_id: {type: string, description: "Alibaba Cloud region ID"}
+    cluster_id: {type: string, description: "ACK cluster ID"}
+    access_key_id: {type: string, description: "Access key ID via an environment-variable reference", x-secret: true}
+    access_key_secret: {type: string, description: "Access key secret via an environment-variable reference", x-secret: true}
+    security_token: {type: string, description: "Temporary STS token", x-secret: true}
+    role_arn: {type: string, description: "RAM role ARN"}
+    role_session_name: {type: string, default: datus-ack}
+    credentials_uri: {type: string, description: "External credential provider URI", x-secret: true}
+    endpoint: {type: string, description: "Optional ACK OpenAPI endpoint"}
+    use_private_endpoint: {type: string, enum: ["true", "false"], default: "false"}
+    credential_ttl_minutes: {type: string, default: "15"}
+    timeout: {type: string, default: "60"}
+    max_attempts: {type: string, default: "3"}
+commands:
+  - name: clusters
+    subcommands: [{name: list}, {name: describe}]
+  - name: nodepools
+    subcommands: [{name: list}, {name: describe, args: [{name: name, required: true}]}]
+  - name: addons
+    subcommands: [{name: list}, {name: describe}]
+  - name: tasks
+    subcommands: [{name: list}, {name: describe, args: [{name: name, required: true}]}]
+  - name: auth
+    subcommands: [{name: check}]
+  - name: kubernetes
+    subcommands: [{name: cluster}, {name: credential}]

@@ -225,6 +225,11 @@ def _input_serialization(ns):
 
 
 def cmd_select(ctx, ns) -> int:
+    if ctx.settings.compatibility == "aliyun-oss":
+        raise UsageError(
+            "S3 Select is not available through Alibaba Cloud OSS S3 compatibility; "
+            "use cat/head or query the object through a data engine"
+        )
     client = ctx.client("s3")
     path = parse_s3_uri(ns.uri, _default_bucket(ctx))
     output_ser = {"JSON": {}} if ns.out == "json" else {"CSV": {}}
