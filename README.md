@@ -15,7 +15,7 @@ picks them up automatically.
 
 ## What's inside
 
-Thirteen plugins, each its own independently versioned distribution. All currently
+Fourteen plugins, each its own independently versioned distribution. All currently
 ship at `0.1.x` — 🧪 **Experimental** (functional and contract-tested, but the
 command surface and config schema may still change; see
 [Versioning & maturity](#versioning--maturity)).
@@ -24,6 +24,7 @@ command surface and config schema may still change; see
 |---|---|:---:|---|:---:|
 | `datus airflow` | `datus-airflow-plugin` | `0.3.0` | Drive remote Apache Airflow 2.x/3.x over REST API v1/v2, with DAG deploy to S3 or a dags folder and per-profile DAG/command scoping | [↗](datus-airflow-plugin/README.md) |
 | `datus statsig` | `datus-statsig-plugin` | `0.1.0` | Read Statsig metrics & experiment results, author warehouse-native metric SQL, drive ETL ingestion (Console API) | [↗](datus-statsig-plugin/README.md) |
+| `datus eks` | `datus-eks-plugin` | `0.1.0` | Inspect Amazon EKS and authenticate `datus k8s` without the AWS CLI | [↗](datus-aws-plugins/datus-eks-plugin/README.md) |
 | `datus s3` | `datus-s3-plugin` | `0.1.0` | Browse and move S3 data (ls/stat/cat/cp/sync/rm/presign) and run S3 Select SQL | [↗](datus-aws-plugins/datus-s3-plugin/README.md) |
 | `datus glue` | `datus-glue-plugin` | `0.1.0` | Browse the Glue Data Catalog and run/monitor Glue crawlers and ETL jobs (with logs) | [↗](datus-aws-plugins/datus-glue-plugin/README.md) |
 | `datus iam` | `datus-iam-plugin` | `0.1.0` | Read-only IAM inspection and permission simulation (the `AccessDenied` diagnostic) | [↗](datus-aws-plugins/datus-iam-plugin/README.md) |
@@ -37,7 +38,7 @@ command surface and config schema may still change; see
 | `flink-local-dev` skill | `datus-flink-plugin` | `0.1.0` | Validate a Flink SQL job locally in an in-process MiniCluster — bounded dev sources, shadowed sinks — before it is deployed | [↗](datus-flink-plugin/README.md) |
 | `flink-k8s-operator` skill | `datus-flink-plugin` | `0.1.0` | Build and operate FlinkDeployment, FlinkSessionJob, and FlinkStateSnapshot resources through `datus k8s` | [↗](datus-flink-plugin/README.md) |
 
-The nine AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)
+The ten AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)
 (boto3 session/AssumeRole, config, error mapping, output rendering) — an internal
 library, not a plugin, installed automatically as a dependency.
 

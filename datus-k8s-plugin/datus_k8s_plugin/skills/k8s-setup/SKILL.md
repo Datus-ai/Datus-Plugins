@@ -1,6 +1,6 @@
 ---
 name: k8s-setup
-description: Configure a kubeconfig-backed environment for the `datus k8s` plugin
+description: Configure a managed-cloud or kubeconfig-backed environment for the `datus k8s` plugin
 requires_mutable_config: true
 ---
 
@@ -13,6 +13,13 @@ If this deployment cannot edit the active Datus config, tell the user to ask
 the deployment administrator instead.
 
 ## Information to collect
+
+For managed Kubernetes collect the provider plugin (`eks`, later `gke`, `aks`,
+or `ack`), provider profile, and namespace. The provider profile owns the
+cluster name/ID. When provider and k8s profile names match, omit
+`provider_profile`.
+
+For a generic cluster collect:
 
 1. A kubeconfig path. It may be absolute, `${KUBECONFIG}`, or relative to the
    current Datus project directory, such as `./conf/kubeconfig.yaml`.
@@ -32,8 +39,12 @@ Add a profile under `agent.plugins.k8s` in the config file named by the
 agent:
   plugins:
     k8s:
-      prod:
+      datus-dev:
         default: true
+        provider: eks
+        namespace: analytics
+
+      prod:
         kubeconfig: ./conf/kubeconfig.yaml
         # context: prod-cluster       # optional; otherwise current-context
         namespace: analytics
@@ -41,6 +52,13 @@ agent:
         request_timeout: 30s
         field_manager: datus-k8s
 ```
+
+For managed Kubernetes, `allowed_namespaces` defaults to `namespace`. The cloud
+plugin owns identity, AssumeRole/workload identity, cluster discovery, and
+short-lived token refresh; never copy cloud credentials into the k8s profile.
+If the provider profile has a different name, set `provider_profile`. If it
+comes from a non-default `--config` file, set `provider_config` to that same
+agent.yml path.
 
 Relative paths are resolved from the directory where Datus is started and may
 not escape it through `..` or symlinks.

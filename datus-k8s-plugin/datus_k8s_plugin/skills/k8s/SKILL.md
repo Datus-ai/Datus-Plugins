@@ -58,8 +58,9 @@ reaching for logs. Use `-o json` or `-o yaml` only when reasoning needs the whol
 object.
 
 Confirm which cluster you are on before the first command of a session, and again
-whenever a task spans two environments. A profile is bound to one kubeconfig
-context; switching clusters means switching profile, never editing kubeconfig:
+whenever a task spans two environments. A profile is bound to one provider
+profile (which owns its managed cluster) or one kubeconfig context; switching
+clusters means switching profile, never editing authentication material:
 
 ```bash
 datus k8s --profile prod version

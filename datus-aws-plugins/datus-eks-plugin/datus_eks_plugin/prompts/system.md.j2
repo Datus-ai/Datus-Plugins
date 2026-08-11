@@ -1,0 +1,20 @@
+## Amazon EKS
+Use `datus eks` for read-only EKS inspection. Use `datus k8s` for namespaced
+Kubernetes workloads when a k8s profile references an EKS profile.
+
+{% if profiles %}
+Configured EKS environments ({{ profiles | length }}):
+{% for name, cfg in profiles.items() %}
+- {{ name }}: cluster={{ cfg.get("cluster", "?") }}, region={{ cfg.get("region", "credential-chain default") }}{% if cfg.get("role_arn") %}, role={{ cfg.get("role_arn") }}{% endif %}
+{% endfor %}
+The `kubernetes credential` command is an internal bridge and must not be run
+to expose bearer tokens. Invoke normal EKS inspection commands or `datus k8s`.
+{% else %}
+Installed but not configured.
+{% if config_mutable %}
+Run the `eks-setup` skill to configure an EKS environment.
+{% else %}
+Configuration is managed by the deployment administrator; ask them to add an
+EKS profile.
+{% endif %}
+{% endif %}

@@ -8,6 +8,7 @@ members = [
     "datus-aws-common",
     "datus-cloudwatch-plugin",
     "datus-ecs-plugin",
+    "datus-eks-plugin",
     "datus-emr-plugin",
     "datus-emr-serverless-plugin",
     "datus-flink-plugin",
@@ -220,6 +221,28 @@ provides-extras = ["dev"]
 name = "datus-ecs-plugin"
 version = "0.2.0"
 source = { editable = "datus-aws-plugins/datus-ecs-plugin" }
+dependencies = [
+    { name = "datus-aws-common" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "jinja2" },
+    { name = "pytest" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "datus-aws-common", editable = "datus-aws-plugins/datus-aws-common" },
+    { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "datus-eks-plugin"
+version = "0.1.0"
+source = { editable = "datus-aws-plugins/datus-eks-plugin" }
 dependencies = [
     { name = "datus-aws-common" },
 ]

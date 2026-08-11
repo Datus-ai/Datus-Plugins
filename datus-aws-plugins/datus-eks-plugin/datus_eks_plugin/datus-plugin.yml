@@ -1,0 +1,181 @@
+manifest_version: 1
+description: "Inspect Amazon EKS and authenticate Kubernetes clients without the AWS CLI."
+
+cli: datus_eks_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+
+permissions:
+  normal:
+    allow:
+      - "clusters list:*"
+      - "clusters describe:*"
+      - "nodegroups list:*"
+      - "nodegroups describe:*"
+      - "addons list:*"
+      - "addons describe:*"
+      - "access-entries list:*"
+      - "access-entries describe:*"
+      - "fargate-profiles list:*"
+      - "fargate-profiles describe:*"
+      - "updates list:*"
+      - "updates describe:*"
+      - "insights list:*"
+      - "insights describe:*"
+      - "auth whoami:*"
+      - "kubernetes cluster:*"
+    ask: []
+    deny:
+      - "kubernetes credential:*"
+  auto:
+    allow:
+      - "clusters list:*"
+      - "clusters describe:*"
+      - "nodegroups list:*"
+      - "nodegroups describe:*"
+      - "addons list:*"
+      - "addons describe:*"
+      - "access-entries list:*"
+      - "access-entries describe:*"
+      - "fargate-profiles list:*"
+      - "fargate-profiles describe:*"
+      - "updates list:*"
+      - "updates describe:*"
+      - "insights list:*"
+      - "insights describe:*"
+      - "auth whoami:*"
+      - "kubernetes cluster:*"
+    ask: []
+    deny:
+      - "kubernetes credential:*"
+
+config_schema:
+  type: object
+  required: [cluster]
+  additionalProperties: false
+  properties:
+    cluster:
+      type: string
+      description: "EKS cluster name used by all cluster-scoped commands"
+    region:
+      type: string
+      description: "AWS region containing the EKS cluster"
+    profile:
+      type: string
+      description: "AWS named profile in ~/.aws/config"
+    access_key_id:
+      type: string
+      description: "Static AWS access key ID; use an environment-variable reference"
+      x-secret: true
+    secret_access_key:
+      type: string
+      description: "AWS secret access key; use an environment-variable reference"
+      x-secret: true
+    session_token:
+      type: string
+      description: "AWS temporary session token; use an environment-variable reference"
+      x-secret: true
+    role_arn:
+      type: string
+      description: "IAM role ARN to assume before calling EKS"
+    role_session_name:
+      type: string
+      description: "Session name for AssumeRole"
+    external_id:
+      type: string
+      description: "ExternalId for AssumeRole; use an environment-variable reference"
+      x-secret: true
+    endpoint_url:
+      type: string
+      description: "Optional custom EKS API endpoint URL"
+    timeout:
+      type: string
+      description: "AWS SDK connect/read timeout in seconds"
+      default: "60"
+    max_attempts:
+      type: string
+      description: "Maximum AWS SDK retry attempts"
+      default: "3"
+
+commands:
+  - name: clusters
+    description: "List EKS clusters or describe the profile's configured cluster."
+    subcommands:
+      - name: list
+        description: "List clusters in the configured region."
+        args:
+          - {name: --limit, description: "Maximum clusters to return"}
+      - name: describe
+        description: "Describe the configured cluster."
+  - name: nodegroups
+    description: "Inspect managed node groups in the configured cluster."
+    subcommands:
+      - name: list
+        args:
+          - {name: --limit, description: "Maximum node groups to return"}
+      - name: describe
+        args:
+          - {name: name, required: true, description: "Node group name"}
+  - name: addons
+    description: "Inspect EKS add-ons in the configured cluster."
+    subcommands:
+      - name: list
+        args:
+          - {name: --limit, description: "Maximum add-ons to return"}
+      - name: describe
+        args:
+          - {name: name, required: true, description: "Add-on name"}
+  - name: access-entries
+    description: "Inspect EKS access entries in the configured cluster."
+    subcommands:
+      - name: list
+        args:
+          - {name: --limit, description: "Maximum access entries to return"}
+      - name: describe
+        args:
+          - {name: name, required: true, description: "Principal ARN"}
+  - name: fargate-profiles
+    description: "Inspect EKS Fargate profiles."
+    subcommands:
+      - name: list
+        args:
+          - {name: --limit, description: "Maximum profiles to return"}
+      - name: describe
+        args:
+          - {name: name, required: true, description: "Fargate profile name"}
+  - name: updates
+    description: "Inspect control-plane, node-group, or add-on updates."
+    subcommands:
+      - name: list
+        args:
+          - {name: --nodegroup, description: "Limit to one node group"}
+          - {name: --addon, description: "Limit to one add-on"}
+          - {name: --limit, description: "Maximum updates to return"}
+      - name: describe
+        args:
+          - {name: id, required: true, description: "Update ID"}
+          - {name: --nodegroup, description: "Update belongs to this node group"}
+          - {name: --addon, description: "Update belongs to this add-on"}
+  - name: insights
+    description: "Inspect EKS upgrade insights."
+    subcommands:
+      - name: list
+        args:
+          - {name: --category, description: "Category filter; repeatable"}
+          - {name: --status, description: "Status filter; repeatable"}
+          - {name: --kubernetes-version, description: "Version filter; repeatable"}
+      - name: describe
+        args:
+          - {name: id, required: true, description: "Insight ID"}
+  - name: auth
+    description: "Inspect the AWS identity used by this EKS profile."
+    subcommands:
+      - name: whoami
+        description: "Show STS caller identity."
+  - name: kubernetes
+    description: "Machine-facing provider protocol consumed by datus-k8s-plugin."
+    subcommands:
+      - name: cluster
+        description: "Emit a cloud-k8s.datus.ai/v1 ClusterConnection JSON object."
+      - name: credential
+        description: "Emit a Kubernetes ExecCredential JSON object; denied to Agent bash."

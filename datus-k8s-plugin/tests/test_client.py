@@ -6,7 +6,15 @@ from types import SimpleNamespace
 import pytest
 import yaml
 
-from datus_k8s_plugin.client import LoadedClient, exec_exit_code
+from datetime import datetime, timedelta, timezone
+
+from datus_k8s_plugin.cloud_contract import ClusterConnection, ExecCredential
+from datus_k8s_plugin.client import (
+    LoadedClient,
+    ManagedCredentialProvider,
+    _provider_command,
+    exec_exit_code,
+)
 from datus_k8s_plugin.config import Settings
 from datus_k8s_plugin.errors import ApiError, UsageError
 
@@ -79,6 +87,93 @@ def test_explicit_context_wins(tmp_path, monkeypatch):
 
     loaded = LoadedClient.load(settings(kubeconfig, context="prod"))
     assert loaded.context_name == "prod"
+
+
+def test_managed_provider_uses_cloud_plugin_contract_and_caches_token(monkeypatch):
+    configured = Settings.from_profile(
+        {"name": "dev", "provider": "eks", "namespace": "analytics"}
+    )
+    calls = []
+
+    def fake_run(_settings, *args):
+        calls.append(args)
+        if args == ("kubernetes", "cluster"):
+            return ClusterConnection(
+                "eks", "orders", "https://cluster.example", "Q0E="
+            ).to_dict()
+        return ExecCredential(
+            "secret-token", datetime.now(timezone.utc) + timedelta(minutes=10)
+        ).to_dict()
+
+    monkeypatch.setattr("datus_k8s_plugin.client.run_cloud_provider", fake_run)
+    provider = ManagedCredentialProvider(configured)
+    assert provider.connection().server == "https://cluster.example"
+    assert provider.credential().token == "secret-token"
+    assert provider.credential().token == "secret-token"
+    assert calls == [
+        ("kubernetes", "cluster"),
+        ("kubernetes", "credential"),
+    ]
+
+
+def test_managed_provider_propagates_explicit_provider_config():
+    configured = Settings.from_profile(
+        {
+            "name": "dev",
+            "provider": "eks",
+            "namespace": "analytics",
+            "provider_config": "/etc/datus/agent.yml",
+        }
+    )
+    assert _provider_command(configured, "kubernetes", "credential") == [
+        "datus",
+        "eks",
+        "--config",
+        "/etc/datus/agent.yml",
+        "--profile",
+        "dev",
+        "kubernetes",
+        "credential",
+    ]
+
+
+def test_managed_provider_accepts_cluster_owned_by_provider(monkeypatch):
+    configured = Settings.from_profile(
+        {"name": "dev", "provider": "eks", "namespace": "analytics"}
+    )
+    monkeypatch.setattr(
+        "datus_k8s_plugin.client.run_cloud_provider",
+        lambda *_args: ClusterConnection(
+            "eks", "another", "https://cluster.example", "Q0E="
+        ).to_dict(),
+    )
+    assert ManagedCredentialProvider(configured).connection().cluster == "another"
+
+
+def test_managed_profile_builds_real_kubernetes_configuration(monkeypatch):
+    configured = Settings.from_profile(
+        {"name": "dev", "provider": "eks", "namespace": "analytics"}
+    )
+
+    def fake_run(_settings, *args):
+        if args == ("kubernetes", "cluster"):
+            return ClusterConnection(
+                "eks", "orders", "https://cluster.example", "Q0E="
+            ).to_dict()
+        return ExecCredential(
+            "secret-token", datetime.now(timezone.utc) + timedelta(minutes=10)
+        ).to_dict()
+
+    monkeypatch.setattr("datus_k8s_plugin.client.run_cloud_provider", fake_run)
+    loaded = LoadedClient.load(configured)
+    assert loaded.kubeconfig_path is None
+    assert loaded.context_name == "eks:orders"
+    assert loaded.managed_cluster == "orders"
+    assert loaded.api_client.configuration.host == "https://cluster.example"
+    assert loaded.api_client.configuration.get_api_key_with_prefix("authorization") == (
+        "Bearer secret-token"
+    )
+    assert loaded.credential_provider is not None
 
 
 def test_cluster_scoped_resource_is_rejected_before_use(tmp_path):

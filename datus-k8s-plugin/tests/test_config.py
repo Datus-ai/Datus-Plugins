@@ -75,8 +75,44 @@ def test_unknown_profile_field_is_rejected():
         Settings.from_profile(profile(bogus=True))
 
 
-def test_missing_kubeconfig_is_config_error():
-    with pytest.raises(ConfigError, match="required"):
+def test_missing_connection_mode_is_config_error():
+    with pytest.raises(ConfigError, match="exactly one"):
         Settings.from_profile(
             {"namespace": "default", "allowed_namespaces": "default"}
         )
+
+
+def test_managed_provider_defaults_to_same_named_provider_profile():
+    settings = Settings.from_profile(
+        {"name": "dev", "provider": "eks", "namespace": "analytics"}
+    )
+    assert settings.managed is True
+    assert settings.provider == "eks"
+    assert settings.provider_profile == "dev"
+    assert settings.allowed_namespaces == ("analytics",)
+    assert settings.kubeconfig is None
+
+
+def test_managed_provider_can_select_another_provider_profile():
+    settings = Settings.from_profile(
+        {
+            "name": "k8s-prod",
+            "provider": "gke",
+            "provider_profile": "prod",
+            "namespace": "analytics",
+        }
+    )
+    assert settings.provider == "gke"
+    assert settings.provider_profile == "prod"
+
+
+def test_kubeconfig_and_provider_are_mutually_exclusive():
+    with pytest.raises(ConfigError, match="exactly one"):
+        Settings.from_profile(profile(provider="eks"))
+
+
+def test_provider_name_is_strict_and_context_is_kubeconfig_only():
+    with pytest.raises(ConfigError, match="invalid cloud provider"):
+        Settings.from_profile({"name": "dev", "provider": "eks!"})
+    with pytest.raises(ConfigError, match="context is only valid"):
+        Settings.from_profile({"name": "dev", "provider": "eks", "context": "dev"})

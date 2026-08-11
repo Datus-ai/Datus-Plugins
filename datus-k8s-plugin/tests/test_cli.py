@@ -373,7 +373,7 @@ def test_unknown_command_is_usage_error(capsys):
 
 def test_missing_profile_is_config_error(capsys):
     assert main(["get", "pods"], {}) == 3
-    assert "kubeconfig is required" in capsys.readouterr().err
+    assert "exactly one of kubeconfig or provider" in capsys.readouterr().err
 
 
 @pytest.mark.parametrize(

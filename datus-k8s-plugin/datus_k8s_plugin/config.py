@@ -18,6 +18,9 @@ KNOWN_KEYS = {
     "default",
     "kubeconfig",
     "context",
+    "provider",
+    "provider_profile",
+    "provider_config",
     "namespace",
     "allowed_namespaces",
     "request_timeout",
@@ -46,10 +49,13 @@ def duration_seconds(raw: str) -> float:
 @dataclass(frozen=True)
 class Settings:
     profile_name: str
-    kubeconfig: str
+    kubeconfig: str | None
     context: str | None
     namespace: str
     allowed_namespaces: tuple[str, ...]
+    provider: str | None = None
+    provider_profile: str | None = None
+    provider_config: str | None = None
     request_timeout: str = "30s"
     field_manager: str = "datus-k8s"
 
@@ -60,14 +66,34 @@ class Settings:
         if unknown:
             raise ConfigError(f"unknown k8s profile field(s): {', '.join(sorted(unknown))}")
 
-        kubeconfig = str(data.get("kubeconfig") or "").strip()
-        if not kubeconfig:
+        profile_name = str(data.get("name") or "").strip()
+        kubeconfig = str(data.get("kubeconfig") or "").strip() or None
+        provider = str(data.get("provider") or "").strip() or None
+        provider_profile = str(data.get("provider_profile") or "").strip() or None
+        provider_config = str(data.get("provider_config") or "").strip() or None
+        context = str(data.get("context") or "").strip() or None
+        if bool(kubeconfig) == bool(provider):
             raise ConfigError(
-                "kubeconfig is required under agent.plugins.k8s.<profile>; "
+                "configure exactly one of kubeconfig or provider under "
+                "agent.plugins.k8s.<profile>; "
                 "run the k8s-setup skill for guided configuration"
             )
+        if provider:
+            if not re.fullmatch(r"[a-z][a-z0-9]*(?:-[a-z0-9]+)*", provider):
+                raise ConfigError(f"invalid cloud provider plugin name: {provider!r}")
+            provider_profile = provider_profile or profile_name
+            if not provider_profile:
+                raise ConfigError(
+                    "provider_profile is required when the k8s profile name is unavailable"
+                )
+            if context:
+                raise ConfigError("context is only valid with kubeconfig")
+        elif provider_profile:
+            raise ConfigError("provider_profile requires provider")
+        if provider_config and not provider:
+            raise ConfigError("provider_config requires provider")
         namespace = str(data.get("namespace") or "default").strip()
-        allowed = _csv(data.get("allowed_namespaces") or "default")
+        allowed = _csv(data.get("allowed_namespaces") or namespace)
         if not allowed:
             raise ConfigError("allowed_namespaces must contain at least one namespace")
         for item in (namespace, *allowed):
@@ -83,18 +109,22 @@ class Settings:
         field_manager = str(data.get("field_manager") or "datus-k8s").strip()
         if not field_manager:
             raise ConfigError("field_manager may not be empty")
-        context = str(data.get("context") or "").strip() or None
         return cls(
-            profile_name=str(data.get("name") or ""),
+            profile_name=profile_name,
             kubeconfig=kubeconfig,
-            context=context,
+            context=context if kubeconfig else None,
             namespace=namespace,
             allowed_namespaces=allowed,
+            provider=provider,
+            provider_profile=provider_profile,
+            provider_config=provider_config,
             request_timeout=timeout,
             field_manager=field_manager,
         )
 
     def resolve_kubeconfig(self, cwd: Path | None = None) -> Path:
+        if not self.kubeconfig:
+            raise ConfigError("this managed Kubernetes profile has no kubeconfig")
         base = (cwd or Path.cwd()).resolve()
         candidate = Path(self.kubeconfig).expanduser()
         if not candidate.is_absolute():
@@ -115,6 +145,10 @@ class Settings:
         except OSError as exc:
             raise ConfigError(f"kubeconfig is not readable: {candidate}: {exc}") from exc
         return candidate
+
+    @property
+    def managed(self) -> bool:
+        return bool(self.provider)
 
     def check_namespace(self, value: str | None) -> str:
         namespace = str(value or self.namespace).strip()

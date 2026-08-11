@@ -12,6 +12,37 @@ datus plugin install src:./datus-k8s-plugin
 
 ## Configure
 
+For a managed Kubernetes cluster, configure the cloud plugin once and reference
+it from a small k8s profile. Profiles with the same name are linked
+automatically; `allowed_namespaces` defaults to the selected namespace:
+
+```yaml
+agent:
+  plugins:
+    eks:
+      datus-dev:
+        default: true
+        cluster: datus-dev-eks-cluster
+        region: us-east-1
+        role_arn: arn:aws:iam::123456789012:role/datus-operator
+    k8s:
+      datus-dev:
+        default: true
+        provider: eks
+        namespace: analytics
+        allowed_namespaces: analytics,analytics-staging
+```
+
+The k8s plugin asks `datus eks --profile datus-dev` for the EKS endpoint, CA,
+and a short-lived
+credential. It never runs the AWS CLI and never persists the token.
+`provider_profile` defaults to the k8s profile name. Set it only when the two
+profile names differ. When the provider profile is loaded with a non-default
+`--config`, set `provider_config` to that agent.yml path so nested calls resolve
+the same config.
+
+Kubeconfig-backed clusters remain supported:
+
 ```yaml
 agent:
   plugins:

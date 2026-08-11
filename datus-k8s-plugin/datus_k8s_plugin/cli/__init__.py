@@ -339,7 +339,11 @@ def _cmd_version(ctx: Context, ns: argparse.Namespace) -> int:
         "pythonClientVersion": package_version("kubernetes"),
         "context": client.context_name,
         "namespace": ctx.settings.namespace,
+        "authenticationProvider": ctx.settings.provider or "kubeconfig",
     }
+    if ctx.settings.provider:
+        data["cluster"] = client.managed_cluster
+        data["providerProfile"] = ctx.settings.provider_profile
     if not ns.client:
         api = client.typed.VersionApi(client.api_client)
         data["serverVersion"] = plain(api.get_code(_request_timeout=client.request_timeout()))

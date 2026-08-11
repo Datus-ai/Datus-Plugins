@@ -58,9 +58,18 @@ permissions:
 
 config_schema:
   type: object
-  required: [kubeconfig, namespace, allowed_namespaces]
+  required: [namespace]
   additionalProperties: false
   properties:
+    provider:
+      type: string
+      description: "Managed Kubernetes provider plugin, such as eks, gke, aks, or ack"
+    provider_profile:
+      type: string
+      description: "Provider plugin profile; defaults to this k8s profile name"
+    provider_config:
+      type: string
+      description: "Optional agent.yml path for provider calls when using a non-default --config"
     kubeconfig:
       type: string
       description: "Kubeconfig path: absolute, ${KUBECONFIG}, or relative to the current Datus project directory"
@@ -73,8 +82,7 @@ config_schema:
       default: default
     allowed_namespaces:
       type: string
-      description: "Comma-separated namespace allowlist; -A and cluster-scoped resources are always blocked"
-      default: default
+      description: "Comma-separated namespace allowlist; defaults to namespace; -A and cluster-scoped resources are blocked"
     request_timeout:
       type: string
       description: "Per-request timeout such as 30s, 2m, or 1h; 0 disables it"

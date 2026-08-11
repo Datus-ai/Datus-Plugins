@@ -14,7 +14,11 @@ Never poll with `sleep`, and never wrap `datus k8s` in a script that re-parses
 {% if profiles %}
 Configured Kubernetes environments:
 {% for name, cfg in profiles.items() %}
+{% if cfg.get("provider") %}
+- {{ name }}: provider={{ cfg.get("provider") }}, provider profile={{ cfg.get("provider_profile") or name }}, default namespace={{ cfg.get("namespace", "default") }}, allowed namespaces={{ cfg.get("allowed_namespaces") or cfg.get("namespace", "default") }}
+{% else %}
 - {{ name }}: context={{ cfg.get("context") or "<kubeconfig current-context at runtime>" }}, default namespace={{ cfg.get("namespace", "default") }}, allowed namespaces={{ cfg.get("allowed_namespaces", "default") }}
+{% endif %}
 {% endfor %}
 
 Select an environment with `datus k8s --profile <name> <command> ...`. Put the

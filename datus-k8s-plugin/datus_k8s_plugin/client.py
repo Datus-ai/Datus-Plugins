@@ -2,11 +2,20 @@
 
 from __future__ import annotations
 
+import json
+import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Iterator
 
 import yaml
+
+from .cloud_contract import (
+    ClusterConnection,
+    ContractError,
+    ExecCredential,
+)
 
 from .config import Settings
 from .errors import ApiError, ConfigError, MissingDependencyError, UsageError
@@ -14,6 +23,89 @@ from .output import plain
 
 #: SPDY/WebSocket channel the API server uses for the exec termination status.
 EXEC_ERROR_CHANNEL = 3
+
+
+def _provider_command(settings: Settings, *args: str) -> list[str]:
+    command = [
+        "datus",
+        str(settings.provider),
+    ]
+    if settings.provider_config:
+        command.extend(("--config", settings.provider_config))
+    command.extend(("--profile", str(settings.provider_profile), *args))
+    return command
+
+
+def run_cloud_provider(settings: Settings, *args: str) -> dict[str, Any]:
+    """Invoke a cloud plugin's versioned managed-Kubernetes machine command."""
+    command = _provider_command(settings, *args)
+    try:
+        completed = subprocess.run(
+            command,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=max(5.0, settings.timeout_seconds or 30.0),
+        )
+    except FileNotFoundError as exc:
+        raise ConfigError("the `datus` executable is unavailable to the k8s plugin") from exc
+    except subprocess.TimeoutExpired as exc:
+        raise ConfigError(
+            f"{settings.provider} Kubernetes provider timed out"
+        ) from exc
+    if completed.returncode != 0:
+        detail = completed.stderr.strip() or f"exit code {completed.returncode}"
+        raise ConfigError(
+            f"{settings.provider} Kubernetes provider failed: {detail}"
+        )
+    try:
+        payload = json.loads(completed.stdout)
+    except ValueError as exc:
+        raise ConfigError(
+            f"{settings.provider} Kubernetes provider returned invalid JSON"
+        ) from exc
+    if not isinstance(payload, dict):
+        raise ConfigError(
+            f"{settings.provider} Kubernetes provider returned a non-object response"
+        )
+    return payload
+
+
+class ManagedCredentialProvider:
+    """Cloud-plugin bridge with short-lived credential caching and refresh."""
+
+    def __init__(self, settings: Settings):
+        self.settings = settings
+        self._credential: ExecCredential | None = None
+
+    def connection(self) -> ClusterConnection:
+        payload = run_cloud_provider(self.settings, "kubernetes", "cluster")
+        try:
+            return ClusterConnection.from_dict(
+                payload,
+                expected_provider=str(self.settings.provider),
+            )
+        except ContractError as exc:
+            raise ConfigError(f"unsafe managed Kubernetes connection: {exc}") from exc
+
+    def credential(self) -> ExecCredential:
+        now = datetime.now(timezone.utc)
+        if (
+            self._credential is not None
+            and self._credential.expiration_timestamp > now + timedelta(seconds=60)
+        ):
+            return self._credential
+        payload = run_cloud_provider(self.settings, "kubernetes", "credential")
+        try:
+            self._credential = ExecCredential.from_dict(payload)
+        except ContractError as exc:
+            raise ConfigError(f"unsafe managed Kubernetes credential: {exc}") from exc
+        return self._credential
+
+    def refresh(self, configuration: Any) -> None:
+        credential = self.credential()
+        configuration.api_key["authorization"] = credential.token
+        configuration.api_key_prefix["authorization"] = "Bearer"
 
 
 def _import_kubernetes():
@@ -61,13 +153,15 @@ def exec_exit_code(payload: str) -> int:
 @dataclass
 class LoadedClient:
     settings: Settings
-    kubeconfig_path: Path
+    kubeconfig_path: Path | None
     context_name: str
     api_client: Any
     dynamic_module: Any
     typed: Any
     watch_module: Any
     _dynamic: Any = None
+    credential_provider: Any = None
+    managed_cluster: str | None = None
 
     @classmethod
     def load(cls, settings: Settings) -> "LoadedClient":
@@ -81,6 +175,8 @@ class LoadedClient:
             _dynamic_exc,
             _not_found,
         ) = _import_kubernetes()
+        if settings.managed:
+            return cls._load_managed(settings, client, config, dynamic, watch)
         path = settings.resolve_kubeconfig()
         try:
             contexts, active = config.list_kube_config_contexts(config_file=str(path))
@@ -103,6 +199,71 @@ class LoadedClient:
         except Exception as exc:
             raise ConfigError(f"cannot load context {context!r} from {path}: {exc}") from exc
         return cls(settings, path, context, api_client, dynamic, client, watch)
+
+    @classmethod
+    def _load_managed(
+        cls,
+        settings: Settings,
+        client: Any,
+        config: Any,
+        dynamic: Any,
+        watch: Any,
+    ) -> "LoadedClient":
+        provider = ManagedCredentialProvider(settings)
+        connection = provider.connection()
+        credential = provider.credential()
+        config_dict = {
+            "apiVersion": "v1",
+            "kind": "Config",
+            "clusters": [
+                {
+                    "name": "managed",
+                    "cluster": {
+                        "server": connection.server,
+                        "certificate-authority-data": connection.certificate_authority_data,
+                    },
+                }
+            ],
+            "users": [
+                {"name": "managed", "user": {"token": credential.token}}
+            ],
+            "contexts": [
+                {
+                    "name": "managed",
+                    "context": {
+                        "cluster": "managed",
+                        "user": "managed",
+                        "namespace": settings.namespace,
+                    },
+                }
+            ],
+            "current-context": "managed",
+        }
+        configuration = client.Configuration()
+        try:
+            loader = config.kube_config.KubeConfigLoader(
+                config_dict=config_dict, active_context="managed"
+            )
+            loader.load_and_set(configuration)
+        except Exception as exc:
+            raise ConfigError(
+                f"cannot construct Kubernetes client for {settings.provider} "
+                f"provider profile {settings.provider_profile!r}: {exc}"
+            ) from exc
+        provider.refresh(configuration)
+        configuration.refresh_api_key_hook = provider.refresh
+        api_client = client.ApiClient(configuration=configuration)
+        return cls(
+            settings,
+            None,
+            f"{settings.provider}:{connection.cluster}",
+            api_client,
+            dynamic,
+            client,
+            watch,
+            credential_provider=provider,
+            managed_cluster=connection.cluster,
+        )
 
     @property
     def dynamic(self) -> Any:
