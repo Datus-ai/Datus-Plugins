@@ -64,6 +64,9 @@ config_schema:
     provider:
       type: string
       description: "Managed Kubernetes provider plugin, such as eks, gke, aks, or ack"
+      x-plugin-profile-ref:
+        profile_field: provider_profile
+        default_profile: same-name
     provider_profile:
       type: string
       description: "Provider plugin profile; defaults to this k8s profile name"
