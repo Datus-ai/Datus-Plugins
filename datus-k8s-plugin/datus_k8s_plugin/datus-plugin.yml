@@ -1,0 +1,257 @@
+manifest_version: 1
+
+description: "Inspect and operate namespace-scoped Kubernetes data workloads from `datus k8s` with a kubectl-style CLI."
+
+cli: datus_k8s_plugin.cli:main
+skills: skills
+system_prompt: prompts/system.md.j2
+
+permissions:
+  normal:
+    allow:
+      - "version:*"
+      - "api-resources:*"
+      - "api-versions:*"
+      - "explain:*"
+      - "get:*"
+      - "describe:*"
+      - "logs:*"
+      - "events:*"
+      - "top pod:*"
+      - "auth can-i:*"
+      - "wait:*"
+      - "rollout status:*"
+    ask:
+      - "create:*"
+      - "apply:*"
+      - "delete:*"
+      - "patch:*"
+      - "scale:*"
+      - "rollout restart:*"
+      - "label:*"
+      - "annotate:*"
+      - "exec:*"
+  auto:
+    allow:
+      - "version:*"
+      - "api-resources:*"
+      - "api-versions:*"
+      - "explain:*"
+      - "get:*"
+      - "describe:*"
+      - "logs:*"
+      - "events:*"
+      - "top pod:*"
+      - "auth can-i:*"
+      - "wait:*"
+      - "rollout status:*"
+    ask:
+      - "create:*"
+      - "apply:*"
+      - "delete:*"
+      - "patch:*"
+      - "scale:*"
+      - "rollout restart:*"
+      - "label:*"
+      - "annotate:*"
+      - "exec:*"
+
+config_schema:
+  type: object
+  required: [namespace]
+  additionalProperties: false
+  properties:
+    provider:
+      type: string
+      description: "Managed Kubernetes provider plugin, such as eks, gke, aks, or ack"
+      x-plugin-profile-ref:
+        profile_field: provider_profile
+        default_profile: same-name
+    provider_profile:
+      type: string
+      description: "Provider plugin profile; defaults to this k8s profile name"
+    provider_config:
+      type: string
+      description: "Optional agent.yml path for provider calls when using a non-default --config"
+    kubeconfig:
+      type: string
+      description: "Kubeconfig path: absolute, ${KUBECONFIG}, or relative to the current Datus project directory"
+    context:
+      type: string
+      description: "Kubeconfig context; omit to use current-context at runtime"
+    namespace:
+      type: string
+      description: "Default namespace for this profile"
+      default: default
+    allowed_namespaces:
+      type: string
+      description: "Comma-separated namespace allowlist; defaults to namespace; -A and cluster-scoped resources are blocked"
+    request_timeout:
+      type: string
+      description: "Per-request timeout such as 30s, 2m, or 1h; 0 disables it"
+      default: 30s
+    field_manager:
+      type: string
+      description: "Server-Side Apply field manager"
+      default: datus-k8s
+
+commands:
+  - name: version
+    description: "Show server, Python client, plugin, and effective context versions"
+    args:
+      - {name: --client, description: "omit the server request"}
+      - {name: -o, description: "json or yaml"}
+  - name: api-resources
+    description: "List namespace-scoped resources discovered from the API server"
+    args:
+      - {name: --api-group}
+      - {name: --verbs}
+  - name: api-versions
+    description: "List API group versions"
+  - name: explain
+    description: "Show discovered information for a namespaced resource"
+    args:
+      - {name: resource, required: true}
+      - {name: --api-version}
+  - name: get
+    description: "Display one or many namespaced resources"
+    args:
+      - {name: resource, required: true}
+      - {name: names}
+      - {name: -n}
+      - {name: -o}
+      - {name: -l}
+      - {name: --field-selector}
+      - {name: --watch}
+  - name: describe
+    description: "Show resource metadata, spec, status, and conditions"
+    args:
+      - {name: resource, required: true}
+      - {name: names}
+      - {name: -n}
+  - name: logs
+    description: "Print or follow pod logs"
+    args:
+      - {name: pod, required: true}
+      - {name: -c}
+      - {name: --all-containers}
+      - {name: -n}
+      - {name: --follow}
+      - {name: --previous}
+      - {name: --tail}
+  - name: exec
+    description: "Run one non-interactive command in a pod; stdin and TTY are disabled"
+    args:
+      - {name: pod, required: true}
+      - {name: -c}
+      - {name: -n}
+      - {name: --timeout}
+      - {name: -- COMMAND, required: true}
+  - name: events
+    description: "List namespace events"
+    args:
+      - {name: -n}
+      - {name: --for}
+      - {name: --types}
+      - {name: --watch}
+  - name: top
+    description: "Display resource usage"
+    subcommands:
+      - name: pod
+        description: "Display pod or container CPU and memory usage"
+        args:
+          - {name: name}
+          - {name: -n}
+          - {name: --containers}
+          - {name: --sort-by}
+  - name: auth
+    description: "Inspect authorization"
+    subcommands:
+      - name: can-i
+        description: "Check whether the current identity may perform an action"
+        args:
+          - {name: verb}
+          - {name: resource}
+          - {name: -n}
+          - {name: --list}
+  - name: wait
+    description: "Wait for creation, deletion, a status condition, or a jsonpath value"
+    args:
+      - {name: resource, required: true}
+      - {name: names, required: true}
+      - {name: --for, required: true}
+      - {name: --fail-on}
+      - {name: --timeout}
+      - {name: --quiet}
+      - {name: -n}
+  - name: rollout
+    description: "Inspect or restart workload rollouts"
+    subcommands:
+      - name: status
+        description: "Wait for a Deployment, StatefulSet, or DaemonSet rollout"
+        args:
+          - {name: type/name, required: true}
+          - {name: -n}
+          - {name: --timeout}
+      - name: restart
+        description: "Restart a Deployment, StatefulSet, or DaemonSet"
+        args:
+          - {name: type/name, required: true}
+          - {name: -n}
+          - {name: -l}
+  - name: create
+    description: "Create resources from local YAML/JSON manifests"
+    args:
+      - {name: -f, required: true}
+      - {name: -n}
+      - {name: --dry-run}
+      - {name: -o}
+  - name: apply
+    description: "Server-Side Apply local YAML/JSON manifests"
+    args:
+      - {name: -f, required: true}
+      - {name: -n}
+      - {name: --field-manager}
+      - {name: --force-conflicts}
+      - {name: -o}
+  - name: delete
+    description: "Delete namespaced resources"
+    args:
+      - {name: resource}
+      - {name: names}
+      - {name: -f}
+      - {name: -n}
+      - {name: -l}
+      - {name: --all}
+      - {name: --force}
+  - name: patch
+    description: "Apply a JSON, merge, or strategic patch"
+    args:
+      - {name: resource, required: true}
+      - {name: name, required: true}
+      - {name: -p}
+      - {name: --patch-file}
+      - {name: --type}
+      - {name: -n}
+  - name: scale
+    description: "Set workload replicas"
+    args:
+      - {name: type/name, required: true}
+      - {name: --replicas, required: true}
+      - {name: -n}
+  - name: label
+    description: "Set or remove resource labels"
+    args:
+      - {name: resource, required: true}
+      - {name: name, required: true}
+      - {name: key=value, required: true}
+      - {name: --overwrite}
+      - {name: -n}
+  - name: annotate
+    description: "Set or remove resource annotations"
+    args:
+      - {name: resource, required: true}
+      - {name: name, required: true}
+      - {name: key=value, required: true}
+      - {name: --overwrite}
+      - {name: -n}
