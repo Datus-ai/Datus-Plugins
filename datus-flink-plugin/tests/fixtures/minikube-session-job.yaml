@@ -1,0 +1,12 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkSessionJob
+metadata:
+  name: datus-flink-session-job-smoke
+  namespace: datus-flink-operator-test
+spec:
+  deploymentName: datus-flink-session-smoke
+  job:
+    jarURI: https://repo1.maven.org/maven2/org/apache/flink/flink-examples-streaming/2.2.0/flink-examples-streaming-2.2.0-TopSpeedWindowing.jar
+    parallelism: 1
+    upgradeMode: stateless
+    state: running

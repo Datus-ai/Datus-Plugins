@@ -1,0 +1,5 @@
+manifest_version: 1
+
+description: "Validate Apache Flink jobs locally and build, deploy, and operate them through bundled runtime-specific skills."
+
+skills: skills

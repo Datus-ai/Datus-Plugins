@@ -1,0 +1,12 @@
+apiVersion: flink.apache.org/v1beta1
+kind: FlinkStateSnapshot
+metadata:
+  name: datus-flink-app-snapshot-smoke-3
+  namespace: datus-flink-operator-test
+spec:
+  jobReference:
+    kind: FlinkDeployment
+    name: datus-flink-app-smoke
+  savepoint:
+    disposeOnDelete: false
+    formatType: CANONICAL

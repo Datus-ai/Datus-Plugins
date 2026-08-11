@@ -56,6 +56,41 @@ datus s3 rm s3://bucket/key [-r] [-y]   # delete; prompts unless -y
   careful, and prefer `ls -r` first to see what will go.
 - Writes use SSE-KMS when `kms_key_id` is set in the profile.
 
+## Publish build artifacts
+
+Uploading a directory of artifacts is one `sync`, not a loop of `cp` — `sync`
+skips unchanged files and reports what it actually wrote:
+
+```
+datus s3 sync ./artifacts/ s3://bucket/artifacts/<name>/<version>/
+datus s3 ls s3://bucket/artifacts/<name>/<version>/ -r --limit 100
+```
+
+An upload is not verified until it has been read back. `stat` returns the object's
+own metadata; compare `ContentLength` against the local file:
+
+```
+datus s3 stat s3://bucket/artifacts/<name>/<version>/job.jar -o json
+```
+
+`ETag` equals the content MD5 only for a single-part upload without SSE-KMS, so
+never present it as a checksum when `kms_key_id` is set. When integrity matters,
+keep the digest yourself: publish a checksum file next to the artifact and have
+the consumer verify it after download.
+
+**Overwriting a key does not notify anything.** A consumer that references an
+artifact by URI — a Kubernetes workload, an operator reconciling a spec, a CDN, a
+cache — sees no change when the bytes behind an unchanged URI change, and keeps
+running the previous build. Publish each build under a key qualified by version or
+content digest and reference that exact key, so a new build is a new URI. Reuse a
+mutable key only for a pointer you expect consumers to re-resolve, and never
+assume an overwrite triggers a restart.
+
+Treat credentials as never belonging in an uploaded artifact. A rendered config or
+SQL file carrying a key becomes readable to everyone with access to the prefix and
+survives in object versions; pass secrets through the consumer's own secret
+mechanism instead.
+
 ## Exit codes
 
 `0` success · `1` runtime/API error · `2` usage (also: `rm` without `-y` when
