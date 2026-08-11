@@ -1,8 +1,8 @@
 # Datus Plugins
 
 Official plugins for [**Datus**](https://github.com/Datus-ai/Datus-agent) — the
-data-engineering agent. Each plugin wraps an SDK, REST API, or cloud service as a
-`datus <command>` subcommand that both you and the agent can drive.
+data-engineering agent. A plugin can add a `datus <command>` subcommand, bundled
+agent skills, or both.
 
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Python](https://img.shields.io/badge/python-%3E%3D3.12-blue.svg)](https://www.python.org/)
@@ -15,15 +15,16 @@ picks them up automatically.
 
 ## What's inside
 
-Eleven plugins, each its own independently versioned distribution. All currently
+Fourteen plugins, each its own independently versioned distribution. All currently
 ship at `0.1.x` — 🧪 **Experimental** (functional and contract-tested, but the
 command surface and config schema may still change; see
 [Versioning & maturity](#versioning--maturity)).
 
-| Command | Distribution | Version | What it does | Docs |
+| Command / skill | Distribution | Version | What it does | Docs |
 |---|---|:---:|---|:---:|
 | `datus airflow` | `datus-airflow-plugin` | `0.3.0` | Drive remote Apache Airflow 2.x/3.x over REST API v1/v2, with DAG deploy to S3 or a dags folder and per-profile DAG/command scoping | [↗](datus-airflow-plugin/README.md) |
 | `datus statsig` | `datus-statsig-plugin` | `0.1.0` | Read Statsig metrics & experiment results, author warehouse-native metric SQL, drive ETL ingestion (Console API) | [↗](datus-statsig-plugin/README.md) |
+| `datus eks` | `datus-eks-plugin` | `0.1.0` | Inspect Amazon EKS and authenticate `datus k8s` without the AWS CLI | [↗](datus-aws-plugins/datus-eks-plugin/README.md) |
 | `datus s3` | `datus-s3-plugin` | `0.1.0` | Browse and move S3 data (ls/stat/cat/cp/sync/rm/presign) and run S3 Select SQL | [↗](datus-aws-plugins/datus-s3-plugin/README.md) |
 | `datus glue` | `datus-glue-plugin` | `0.1.0` | Browse the Glue Data Catalog and run/monitor Glue crawlers and ETL jobs (with logs) | [↗](datus-aws-plugins/datus-glue-plugin/README.md) |
 | `datus iam` | `datus-iam-plugin` | `0.1.0` | Read-only IAM inspection and permission simulation (the `AccessDenied` diagnostic) | [↗](datus-aws-plugins/datus-iam-plugin/README.md) |
@@ -33,8 +34,11 @@ command surface and config schema may still change; see
 | `datus cloudwatch` | `datus-cloudwatch-plugin` | `0.1.0` | Query CloudWatch logs (incl. Logs Insights), metrics, alarms and dashboards | [↗](datus-aws-plugins/datus-cloudwatch-plugin/README.md) |
 | `datus quicksight` | `datus-quicksight-plugin` | `0.1.0` | Browse QuickSight datasets/dashboards/analyses and refresh SPICE ingestions | [↗](datus-aws-plugins/datus-quicksight-plugin/README.md) |
 | `datus mwaa` | `datus-mwaa-plugin` | `0.1.0` | Inspect MWAA environments, mint tokens, and run the Airflow CLI over REST | [↗](datus-aws-plugins/datus-mwaa-plugin/README.md) |
+| `datus k8s` | `datus-k8s-plugin` | `0.1.0` | Inspect and operate namespace-scoped Kubernetes data workloads with a kubectl-style CLI | [↗](datus-k8s-plugin/README.md) |
+| `flink-local-dev` skill | `datus-flink-plugin` | `0.1.0` | Validate a Flink SQL job locally in an in-process MiniCluster — bounded dev sources, shadowed sinks — before it is deployed | [↗](datus-flink-plugin/README.md) |
+| `flink-k8s-operator` skill | `datus-flink-plugin` | `0.1.0` | Build and operate FlinkDeployment, FlinkSessionJob, and FlinkStateSnapshot resources through `datus k8s` | [↗](datus-flink-plugin/README.md) |
 
-The nine AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)
+The ten AWS plugins share [`datus-aws-common`](datus-aws-plugins/datus-aws-common/README.md)
 (boto3 session/AssumeRole, config, error mapping, output rendering) — an internal
 library, not a plugin, installed automatically as a dependency.
 
@@ -110,13 +114,16 @@ datus s3 --profile staging cat s3://my-bucket/report.json
 
 ## Develop your own plugin
 
-### Use the development skill (recommended)
+### Use the plugin engineering skills (recommended)
 
-`datus-plugin-development` is a bundled agent skill that turns any SDK / REST API
-/ documentation into an installable plugin. It is **design-first**: it produces a
-design draft (config schema, command list with doc citations + permission rules,
-bundled-skill plan) and **stops for your confirmation** before writing any code.
-The full plugin contract is inlined in the skill, so it needs no external docs.
+One marketplace installation provides three skills that Claude Code or Codex
+runs directly—there is no additional framework CLI:
+
+| Skill | Purpose |
+|---|---|
+| `datus-plugin-development` | Produce a design draft, stop for confirmation, then implement the plugin. |
+| `build-datus-plugin-e2e` | Define and run a deterministic `datus -p` workflow through the pytest harness. |
+| `optimize-datus-plugin` | Analyze oracle/session/generated-file evidence and iterate on the plugin. |
 
 #### Claude Code
 
@@ -125,10 +132,12 @@ The full plugin contract is inlined in the skill, so it needs no external docs.
 /plugin install datus-plugin-development@datus-plugin
 ```
 
-Then invoke it with the SDK / API / docs to wrap:
+Then invoke the required workflow:
 
 ```
 /datus-plugin-development <path or URL to the SDK / API / docs, plus the desired command name>
+/build-datus-plugin-e2e <plugin path and deterministic goal>
+/optimize-datus-plugin <E2E run artifact path>
 ```
 
 #### Codex
@@ -142,7 +151,15 @@ then start a new session and invoke the skill:
 
 ```
 $datus-plugin-development <path or URL to the SDK / API / docs, plus the desired command name>
+$build-datus-plugin-e2e <plugin path and deterministic goal>
+$optimize-datus-plugin <E2E run artifact path>
 ```
+
+The reusable implementation is under [`tests/e2e`](tests/e2e/README.md). Live
+runs resolve a requested datus-agent branch to an immutable SHA, pack the
+current plugin checkout with that agent, install the resulting `zip:` bundle,
+and invoke `datus -p`. Programmatic oracles determine correctness; session
+analysis is used only to diagnose quality and efficiency.
 
 ### The plugin contract
 

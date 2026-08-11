@@ -26,6 +26,9 @@ share/python-wheels/
 *.egg
 MANIFEST
 
+# Datus offline plugin bundles (datus-<plugin>-<version>.zip)
+datus-*-plugin-*.zip
+
 # PyInstaller
 #   Usually these files are written by a python script from a template
 #   before PyInstaller builds the exe, so as to inject date/other infos into it.
@@ -208,6 +211,9 @@ tempCodeRunnerFile.py
 
 # PyPI configuration file
 .pypirc
+
+# Datus plugin LLM E2E runs (sessions, generated files, local kubeconfigs)
+.datus-e2e/
 
 # Marimo
 marimo/_static/

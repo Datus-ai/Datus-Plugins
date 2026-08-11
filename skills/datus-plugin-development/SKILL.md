@@ -1,14 +1,6 @@
 ---
 name: datus-plugin-development
 description: Wrap a user-provided SDK / REST API / documentation into an installable Datus plugin. Produces a design draft FIRST (config schema, CLI command list with doc citations + permission rules, bundled-skill plan), then STOPS for user confirmation before writing any code. Fully self-contained — the entire datus-plugin.yml manifest contract is inlined below.
-triggers:
-  - datus plugin
-  - build a datus plugin
-  - wrap sdk into plugin
-  - wrap api into plugin
-  - create datus plugin
-  - plugin development
-argument-hint: "[path or URL to the SDK / API / docs to wrap, plus the desired command name]"
 ---
 
 # Datus Plugin Development Skill
@@ -190,6 +182,9 @@ glob, `:*` whole namespace. Only `normal` and `auto` profiles are accepted.
 - Main skill `<name>` — description + when the agent should invoke it.
 - Setup skill `<name>-setup` — the profile fields it collects from the user,
   and that it writes `${VAR}` references for secrets (never literals).
+- Each skill is ONE `SKILL.md` (no `references/`, no `assets/`): list the
+  templates/scripts to inline in it, and split into another skill rather than
+  another file when the content does not fit.
 - system_prompt template — the NON-SECRET fields to surface per environment
   (e.g. base URL, region, env name); all of them must be declared in §1.
   Plan the `{% else %}` installed-but-unconfigured branch pointing at
@@ -226,7 +221,19 @@ scoping. Show both halves:
 End with an explicit prompt: "Confirm this scope, or tell me which excluded
 capabilities to include."
 
-### 6. Open questions
+### 6. End-to-end testability
+
+- Deterministic user goal: <one bounded task the plugin must complete through `datus -p`>.
+- Environment fixtures: <minikube / MinIO / Flink Operator / other pinned services, or none>.
+- Independent oracle: <exact external state, schema, count, checksum, or resource fields to verify without calling the tested plugin>.
+- Generated artifacts: <workspace-relative output patterns to preserve>.
+- Support plugins and minimum permission prefixes: <only what the workflow needs>.
+- Efficiency signals: <expected command sequence plus tool-call / turn / token / unexpected-failure budgets>.
+- Feasibility: <runnable now | reference workflow pending fixture/oracle>, including prerequisites.
+
+This section becomes the input to `$build-datus-plugin-e2e` after implementation. The E2E oracle, not the LLM's narrative, owns the correctness verdict.
+
+### 7. Open questions
 
 - <anything the docs did not resolve: auth details, pagination, rate limits,
   command-name conflicts, or scope calls you are unsure about …>
@@ -272,13 +279,20 @@ Implement in this order:
    configured branch and an `{% else %}` branch pointing at `<name>-setup`
    ([System-prompt template](#system-prompt-template)).
 6. **Bundled skills** — `skills/<name>/SKILL.md` and
-   `skills/<name>-setup/SKILL.md` (see [Bundling a setup skill](#bundling-a-setup-skill)).
+   `skills/<name>-setup/SKILL.md`, each **one self-contained file**: no
+   `references/` or `assets/` siblings, every template inlined as a fenced block
+   (see [Bundling skills](#bundling-skills) and
+   [Bundling a setup skill](#bundling-a-setup-skill)).
 7. **Packaging** — ensure the manifest, template, and skill files ship in the
    wheel (Hatchling packages them by default; with setuptools add
    `[tool.setuptools.package-data]`).
 8. **Tests** — call `main(argv, profile)` with a plain dict (no `agent.yml`,
    no Datus imports); validate the manifest with `yaml.safe_load` and render
    the template with plain Jinja2. See [Testing your plugin](#testing-your-plugin).
+9. **E2E handoff** — after unit and manifest-contract tests pass, invoke
+   `$build-datus-plugin-e2e` when end-to-end coverage is in scope. Implement the
+   approved §6 deterministic goal through the repository's pytest harness; do
+   not add a standalone test CLI and do not use LLM judgment as the oracle.
 
 ### Verify against the constraints checklist
 
@@ -299,7 +313,9 @@ Before declaring done, confirm every item in
 
 Summarize: the package created, entry-point name, manifest contents (config
 schema, CLI commands and their permission posture, skills), and the checklist +
-verification results. Note any open questions still outstanding.
+verification results. Note any open questions still outstanding. Include the
+deterministic E2E target and either the `$build-datus-plugin-e2e` result or the
+exact handoff still required.
 
 ---
 
@@ -403,7 +419,7 @@ required; every other key is optional:
 | `tool_transformers` | mapping | Tool pattern → code ref (or list of refs) that rewrite or deny the agent's tool calls. |
 | `permissions` | mapping | Bash-permission rules for the plugin's own CLI namespace, per permission profile — pure YAML, no code. |
 | `system_prompt` | path | Package-relative path of a Jinja2 template rendered into the agent's system prompt. |
-| `skills` | path | Package-relative path of a bundled skill directory. A `<name>-setup` skill must declare `requires_mutable_config: true` in its frontmatter (see "Bundling a setup skill"). |
+| `skills` | path | Package-relative path of a bundled skill directory. Each skill inside it is exactly one `SKILL.md` — sibling `references/`/`assets/` files are never loaded (see "Bundling skills"). A `<name>-setup` skill must declare `requires_mutable_config: true` in its frontmatter (see "Bundling a setup skill"). |
 | `config_schema` | JSON Schema | Inline object schema describing one profile — drives the `/plugins` TUI form and validates profiles before saving. |
 | `commands` | list | Descriptive catalogue of the CLI commands (and nested subcommands / args) the `cli` function accepts — powers the REPL's `!<plugin>` completion and argument hints. Purely metadata; Datus never parses the plugin's args (see "Declaring the CLI command catalogue"). |
 
@@ -729,15 +745,40 @@ Declare a package-relative skills directory in the manifest — no code involved
 skills: skills
 ```
 
-Layout:
+Layout — one directory per skill, and **exactly one `SKILL.md` inside it**:
 
 ```
 datus_plugin_hello/
 ├── datus-plugin.yml
 └── skills/
-    └── hello/
+    ├── hello/
+    │   └── SKILL.md
+    └── hello-setup/
         └── SKILL.md
 ```
+
+**A skill is one file.** Datus discovers and loads the `SKILL.md` only. A skill
+directory has no support for `references/`, `assets/`, `scripts/`, or any other
+sibling file: such files are not loaded, not resolved by relative markdown
+links, and not copied anywhere the agent can reach at skill-load time. So the
+progressive-disclosure pattern from Claude Code skills (a lean `SKILL.md` that
+says "read `references/x.md` when relevant") does **not** work here.
+
+Consequences for writing a plugin skill:
+
+- **Inline everything the skill hands to a project** — config templates, YAML
+  manifests, Dockerfiles, SQL, small scripts — as fenced code blocks. Give each
+  one a `### <filename>` heading so the agent knows what to write where, and so
+  tests can extract and validate the block.
+- **Never link to a sibling file.** `[reference](references/x.md)` is a dead
+  link. Link only to absolute URLs, or to headings inside the same file.
+- **Budget the file.** Everything loads at once, so prune "nice to know"
+  material and keep the operational spine: preflight, decision rules,
+  templates, verification, failure modes.
+- **Split by task, not by document.** When one file grows unwieldy, ship a
+  second *skill* with its own trigger description (e.g. `<name>` for daily use
+  and `<name>-setup` for configuration) rather than a second file inside one
+  skill.
 
 Datus discovers the skills at startup (they show up in `/skill list`). A
 minimal `SKILL.md` is YAML frontmatter plus markdown instructions (the
@@ -1149,4 +1190,5 @@ Before publishing, verify:
 - [ ] `permissions` patterns are namespace-relative (no `datus <name>` prefix — Datus adds it), and state-changing subcommands are `ask` under `normal`.
 - [ ] `commands` catalogues the CLI surface (command groups as nested `subcommands`, key args per command) and stays in sync with the `permissions` tree and the `cli` function.
 - [ ] Skill files and the prompt template are packaged into the wheel.
+- [ ] Every bundled skill is a single `SKILL.md` — no `references/`, `assets/`, or other sibling files, no relative markdown links, and every template inlined as a fenced block under a `### <filename>` heading.
 - [ ] The `datus.plugins` entry-point name matches the intended `datus <name>` command and the `agent.plugins.<name>` config key.

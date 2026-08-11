@@ -30,5 +30,9 @@ airflow = "datus_airflow_plugin"
 [tool.hatch.build.targets.wheel]
 packages = ["datus_airflow_plugin"]
 
+[tool.hatch.build.targets.sdist]
+# The offline bundle zip is a build artifact — it must never ship inside the sdist.
+exclude = ["*.zip"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
