@@ -1,20 +1,26 @@
 {
   "name": "datus-plugin-development",
-  "version": "1.0.0",
-  "description": "Wrap an SDK / REST API / docs into an installable Datus plugin (design-draft-first workflow)",
+  "version": "1.1.0",
+  "description": "Design, test, and iteratively optimize Datus plugins with deterministic LLM-driven E2E workflows",
   "author": {
     "name": "Datus-ai"
   },
   "homepage": "https://github.com/Datus-ai/Datus-Plugins",
   "repository": "https://github.com/Datus-ai/Datus-Plugins",
   "license": "Apache-2.0",
-  "keywords": ["datus", "plugin", "development", "sdk", "cli"],
+  "keywords": ["datus", "plugin", "development", "e2e", "testing", "optimization"],
   "skills": "./skills/",
   "interface": {
-    "displayName": "Datus Plugin Development",
-    "shortDescription": "Scaffold an installable Datus plugin from an SDK / REST API / docs",
+    "displayName": "Datus Plugin Engineering",
+    "shortDescription": "Develop, E2E test, and optimize installable Datus plugins",
+    "longDescription": "Design installable Datus plugins from SDK or API documentation, build deterministic LLM-driven end-to-end workflows, and iteratively optimize plugins from oracle, session, and generated-artifact evidence.",
     "developerName": "Datus-ai",
     "category": "Productivity",
-    "capabilities": ["Read", "Write"]
+    "capabilities": ["Read", "Write"],
+    "defaultPrompt": [
+      "Design a Datus plugin from these API docs.",
+      "Build a deterministic E2E workflow for this plugin.",
+      "Optimize this plugin from the latest E2E artifacts."
+    ]
   }
 }

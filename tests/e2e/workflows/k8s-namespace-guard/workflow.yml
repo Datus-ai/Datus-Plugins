@@ -1,0 +1,28 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: k8s-namespace-guard
+  description: Reference negative workflow proving that a plugin cannot escape its allowed namespace.
+  tags: [reference, smoke, k8s, security]
+spec:
+  target:
+    distribution: datus-k8s-plugin
+    path: datus-k8s-plugin
+    name: k8s
+    profile:
+      kubeconfig: "{{KUBECONFIG}}"
+      context: "{{KUBE_CONTEXT}}"
+      namespace: "{{NAMESPACE}}"
+      allowed_namespaces: "{{NAMESPACE}}"
+  supportPlugins: []
+  agent: {prompt: prompt.md, timeoutSeconds: 600}
+  environment: {components: [minikube], lock: environment.lock.yml}
+  workspace:
+    outputs: [results/namespace-guard.json]
+  permissions:
+    bashAllow: ["datus k8s create:*", "datus k8s get:*"]
+  oracles:
+    - {type: files, config: {patterns: [results/namespace-guard.json]}}
+    - {type: namespace_guard, config: {createdConfigMap: e2e-allowed, forbiddenNamespace: kube-system}}
+  efficiency: {maxToolCalls: 6, maxLlmTurns: 5, maxTokens: 40000, maxUnexpectedFailures: 1}
+  cleanup: {deleteNamespace: true, deleteBucketPrefix: false}

@@ -1,0 +1,4 @@
+interface:
+  display_name: "Datus Plugin E2E"
+  short_description: "Build deterministic LLM-driven plugin E2E workflows"
+  default_prompt: "Use $build-datus-plugin-e2e to create and run a deterministic E2E workflow for this plugin."

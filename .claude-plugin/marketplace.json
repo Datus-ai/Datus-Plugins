@@ -1,6 +1,6 @@
 {
   "name": "datus-plugin",
-  "description": "Tooling for building Datus plugins — install alongside the Datus-Plugins monorepo",
+  "description": "Skills for Datus plugin development, deterministic end-to-end testing, and evidence-driven optimization",
   "owner": {
     "name": "Datus-ai"
   },
@@ -8,7 +8,7 @@
     {
       "name": "datus-plugin-development",
       "source": "./",
-      "description": "Wrap an SDK / REST API / docs into an installable Datus plugin (design-draft-first workflow)",
+      "description": "Design, implement, E2E test, and optimize Datus plugins through Claude Code or Codex",
       "category": "development"
     }
   ]

@@ -1,0 +1,51 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: s3-minio-roundtrip
+  description: Upload a deterministic fixture through the S3 plugin and prove its checksum in MinIO.
+  tags: [smoke, s3, minio]
+spec:
+  target:
+    distribution: datus-s3-plugin
+    path: datus-aws-plugins/datus-s3-plugin
+    name: s3
+    profile:
+      bucket: warehouse
+      region: us-east-1
+      access_key_id: "{{MINIO_ACCESS_KEY}}"
+      secret_access_key: "{{MINIO_SECRET_KEY}}"
+      endpoint_url: "{{MINIO_HOST_ENDPOINT}}"
+  supportPlugins: []
+  agent:
+    prompt: prompt.md
+    timeoutSeconds: 600
+  environment:
+    components: [minikube, minio]
+    lock: environment.lock.yml
+  workspace:
+    seed: seed
+    outputs:
+      - results/upload.json
+  permissions:
+    bashAllow:
+      - "datus s3 cp:*"
+      - "datus s3 ls:*"
+      - "datus s3 stat:*"
+  oracles:
+    - type: files
+      config:
+        patterns: [results/upload.json]
+    - type: minio_object
+      config:
+        source: fixtures/events.json
+        objectPath: "/data/warehouse/{{RUN_ID}}/input/events.json"
+  efficiency:
+    maxToolCalls: 8
+    maxLlmTurns: 5
+    maxTokens: 40000
+    maxUnexpectedFailures: 0
+    forbiddenCommands: ["(^|\\s)(aws|mc)(\\s|$)"]
+    expectedCommands: ["^datus s3 cp", "^datus s3 stat"]
+  cleanup:
+    deleteNamespace: true
+    deleteBucketPrefix: true

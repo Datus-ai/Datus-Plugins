@@ -8,3 +8,16 @@ members = [
     "datus-aws-plugins/datus-aws-common",
     "datus-aws-plugins/datus-*-plugin",
 ]
+
+[dependency-groups]
+e2e = [
+    "pytest>=8.0",
+    "PyYAML>=6.0",
+]
+
+[tool.pytest.ini_options]
+markers = [
+    "e2e: deterministic workflow contract and harness tests",
+    "llm_e2e: live tests that provision services and call a configured LLM",
+    "nightly: heavyweight live workflows",
+]
