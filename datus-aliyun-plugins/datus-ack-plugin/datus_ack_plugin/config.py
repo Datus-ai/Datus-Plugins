@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from typing import Any
 
@@ -69,14 +70,18 @@ class Settings:
             )
         try:
             ttl = int(data.get("credential_ttl_minutes") or 15)
-            timeout = float(data.get("timeout") or 60)
-            attempts = int(data.get("max_attempts") or 3)
+            timeout = float(data.get("timeout", 60))
+            attempts = int(data.get("max_attempts", 3))
         except (TypeError, ValueError) as exc:
             raise ConfigError(
                 "credential_ttl_minutes, timeout, and max_attempts must be numeric"
             ) from exc
-        if ttl < 15:
-            raise ConfigError("credential_ttl_minutes must be at least 15")
+        if not 15 <= ttl <= 4320:
+            raise ConfigError("credential_ttl_minutes must be between 15 and 4320")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ConfigError("timeout must be a finite number greater than 0")
+        if attempts < 1:
+            raise ConfigError("max_attempts must be at least 1")
         return cls(
             region,
             cluster,

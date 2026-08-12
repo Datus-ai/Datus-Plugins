@@ -14,6 +14,7 @@ dependencies = [
     "alibabacloud-cs20151215>=4.7",
     "alibabacloud-credentials>=1.0",
     "alibabacloud-tea-openapi>=0.3",
+    "alibabacloud-tea-util>=0.3",
     "PyYAML>=6.0",
 ]
 

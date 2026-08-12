@@ -78,15 +78,12 @@ class GkeContext:
         dns_cfg = field(control, "dns_endpoint_config", {}) or {}
         dns = str(field(dns_cfg, "endpoint", "") or "")
         mode = self.settings.endpoint_mode
+        # Only `auto` may fall back; an explicit mode that is unavailable is an
+        # error rather than a silent switch to a different endpoint.
         endpoint = (
-            {
-                "public": public,
-                "private": private,
-                "dns": dns,
-            }.get(mode)
-            or dns
-            or public
-            or private
+            (dns or public or private)
+            if mode == "auto"
+            else {"public": public, "private": private, "dns": dns}.get(mode, "")
         )
         if not endpoint:
             raise ApiError(f"GKE cluster has no endpoint for endpoint_mode={mode}")

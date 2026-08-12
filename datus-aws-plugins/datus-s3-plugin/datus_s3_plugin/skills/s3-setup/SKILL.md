@@ -56,8 +56,10 @@ presigned URLs. S3 Select and AWS SSE-KMS are rejected explicitly.
 ## Steps
 
 1. Ask for `region` and the auth method (prefer the AWS chain; use `${VAR}` for
-   any keys, never literals). Ask whether they want a default `bucket` and
-   whether writes must be SSE-KMS encrypted (`kms_key_id`).
+   any keys, never literals). Ask whether they want a default `bucket`. Ask
+   about SSE-KMS (`kms_key_id`) only for `compatibility: aws`; MinIO and
+   Alibaba OSS do not implement AWS SSE-KMS, and `from_profile` rejects
+   `kms_key_id` on an `aliyun-oss` profile.
 2. The IAM principal needs, at minimum, `s3:ListBucket` + `s3:GetObject` for
    read/select; add `s3:PutObject` for `cp`/`sync`/`mv` and `s3:DeleteObject`
    for `rm`. `presign` needs no extra permission beyond the signed operation.

@@ -51,11 +51,20 @@ class AksContext:
                     "azure-mgmt-containerservice is required for the AKS plugin"
                 ) from exc
             base = self.settings.azure.resource_manager
+            # The multiapi client defaults to the newest api_version on public
+            # Azure, which sovereign clouds may not serve yet; base_url alone
+            # does not change that choice.
+            extra = (
+                {"api_version": self.settings.api_version}
+                if self.settings.api_version
+                else {}
+            )
             self._client = ContainerServiceClient(
                 self.credential,
                 self.settings.subscription_id,
                 base_url=base,
                 credential_scopes=[f"{base}/.default"],
+                **extra,
             )
         return self._client
 

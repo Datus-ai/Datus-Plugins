@@ -51,10 +51,17 @@ literal secrets. Configure at most one of account key and SAS. Prefer Entra;
 account keys are broad credentials and an existing SAS is limited by its own
 scope, permissions, and expiry.
 
-Grant a Storage Blob Data Reader role for reads, Contributor-level data access
-for writes/deletes, and appropriate user-delegation permission for SAS. On HNS
-accounts, directory execute/traverse and file ACLs may also be required even
-when Azure RBAC exists. ACL commands are meaningful only with HNS enabled.
+Grant the data-plane role `Storage Blob Data Reader` for reads and
+`Storage Blob Data Contributor` for writes/deletes. Management roles such as
+`Contributor`, `Reader`, or `Storage Account Contributor` administer the account
+and do not grant access to its data. `sas` additionally needs
+`Microsoft.Storage/storageAccounts/blobServices/generateUserDelegationKey/action`.
+
+Separately from Azure RBAC, HNS accounts also enforce POSIX ACLs: directory
+execute/traverse on every parent and read/write on the file itself may be
+required even when a data-plane role is already assigned. ACL commands are
+meaningful only with HNS enabled, and `acl set` requires being the owning user
+or holding `Storage Blob Data Owner`.
 
 ## Verify
 

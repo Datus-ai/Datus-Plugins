@@ -49,6 +49,8 @@ agent:
         # context: prod-cluster       # optional; otherwise current-context
         namespace: analytics
         allowed_namespaces: analytics,analytics-staging
+        request_timeout: 30s
+        field_manager: datus-k8s
 
       gcp-prod:
         provider: gke
@@ -61,8 +63,6 @@ agent:
       aliyun-prod:
         provider: ack
         namespace: analytics
-        request_timeout: 30s
-        field_manager: datus-k8s
 ```
 
 For managed Kubernetes, `allowed_namespaces` defaults to `namespace`. The cloud

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -14,6 +15,12 @@ PLUGINS = (
     ("adls", ROOT / "datus-azure-plugins/datus-adls-plugin", "datus_adls_plugin"),
     ("ack", ROOT / "datus-aliyun-plugins/datus-ack-plugin", "datus_ack_plugin"),
 )
+
+
+def _requirement_name(requirement: str) -> str:
+    """Normalized PEP 508 project name, ignoring extras, versions, and markers."""
+    name = re.split(r"[\s\[<>=!~;(@]", str(requirement).strip(), maxsplit=1)[0]
+    return re.sub(r"[-_.]+", "-", name).lower()
 
 
 def _manifest(directory: Path, package: str) -> dict:
@@ -63,7 +70,8 @@ def test_multicloud_distribution_contracts():
     for name, directory, package in PLUGINS:
         project = tomllib.loads((directory / "pyproject.toml").read_text())
         assert project["project"]["entry-points"]["datus.plugins"] == {name: package}
-        assert "datus" not in project["project"].get("dependencies", [])
+        dependencies = project["project"].get("dependencies", [])
+        assert "datus" not in {_requirement_name(item) for item in dependencies}
 
         manifest = _manifest(directory, package)
         assert manifest["manifest_version"] == 1

@@ -32,6 +32,56 @@ clusters:
     assert value["server"] == "https://aks.example"
 
 
+def test_cluster_connection_prefers_the_private_fqdn():
+    raw = b"""apiVersion: v1
+clusters:
+- cluster:
+    server: https://aks.example
+    certificate-authority-data: Q0E=
+"""
+    ctx = AksContext(
+        Settings.from_profile(
+            {
+                "subscription_id": "s",
+                "resource_group": "r",
+                "cluster": "c",
+                "use_private_endpoint": "true",
+            }
+        )
+    )
+    ctx._client = SimpleNamespace(
+        managed_clusters=SimpleNamespace(
+            list_cluster_user_credentials=lambda group, cluster: SimpleNamespace(
+                kubeconfigs=[SimpleNamespace(value=raw)]
+            ),
+            get=lambda group, cluster: SimpleNamespace(
+                private_fqdn="aks-private.privatelink.example"
+            ),
+        )
+    )
+    value = ctx.cluster_connection().to_dict()
+    assert value["server"] == "https://aks-private.privatelink.example"
+
+
+def test_profile_pins_an_explicit_api_version():
+    settings = Settings.from_profile(
+        {
+            "subscription_id": "s",
+            "resource_group": "r",
+            "cluster": "c",
+            "cloud": "china",
+            "api_version": "2023-10-01",
+        }
+    )
+    assert settings.api_version == "2023-10-01"
+    assert (
+        Settings.from_profile(
+            {"subscription_id": "s", "resource_group": "r", "cluster": "c"}
+        ).api_version
+        is None
+    )
+
+
 def test_manifest_denies_credential():
     from pathlib import Path
 

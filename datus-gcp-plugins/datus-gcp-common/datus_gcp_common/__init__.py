@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import sys
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -79,10 +80,14 @@ class GcpSettings:
         if require_project and not project:
             raise ConfigError("project is required in the GCP plugin profile")
         try:
-            timeout = float(data.get("timeout") or 60)
-            attempts = int(data.get("max_attempts") or 3)
+            timeout = float(data.get("timeout", 60))
+            attempts = int(data.get("max_attempts", 3))
         except (TypeError, ValueError) as exc:
             raise ConfigError("timeout and max_attempts must be numeric") from exc
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise ConfigError("timeout must be a finite number greater than 0")
+        if attempts < 1:
+            raise ConfigError("max_attempts must be at least 1")
         scopes = _csv(data.get("scopes")) or (
             "https://www.googleapis.com/auth/cloud-platform",
         )

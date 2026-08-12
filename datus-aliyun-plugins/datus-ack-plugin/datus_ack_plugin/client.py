@@ -44,11 +44,23 @@ def _jwt_expiry(token: str, fallback: datetime) -> datetime:
         return fallback
 
 
+def _api_expiry(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
 class AckContext:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._client: Any = None
         self._kubeconfig: dict[str, Any] | None = None
+        self._expiration: datetime | None = None
 
     @property
     def client(self):
@@ -87,13 +99,43 @@ class AckContext:
             open_cfg.endpoint = (
                 self.settings.endpoint or f"cs.{self.settings.region_id}.aliyuncs.com"
             )
+            open_cfg.connect_timeout = self._timeout_ms
+            open_cfg.read_timeout = self._timeout_ms
             self._client = CsClient(open_cfg)
         return self._client
 
+    @property
+    def _timeout_ms(self) -> int:
+        return int(self.settings.timeout * 1000)
+
+    def _runtime(self) -> Any:
+        try:
+            from alibabacloud_tea_util.models import RuntimeOptions
+        except ImportError as exc:
+            raise MissingDependencyError(
+                "Alibaba Cloud ACK SDK dependencies are unavailable"
+            ) from exc
+        return RuntimeOptions(
+            autoretry=True,
+            max_attempts=self.settings.max_attempts,
+            connect_timeout=self._timeout_ms,
+            read_timeout=self._timeout_ms,
+        )
+
     def invoke(self, method: str, *args: Any) -> Any:
+        # The SDK exposes a *_with_options twin that accepts headers and
+        # RuntimeOptions; `describe_clusters_v1` spells it without the
+        # separating underscore.
+        for name in (f"{method}_with_options", f"{method}with_options"):
+            fn = getattr(self.client, name, None)
+            if fn is not None:
+                return self._call(fn, *args, {}, self._runtime())
         fn = getattr(self.client, method, None)
         if fn is None:
             raise ApiError(f"installed ACK SDK does not expose {method}")
+        return self._call(fn, *args)
+
+    def _call(self, fn: Any, *args: Any) -> Any:
         try:
             return _body(fn(*args))
         except Exception as exc:
@@ -132,6 +174,7 @@ class AckContext:
         if not isinstance(data, dict):
             raise ApiError("ACK returned a non-object kubeconfig")
         self._kubeconfig = data
+        self._expiration = _api_expiry(response.get("expiration"))
         return data
 
     def cluster_connection(self) -> ClusterConnection:
@@ -159,4 +202,7 @@ class AckContext:
         fallback = datetime.now(timezone.utc) + timedelta(
             minutes=self.settings.credential_ttl_minutes - 1
         )
-        return ExecCredential(token, _jwt_expiry(token, fallback))
+        expiry = _jwt_expiry(token, fallback)
+        if self._expiration is not None:
+            expiry = min(expiry, self._expiration)
+        return ExecCredential(token, expiry)

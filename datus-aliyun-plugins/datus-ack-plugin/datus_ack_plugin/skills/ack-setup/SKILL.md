@@ -53,7 +53,8 @@ selects an external credential provider and is itself treated as sensitive.
 
 `endpoint` overrides the ACK OpenAPI endpoint. `use_private_endpoint` selects
 the cluster's private Kubernetes endpoint. `credential_ttl_minutes` controls
-the requested temporary kubeconfig duration and must be at least 15.
+the requested temporary kubeconfig duration and must be between 15 and 4320
+(3 days), the range ACK accepts.
 
 Grant only the RAM permissions needed to read clusters/node pools/add-ons/tasks
 and retrieve temporary user kubeconfig. Kubernetes RBAC separately limits the
