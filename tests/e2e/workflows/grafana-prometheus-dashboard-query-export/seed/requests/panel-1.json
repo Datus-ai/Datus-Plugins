@@ -1,0 +1,10 @@
+{
+  "id": 1,
+  "title": "Targets Up",
+  "type": "stat",
+  "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+  "datasource": {"type": "prometheus", "uid": "prometheus-e2e"},
+  "fieldConfig": {"defaults": {}, "overrides": []},
+  "options": {"reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false}},
+  "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus-e2e"}, "expr": "sum by (job) (up{job=~\"$job\"})", "range": true, "editorMode": "code", "legendFormat": ""}]
+}

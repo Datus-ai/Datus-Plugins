@@ -1,0 +1,234 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-seed
+  namespace: {{NAMESPACE}}
+data:
+  seed.sql: |
+    DROP TABLE IF EXISTS public.world_population_e2e;
+    CREATE TABLE public.world_population_e2e (
+      year integer NOT NULL,
+      region text NOT NULL,
+      country text NOT NULL,
+      population_millions integer NOT NULL,
+      life_expectancy numeric(4,1) NOT NULL,
+      rural_percent numeric(4,1) NOT NULL,
+      PRIMARY KEY (year, country)
+    );
+    INSERT INTO public.world_population_e2e
+      (year, region, country, population_millions, life_expectancy, rural_percent)
+    VALUES
+      (2004, 'East Asia & Pacific', 'China', 1296, 73.4, 58.2),
+      (2014, 'East Asia & Pacific', 'China', 1371, 75.8, 45.1),
+      (2004, 'East Asia & Pacific', 'Japan', 120, 82.0, 20.5),
+      (2014, 'East Asia & Pacific', 'Japan', 120, 83.6, 20.7),
+      (2004, 'South Asia', 'India', 1120, 64.0, 71.5),
+      (2014, 'South Asia', 'India', 1320, 68.0, 67.6),
+      (2004, 'South Asia', 'Pakistan', 140, 63.0, 65.0),
+      (2014, 'South Asia', 'Pakistan', 160, 66.0, 61.0),
+      (2004, 'Sub-Saharan Africa', 'Nigeria', 130, 48.5, 58.0),
+      (2014, 'Sub-Saharan Africa', 'Nigeria', 180, 52.7, 52.2),
+      (2004, 'Sub-Saharan Africa', 'Ethiopia', 65, 54.7, 84.0),
+      (2014, 'Sub-Saharan Africa', 'Ethiopia', 95, 64.0, 80.0),
+      (2004, 'Europe & Central Asia', 'Germany', 82, 79.4, 25.4),
+      (2014, 'Europe & Central Asia', 'Germany', 82, 81.1, 22.7),
+      (2004, 'Europe & Central Asia', 'Turkey', 60, 71.1, 32.0),
+      (2014, 'Europe & Central Asia', 'Turkey', 65, 75.6, 26.0);
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: superset-config
+  namespace: {{NAMESPACE}}
+data:
+  superset_config.py: |
+    import os
+    SECRET_KEY = os.environ["SUPERSET_SECRET_KEY"]
+    SQLALCHEMY_DATABASE_URI = os.environ["SUPERSET_DATABASE_URI"]
+    WTF_CSRF_ENABLED = True
+    TALISMAN_ENABLED = False
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: superset-home
+  namespace: {{NAMESPACE}}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 1Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+  namespace: {{NAMESPACE}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: postgres}
+  template:
+    metadata:
+      labels: {app: postgres}
+    spec:
+      containers:
+        - name: postgres
+          image: {{POSTGRES_IMAGE}}
+          env:
+            - {name: POSTGRES_USER, value: "{{POSTGRES_USERNAME}}"}
+            - {name: POSTGRES_PASSWORD, value: "{{POSTGRES_PASSWORD}}"}
+            - {name: POSTGRES_DB, value: "{{POSTGRES_DATABASE}}"}
+          ports:
+            - {name: postgres, containerPort: 5432}
+          readinessProbe:
+            exec:
+              command: [pg_isready, -U, "{{POSTGRES_USERNAME}}", -d, "{{POSTGRES_DATABASE}}"]
+            initialDelaySeconds: 3
+            periodSeconds: 2
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+  namespace: {{NAMESPACE}}
+spec:
+  selector: {app: postgres}
+  ports:
+    - {name: postgres, port: 5432, targetPort: postgres}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: postgres-seed
+  namespace: {{NAMESPACE}}
+spec:
+  backoffLimit: 4
+  template:
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: seed
+          image: {{POSTGRES_IMAGE}}
+          env:
+            - {name: PGPASSWORD, value: "{{POSTGRES_PASSWORD}}"}
+          command: [sh, -ec]
+          args:
+            - >-
+              until pg_isready -h postgres -U {{POSTGRES_USERNAME}} -d {{POSTGRES_DATABASE}}; do sleep 2; done;
+              psql -v ON_ERROR_STOP=1 -h postgres -U {{POSTGRES_USERNAME}} -d {{POSTGRES_DATABASE}} -f /seed/seed.sql
+          volumeMounts:
+            - {name: seed, mountPath: /seed}
+      volumes:
+        - name: seed
+          configMap: {name: postgres-seed}
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: superset-init
+  namespace: {{NAMESPACE}}
+spec:
+  backoffLimit: 1
+  activeDeadlineSeconds: 600
+  template:
+    spec:
+      securityContext: {fsGroup: 1000}
+      restartPolicy: Never
+      containers:
+        - name: init
+          image: {{SUPERSET_IMAGE}}
+          imagePullPolicy: Never
+          env:
+            - {name: SUPERSET_CONFIG_PATH, value: /app/e2e/superset_config.py}
+            - {name: SUPERSET_SECRET_KEY, value: "{{SUPERSET_SECRET_KEY}}"}
+            - {name: SUPERSET_DATABASE_URI, value: "sqlite:////app/superset_home/superset.db"}
+            - {name: SUPERSET_USERNAME, value: "{{SUPERSET_USERNAME}}"}
+            - {name: SUPERSET_PASSWORD, value: "{{SUPERSET_PASSWORD}}"}
+          command: [sh, -exc]
+          args:
+            - >-
+              until superset db upgrade; do echo 'waiting for PostgreSQL metadata database'; sleep 3; done;
+              (superset fab create-admin --username "$SUPERSET_USERNAME" --firstname E2E --lastname Admin --email e2e@example.test --password "$SUPERSET_PASSWORD" || true) &&
+              superset init
+          volumeMounts:
+            - {name: config, mountPath: /app/e2e}
+            - {name: home, mountPath: /app/superset_home}
+      volumes:
+        - name: config
+          configMap: {name: superset-config}
+        - name: home
+          persistentVolumeClaim: {claimName: superset-home}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: superset
+  namespace: {{NAMESPACE}}
+spec:
+  replicas: 0
+  selector:
+    matchLabels: {app: superset}
+  template:
+    metadata:
+      labels: {app: superset}
+    spec:
+      securityContext: {fsGroup: 1000}
+      initContainers:
+        - name: wait-init
+          image: {{SUPERSET_IMAGE}}
+          imagePullPolicy: Never
+          env:
+            - {name: SUPERSET_CONFIG_PATH, value: /app/e2e/superset_config.py}
+            - {name: SUPERSET_SECRET_KEY, value: "{{SUPERSET_SECRET_KEY}}"}
+            - {name: SUPERSET_DATABASE_URI, value: "sqlite:////app/superset_home/superset.db"}
+            - {name: SUPERSET_USERNAME, value: "{{SUPERSET_USERNAME}}"}
+            - {name: SUPERSET_PASSWORD, value: "{{SUPERSET_PASSWORD}}"}
+          command: [sh, -ec]
+          args: ["until superset fab list-users >/dev/null 2>&1; do sleep 3; done"]
+          volumeMounts:
+            - {name: config, mountPath: /app/e2e}
+            - {name: home, mountPath: /app/superset_home}
+      containers:
+        - name: superset
+          image: {{SUPERSET_IMAGE}}
+          imagePullPolicy: Never
+          env:
+            - {name: SUPERSET_CONFIG_PATH, value: /app/e2e/superset_config.py}
+            - {name: SUPERSET_SECRET_KEY, value: "{{SUPERSET_SECRET_KEY}}"}
+            - {name: SUPERSET_DATABASE_URI, value: "sqlite:////app/superset_home/superset.db"}
+            - {name: SUPERSET_USERNAME, value: "{{SUPERSET_USERNAME}}"}
+            - {name: SUPERSET_PASSWORD, value: "{{SUPERSET_PASSWORD}}"}
+          command: [gunicorn]
+          args: ["--bind", "0.0.0.0:8088", "--workers", "1", "--timeout", "120", "superset.app:create_app()"]
+          ports:
+            - {name: http, containerPort: 8088}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            failureThreshold: 24
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {memory: 2Gi}
+          volumeMounts:
+            - {name: config, mountPath: /app/e2e}
+            - {name: home, mountPath: /app/superset_home}
+      volumes:
+        - name: config
+          configMap: {name: superset-config}
+        - name: home
+          persistentVolumeClaim: {claimName: superset-home}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: superset
+  namespace: {{NAMESPACE}}
+spec:
+  selector: {app: superset}
+  ports:
+    - {name: http, port: 8088, targetPort: http}

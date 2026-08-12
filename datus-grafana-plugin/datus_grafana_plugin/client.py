@@ -63,7 +63,7 @@ class GrafanaClient:
             self.settings.api_mode == "auto" and self.major_version() >= 12
         )
         if use_new:
-            base = f"/apis/dashboard.grafana.app/v1/namespaces/{self.settings.namespace}/dashboards"
+            base = f"/apis/dashboard.grafana.app/v1beta1/namespaces/{self.settings.namespace}/dashboards"
             path = base + (f"/{uid}" if uid else "")
             try:
                 return self.request(method, path, params=params, json_body=json_body)

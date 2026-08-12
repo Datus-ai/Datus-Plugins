@@ -1,0 +1,10 @@
+{
+  "id": 2,
+  "title": "Max Scrape Duration",
+  "type": "timeseries",
+  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+  "datasource": {"type": "prometheus", "uid": "prometheus-e2e"},
+  "fieldConfig": {"defaults": {}, "overrides": []},
+  "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+  "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus-e2e"}, "expr": "max by (job) (scrape_duration_seconds{job=~\"$job\"})", "range": true, "editorMode": "code", "legendFormat": ""}]
+}

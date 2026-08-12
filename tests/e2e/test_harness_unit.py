@@ -11,7 +11,8 @@ import yaml
 from tests.e2e.harness.agent import _write_configs, prepare_agent_source, resolve_agent_sha
 from tests.e2e.harness.artifacts import capture_generated, export_session, redact, sha256, snapshot_text
 from tests.e2e.harness.process import check_efficiency, diagnose, load_payloads
-from tests.e2e.harness.oracles import _files
+from tests.e2e.harness.environment import EnvironmentContext, load_environment_lock
+from tests.e2e.harness.oracles import _files, _query_export_manifest, _superset_chart_datasource_id
 from tests.e2e.harness.schema import ContractError, RunConfig, Workflow
 
 
@@ -34,6 +35,20 @@ def _minimal_workflow(tmp_path: Path) -> tuple[dict, Path]:
         },
         path,
     )
+
+
+@pytest.mark.parametrize(
+    ("detail", "expected"),
+    [
+        ({"datasource_id": 7}, 7),
+        ({"datasource": {"id": 8}}, 8),
+        ({"query_context": '{"datasource":{"id":9,"type":"table"}}'}, 9),
+        ({"query_context": {"datasource": {"id": 10, "type": "table"}}}, 10),
+        ({"query_context": "not-json"}, None),
+    ],
+)
+def test_superset_chart_datasource_id_supports_api_projections(detail, expected):
+    assert _superset_chart_datasource_id(detail) == expected
 
 
 def test_workflow_rejects_unknown_fields(tmp_path: Path):
@@ -220,6 +235,105 @@ def test_files_oracle_rejects_forbidden_content(tmp_path: Path):
 
     assert not result.passed
     assert "contained forbidden" in (result.error or "")
+
+
+def test_query_export_manifest_checks_count_language_hash_and_sources(tmp_path: Path):
+    root = tmp_path / "reference_sql/grafana/prometheus-e2e-overview"
+    source = root / "_source"
+    source.mkdir(parents=True)
+    query = "sum by (job) (up{job=~\"$job\"})\n"
+    (root / "1-up-a.promql").write_text(query, encoding="utf-8")
+    (source / "dashboard.json").write_text('{"title":"safe"}\n', encoding="utf-8")
+    manifest = {
+        "platform": "grafana",
+        "summary": {"total": 1, "succeeded": 1, "failed": 0},
+        "queries": [
+            {
+                "language": "promql",
+                "status": "ok",
+                "file": "1-up-a.promql",
+                "sha256": sha256(root / "1-up-a.promql"),
+            }
+        ],
+    }
+    (root / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    config = {
+        "manifest": "reference_sql/grafana/prometheus-e2e-overview/manifest.json",
+        "platform": "grafana",
+        "count": 1,
+        "language": "promql",
+        "suffix": ".promql",
+        "forbidSuffix": ".sql",
+        "requiredText": ["$job"],
+    }
+
+    assert _query_export_manifest(config, workspace=tmp_path).passed
+
+    (source / "dashboard.json").write_text('{"password":"leak"}\n', encoding="utf-8")
+    result = _query_export_manifest(config, workspace=tmp_path)
+    assert not result.passed
+    assert "secret fields" in (result.error or "")
+
+
+@pytest.mark.parametrize(
+    ("component", "required"),
+    [
+        ("superset-postgres", ["supersetImage", "postgresImage", "psycopg2Version"]),
+        ("grafana-prometheus", ["grafanaImage", "prometheusImage", "nodeExporterImage"]),
+    ],
+)
+def test_environment_lock_requires_dashboard_fixture_images(tmp_path: Path, component: str, required: list[str]):
+    (tmp_path / "environment.lock.yml").write_text("kubernetes: v1.35.0\n", encoding="utf-8")
+    with pytest.raises(ValueError, match=component):
+        load_environment_lock(
+            tmp_path,
+            {"components": [component], "lock": "environment.lock.yml"},
+        )
+
+    values = {"kubernetes": "v1.35.0", **{key: "pinned" for key in required}}
+    (tmp_path / "environment.lock.yml").write_text(yaml.safe_dump(values), encoding="utf-8")
+    assert load_environment_lock(
+        tmp_path,
+        {"components": [component], "lock": "environment.lock.yml"},
+    ) == values
+
+
+def test_wait_deployment_collects_failure_evidence(monkeypatch: pytest.MonkeyPatch, tmp_path: Path):
+    context = EnvironmentContext(
+        repo_root=tmp_path,
+        suite_id="suite",
+        run_id="run",
+        run_dir=tmp_path / "run",
+        workflow_dir=tmp_path,
+        components=("minikube",),
+        lock={},
+        keep_suite=False,
+    )
+    calls: list[tuple[list[str], str]] = []
+
+    def fake_kubectl(args, name, **_kwargs):
+        calls.append((args, name))
+        if name == "prometheus-ready":
+            return subprocess.CompletedProcess(args, 1, stdout="", stderr="rollout timed out")
+        evidence = {
+            "prometheus-failure-pods": "prometheus-abc 0/1 Pending",
+            "prometheus-failure-describe": "FailedScheduling: insufficient memory",
+            "prometheus-failure-events": "Warning FailedScheduling",
+        }[name]
+        return subprocess.CompletedProcess(args, 0, stdout=evidence, stderr="")
+
+    monkeypatch.setattr(context, "kubectl", fake_kubectl)
+
+    with pytest.raises(RuntimeError, match="insufficient memory"):
+        context._wait_deployment("prometheus", timeout=15)
+
+    assert [name for _, name in calls] == [
+        "prometheus-ready",
+        "prometheus-failure-pods",
+        "prometheus-failure-describe",
+        "prometheus-failure-events",
+    ]
+    assert calls[0][0][-1] == "--timeout=15s"
 
 
 def test_redact_handles_nested_secret_values():
