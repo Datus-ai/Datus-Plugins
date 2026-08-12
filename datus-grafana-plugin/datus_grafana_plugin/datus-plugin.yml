@@ -1,0 +1,194 @@
+manifest_version: 1
+description: Grafana dashboards, panels, datasources, queries, alerting, annotations, and project query context export.
+cli: datus_grafana_plugin.cli:main
+system_prompt: prompts/system.md.j2
+skills: skills
+
+permissions:
+  normal:
+    allow: &grafana_allow
+      - "status:*"
+      - "dashboards list:*"
+      - "dashboards search:*"
+      - "dashboards get:*"
+      - "dashboards tags:*"
+      - "dashboards home:*"
+      - "dashboards versions:*"
+      - "dashboards version-get:*"
+      - "dashboards permissions-get:*"
+      - "dashboards public-list:*"
+      - "dashboards public-get:*"
+      - "dashboards snapshot-list:*"
+      - "dashboards snapshot-get:*"
+      - "folders list:*"
+      - "folders get:*"
+      - "folders counts:*"
+      - "folders permissions-get:*"
+      - "datasources list:*"
+      - "datasources get:*"
+      - "datasources get-by-name:*"
+      - "datasources health:*"
+      - "datasources resources:*"
+      - "datasources proxy-get:*"
+      - "queries history-list:*"
+      - "annotations list:*"
+      - "annotations get:*"
+      - "annotations tags:*"
+      - "library-elements list:*"
+      - "library-elements get:*"
+      - "library-elements get-by-name:*"
+      - "library-elements connections:*"
+      - "playlists list:*"
+      - "playlists get:*"
+      - "playlists items:*"
+      - "correlations list:*"
+      - "correlations get:*"
+      - "alert-rules list:*"
+      - "alert-rules get:*"
+      - "alert-rules export:*"
+      - "alert-groups get:*"
+      - "alert-groups export:*"
+      - "contact-points list:*"
+      - "contact-points export:*"
+      - "notification-policies get:*"
+      - "notification-policies export:*"
+      - "mute-timings list:*"
+      - "mute-timings get:*"
+      - "mute-timings export:*"
+      - "alert-templates list:*"
+      - "alert-templates get:*"
+      - "recording-rules list:*"
+      - "recording-rules writer-get:*"
+      - "silences list:*"
+      - "silences get:*"
+      - "panels list:*"
+      - "panels get:*"
+      - "serving-target:*"
+    ask: &grafana_ask
+      - "dashboards create:*"
+      - "dashboards update:*"
+      - "dashboards delete:*"
+      - "dashboards import:*"
+      - "dashboards export:*"
+      - "dashboards restore:*"
+      - "dashboards permissions-set:*"
+      - "dashboards public-enable:*"
+      - "dashboards public-update:*"
+      - "dashboards public-delete:*"
+      - "dashboards snapshot-create:*"
+      - "dashboards snapshot-delete:*"
+      - "folders create:*"
+      - "folders update:*"
+      - "folders move:*"
+      - "folders delete:*"
+      - "folders permissions-set:*"
+      - "datasources create:*"
+      - "datasources update:*"
+      - "datasources delete:*"
+      - "datasources proxy-post:*"
+      - "queries run:*"
+      - "queries run-panel:*"
+      - "queries history-create:*"
+      - "queries history-update:*"
+      - "queries history-delete:*"
+      - "queries star:*"
+      - "queries unstar:*"
+      - "annotations create:*"
+      - "annotations create-graphite:*"
+      - "annotations update:*"
+      - "annotations patch:*"
+      - "annotations delete:*"
+      - "annotations mass-delete:*"
+      - "library-elements create:*"
+      - "library-elements update:*"
+      - "library-elements delete:*"
+      - "playlists create:*"
+      - "playlists update:*"
+      - "playlists delete:*"
+      - "correlations create:*"
+      - "correlations update:*"
+      - "correlations delete:*"
+      - "alert-rules create:*"
+      - "alert-rules update:*"
+      - "alert-rules delete:*"
+      - "alert-groups replace:*"
+      - "alert-groups delete:*"
+      - "contact-points create:*"
+      - "contact-points update:*"
+      - "contact-points delete:*"
+      - "notification-policies replace:*"
+      - "notification-policies reset:*"
+      - "mute-timings create:*"
+      - "mute-timings update:*"
+      - "mute-timings delete:*"
+      - "alert-templates put:*"
+      - "alert-templates delete:*"
+      - "recording-rules create:*"
+      - "recording-rules update:*"
+      - "recording-rules delete:*"
+      - "recording-rules test:*"
+      - "recording-rules writer-set:*"
+      - "recording-rules writer-delete:*"
+      - "silences create:*"
+      - "silences update:*"
+      - "silences delete:*"
+      - "panels create:*"
+      - "panels update:*"
+      - "panels delete:*"
+      - "panels copy:*"
+      - "panels move:*"
+      - "panels query:*"
+      - "context export-dashboard:*"
+      - "api call:*"
+  auto:
+    allow: *grafana_allow
+    ask: *grafana_ask
+
+config_schema:
+  type: object
+  required: [api_base_url, auth_mode]
+  additionalProperties: false
+  properties:
+    api_base_url: {type: string, description: "Grafana origin, for example https://grafana.example.com"}
+    auth_mode: {type: string, enum: [token, basic], default: token, description: "token or basic"}
+    token: {type: string, x-secret: true, description: "Service account token via an environment variable"}
+    username: {type: string, description: "Username for basic auth"}
+    password: {type: string, x-secret: true, description: "Password via an environment variable"}
+    org_id: {type: string, description: "Optional Grafana organization ID"}
+    api_mode: {type: string, enum: [auto, new, legacy], default: auto, description: "Dashboard API mode; auto prefers /apis on Grafana 12+"}
+    namespace: {type: string, default: default, description: "Grafana API namespace"}
+    verify_ssl: {type: string, enum: ["true", "false"], default: "true", description: "Verify TLS certificates"}
+    timeout: {type: string, default: "30", description: "HTTP timeout in seconds"}
+    default_datasource_uid: {type: string, description: "Fallback datasource UID for inherited targets"}
+    serving_datasource: {type: string, description: "Optional Datus datasource name represented by Grafana"}
+    serving_database_name: {type: string, description: "Optional warehouse database name"}
+
+commands:
+  - {name: status, description: "Health, version, and active user", subcommands: [{name: health}, {name: version}, {name: whoami}]}
+  - {name: dashboards, description: "Dashboard search, CRUD, versions, permissions, sharing, snapshots, and import/export", subcommands: [{name: list}, {name: search}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: import}, {name: export}, {name: tags}, {name: home}, {name: versions}, {name: version-get}, {name: restore}, {name: permissions-get}, {name: permissions-set}, {name: public-list}, {name: public-get}, {name: public-enable}, {name: public-update}, {name: public-delete}, {name: snapshot-create}, {name: snapshot-list}, {name: snapshot-get}, {name: snapshot-delete}]}
+  - {name: panels, description: "Panel CRUD, copy, move, and query", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: copy}, {name: move}, {name: query}]}
+  - {name: folders, description: "Folder CRUD, movement, counts, and permissions", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: move}, {name: delete}, {name: counts}, {name: permissions-get}, {name: permissions-set}]}
+  - {name: datasources, description: "Datasource CRUD, health, resources, and proxy calls", subcommands: [{name: list}, {name: get}, {name: get-by-name}, {name: create}, {name: update}, {name: delete}, {name: health}, {name: resources}, {name: proxy-get}, {name: proxy-post}]}
+  - {name: queries, description: "Datasource query execution and query history", subcommands: [{name: run}, {name: run-panel}, {name: history-list}, {name: history-create}, {name: history-update}, {name: history-delete}, {name: star}, {name: unstar}]}
+  - {name: annotations, description: "Annotation CRUD, tags, and mass deletion", subcommands: [{name: list}, {name: get}, {name: create}, {name: create-graphite}, {name: update}, {name: patch}, {name: delete}, {name: mass-delete}, {name: tags}]}
+  - {name: library-elements, description: "Library panel CRUD and connections", subcommands: [{name: list}, {name: get}, {name: get-by-name}, {name: create}, {name: update}, {name: delete}, {name: connections}]}
+  - {name: playlists, description: "Playlist CRUD and items", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: items}]}
+  - {name: correlations, description: "Datasource correlation CRUD", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}]}
+  - {name: alert-rules, description: "Provisioned alert-rule CRUD and export", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: export}]}
+  - {name: alert-groups, description: "Alert rule-group replacement and export", subcommands: [{name: get}, {name: replace}, {name: delete}, {name: export}]}
+  - {name: contact-points, description: "Contact-point CRUD and export", subcommands: [{name: list}, {name: create}, {name: update}, {name: delete}, {name: export}]}
+  - {name: notification-policies, description: "Notification policy replacement, reset, and export", subcommands: [{name: get}, {name: replace}, {name: reset}, {name: export}]}
+  - {name: mute-timings, description: "Mute timing CRUD and export", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: export}]}
+  - {name: alert-templates, description: "Alert template CRUD", subcommands: [{name: list}, {name: get}, {name: put}, {name: delete}]}
+  - {name: recording-rules, description: "Recording rules, testing, and writer configuration", subcommands: [{name: list}, {name: create}, {name: update}, {name: delete}, {name: test}, {name: writer-get}, {name: writer-set}, {name: writer-delete}]}
+  - {name: silences, description: "Grafana Alertmanager silence CRUD", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}]}
+  - {name: serving-target, description: "Show the configured serving datasource"}
+  - name: context
+    description: "Build project context from all dashboard query languages"
+    subcommands:
+      - name: export-dashboard
+        args: [{name: dashboard_uid, required: true}, {name: --output-root}, {name: --include-hidden}, {name: --overwrite}]
+  - name: api
+    description: "Guarded access to additional official API endpoints"
+    subcommands:
+      - {name: call, args: [{name: method, required: true}, {name: path, required: true}, {name: --json-file}, {name: --output-file}]}

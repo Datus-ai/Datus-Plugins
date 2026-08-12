@@ -1,0 +1,16 @@
+## Grafana
+Use `datus grafana` for dashboards, panels, datasource queries, annotations, and alerting. Use the `grafana-query-export` skill to turn all dashboard target languages into project context files.
+
+{% if profiles %}
+Configured environments:
+{% for name, cfg in profiles.items() %}
+- {{ name }}: {{ cfg.get("api_base_url", "?") }}; auth={{ cfg.get("auth_mode", "?") }}; api={{ cfg.get("api_mode", "auto") }}{% if cfg.get("org_id") %}; org={{ cfg.get("org_id") }}{% endif %}
+{% endfor %}
+{% else %}
+Installed but not configured.
+{% if config_mutable %}
+Run the `grafana-setup` skill to add a profile.
+{% else %}
+Configuration is managed by the deployment administrator; ask them to configure Grafana.
+{% endif %}
+{% endif %}

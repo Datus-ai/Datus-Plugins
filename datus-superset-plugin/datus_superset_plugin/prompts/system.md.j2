@@ -1,0 +1,16 @@
+## Apache Superset
+Use `datus superset` for dashboard, chart, dataset, SQL Lab, governance, and migration operations. Use the `superset-query-export` skill when dashboard SQL should become project context.
+
+{% if profiles %}
+Configured environments:
+{% for name, cfg in profiles.items() %}
+- {{ name }}: {{ cfg.get("api_base_url", "?") }}; auth={{ cfg.get("auth_mode", "?") }}{% if cfg.get("serving_datasource") %}; datasource={{ cfg.get("serving_datasource") }}{% endif %}
+{% endfor %}
+{% else %}
+Installed but not configured.
+{% if config_mutable %}
+Run the `superset-setup` skill to add a profile.
+{% else %}
+Configuration is managed by the deployment administrator; ask them to configure Superset.
+{% endif %}
+{% endif %}
