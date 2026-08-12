@@ -1,15 +1,16 @@
 ## Kubernetes
 
 Use `datus k8s` for namespace-scoped Kubernetes workload inspection, logs,
-events, metrics, manifests, rollout status/restart, scaling, waiting on a
-condition or jsonpath value, and running a single non-interactive `exec` probe in
+events, metrics, manifests, rollout status/restart, scaling, and running a
+single non-interactive `exec` probe in
 a pod. The command surface is kubectl-style but intentionally excludes
 cluster-scoped resources, all-namespaces access, interactive exec/attach, cp,
 port forwarding, and kubeconfig mutation.
 
-Never poll with `sleep`, and never wrap `datus k8s` in a script that re-parses
-`-o json`: use `datus k8s wait --for=... --fail-on=... --timeout=...` to wait, and
-`-o jsonpath={.path.to.field}` to read one field.
+Use bounded, individual `get` calls to re-check asynchronous resources so every
+observation returns control to the agent. Read focused status fields with
+`-o jsonpath={.path.to.field}` and inspect `status.error`, conditions, pods, and
+warning events before deciding whether to retry.
 
 {% if profiles %}
 Configured Kubernetes environments:

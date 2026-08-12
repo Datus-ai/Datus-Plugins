@@ -86,21 +86,9 @@ it:
 datus k8s get flinkdeployment orders -n analytics -o 'jsonpath={.status.jobStatus.state}'
 ```
 
-Waiting is a first-class command, so nothing needs to poll with `sleep`. Custom
-resources that report readiness outside `status.conditions` are covered by a
-jsonpath condition, and `--fail-on` ends the wait as soon as the resource reports
-failure instead of burning the timeout:
-
-```bash
-datus k8s wait job/daily-etl --for=condition=Complete --timeout=30m -n analytics
-datus k8s wait flinkdeployment/orders -n analytics \
-  --for='jsonpath={.status.jobStatus.state}=RUNNING' \
-  --fail-on='jsonpath={.status.jobStatus.state}=FAILED' --timeout=10m
-```
-
-`--fail-on` defaults to `jsonpath={.status.error}`; `--fail-on=none` opts out.
-While waiting, each newly observed value is reported on stderr and the timeout
-message names the last one, so a wait is never a silent block.
+The plugin intentionally has no generic blocking `wait` command. Re-check
+asynchronous resources with bounded `get` calls so each observation can inspect
+the resource's actual status, error, pods, and events before continuing.
 
 State-changing commands (`create`, `apply`, `delete`, `patch`, `scale`,
 `rollout restart`, `label`, and `annotate`) always require agent confirmation.
@@ -117,7 +105,7 @@ stdin and TTY are always disabled and the pod's exit code is propagated, so
 This is a deliberate kubectl-style subset. It does not support cluster-scoped
 resources, `-A`, interactive exec, attach/cp, port-forward/proxy, Kustomize,
 kubeconfig mutation, Go templates, custom-columns, or kubectl plugins. The
-JSONPath surface — `-o jsonpath=` and `wait --for=`/`--fail-on=` — accepts
+JSONPath output via `-o jsonpath=` accepts
 `.field` and `[index]` steps only; filters, wildcards, and ranges are rejected
 rather than silently mis-evaluated.
 

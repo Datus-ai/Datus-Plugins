@@ -117,21 +117,22 @@ base image rather than installing a JDK into a running pod.
 ## 5. Fix at the source, then re-verify
 
 Apply the fix where it survives a restart — image contents, init container,
-plugin directory, `flinkConfiguration`, catalog properties, a Secret — then apply
-and wait on the resource's own status field:
+plugin directory, `flinkConfiguration`, catalog properties, a Secret — then
+apply and re-check the resource with bounded, individual reads:
 
 ```bash
 datus k8s --profile <profile> apply -f <manifest> -n <namespace> --dry-run server -o yaml
 datus k8s --profile <profile> apply -f <manifest> -n <namespace>
-datus k8s --profile <profile> wait <kind>/<name> -n <namespace> \
-  --for='jsonpath={.status.<readiness-field>}=<expected>' \
-  --fail-on='jsonpath={.status.<readiness-field>}=<failed-value>' --timeout=10m
+datus k8s --profile <profile> get <kind>/<name> -n <namespace> -o wide
+datus k8s --profile <profile> get <kind>/<name> -n <namespace> \
+  -o 'jsonpath={.status.error}'
+datus k8s --profile <profile> events -n <namespace> --for <kind>/<name>
 ```
 
-Wait on the field that reports the workload, not the one that reports its
-container, and always pair it with the failure value. A classpath fix that did not
-work fails in seconds; without `--fail-on` the wait hides that for the whole
-timeout, and the next probe runs against a resource whose state you have not read.
+Check both the field that reports the workload and the fields that report its
+container or controller. A classpath fix that did not work often fails in
+seconds; `status.error`, pods, or warning events may contain the answer before
+the workload state changes.
 
 Re-run the probe that failed. A fix is confirmed by the probe changing its
 answer, not by the absence of the old log line.
