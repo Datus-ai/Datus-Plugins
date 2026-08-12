@@ -1,4 +1,4 @@
-"""The kubectl-style JSONPath subset shared by `wait --for` and `-o jsonpath=`."""
+"""The kubectl-style JSONPath subset used by ``-o jsonpath=``."""
 
 from __future__ import annotations
 
@@ -14,7 +14,7 @@ def resolve(item: dict[str, Any], expression: str) -> Any:
     """Resolve a kubectl-style ``{.a.b[0].c}`` expression against one object.
 
     Only field and list-index steps are supported — enough to read any status
-    field, which is what waiting and printing need. Filters, wildcards, ranges,
+    field, which is what focused status output needs. Filters, wildcards, ranges,
     and escaped dots are rejected rather than silently mis-evaluated. A step that
     runs off the end of the object yields ``None`` (the field simply is not there
     yet).
@@ -45,21 +45,6 @@ def resolve(item: dict[str, Any], expression: str) -> Any:
                 return None
             current = current[int(index)]
     return current
-
-
-def split_condition(raw: str) -> tuple[str, str | None]:
-    """Split ``{.status.phase}=Running`` into its expression and expected value."""
-    text = raw.strip()
-    if text.startswith("{"):
-        close = text.find("}")
-        if close < 0:
-            raise UsageError(f"unsupported jsonpath {raw!r}: the closing '}}' is missing")
-        expression, remainder = text[: close + 1], text[close + 1 :].strip()
-        if remainder and not remainder.startswith("="):
-            raise UsageError(f"unsupported jsonpath {raw!r}: expected =VALUE after the expression")
-        return expression, remainder[1:] if remainder else None
-    expression, separator, expected = text.partition("=")
-    return expression, expected if separator else None
 
 
 def display(value: Any) -> str:

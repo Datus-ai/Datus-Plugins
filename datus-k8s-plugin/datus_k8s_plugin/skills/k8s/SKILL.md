@@ -77,44 +77,18 @@ datus k8s --profile prod logs worker-abcde -n analytics -c app --since 10m
 datus k8s --profile prod logs worker-abcde -n analytics --all-containers --tail 100
 ```
 
-## Wait instead of polling
+## Re-check asynchronous resources
 
-Never poll with `sleep` and a repeated `get`. Every wait belongs in `wait`, which
-takes a deadline, reports what it observes on stderr while it waits, and names the
-last observed value when it times out:
+There is no generic blocking `wait` command. Use bounded, individual `get`
+calls so each observation returns control to the agent. On every re-check, read
+the success field and also inspect `status.error`, conditions, pods, and warning
+events. Stop immediately on a concrete failure instead of checking only the
+expected success value. Keep the retry count and total elapsed time explicit.
 
-```bash
-datus k8s --profile prod wait job/daily-etl --for=condition=Complete --timeout=30m -n analytics
-datus k8s --profile prod wait pods -l job-name=daily-etl --for=delete --timeout=5m -n analytics
-```
-
-Custom resources usually report readiness in their own status fields and never
-populate `status.conditions`, so `condition=` cannot express their state. Use a
-jsonpath expression against the field the CRD actually sets, and pair it with the
-failure state so the wait ends the moment the answer is known:
-
-```bash
-datus k8s --profile prod wait flinkdeployment/orders -n analytics \
-  --for='jsonpath={.status.jobStatus.state}=RUNNING' \
-  --fail-on='jsonpath={.status.jobStatus.state}=FAILED' --timeout=10m
-```
-
-`--fail-on` defaults to `jsonpath={.status.error}`, so a resource that reports an
-error aborts the wait with that error instead of burning the whole timeout. Pass
-`--fail-on=none` to wait regardless, and repeat `--fail-on` for more than one
-failure state.
-
-**Waiting on the wrong field is worse than not waiting.** Choose one that is false
-while the workload is broken. A field that reports only that the controller
-created something — a Flink `jobManagerDeploymentStatus` of `READY`, for instance —
-goes true while the job inside is failing, so a wait on it succeeds and the
-conclusion drawn from it is wrong. When a resource has both an infrastructure
-state and a workload state, wait on the workload state.
-
-Only `.field` and `[index]` steps are supported. Read the object once with
-`-o yaml` to learn the real field path before waiting on it. Omit `=VALUE` to
-wait until the field merely becomes non-empty. When the resource itself may not
-exist yet, chain `--for=create` first.
+Custom resources often expose several independent states. For example, a Flink
+deployment may report `jobStatus.state=RECONCILING` while
+`jobManagerDeploymentStatus=ERROR` and `status.error` already contains the root
+cause. Never infer health from one field alone.
 
 ## Inspect what a container actually sees
 
@@ -140,7 +114,8 @@ undo the fix. When a probe proves something is missing, fix the source.
 
 ```bash
 datus k8s --profile prod apply -f ./k8s/job.yaml -n analytics
-datus k8s --profile prod wait job/daily-etl --for=condition=Complete --timeout=30m -n analytics
+datus k8s --profile prod get job/daily-etl -n analytics -o wide
+datus k8s --profile prod events -n analytics --for job/daily-etl
 datus k8s --profile prod scale deployment/worker --replicas=8 -n analytics
 datus k8s --profile prod rollout restart deployment/worker -n analytics
 datus k8s --profile prod rollout status deployment/worker --timeout=10m -n analytics

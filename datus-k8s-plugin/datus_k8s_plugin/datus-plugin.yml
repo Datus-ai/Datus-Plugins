@@ -19,7 +19,6 @@ permissions:
       - "events:*"
       - "top pod:*"
       - "auth can-i:*"
-      - "wait:*"
       - "rollout status:*"
     ask:
       - "create:*"
@@ -43,7 +42,6 @@ permissions:
       - "events:*"
       - "top pod:*"
       - "auth can-i:*"
-      - "wait:*"
       - "rollout status:*"
     ask:
       - "create:*"
@@ -174,16 +172,6 @@ commands:
           - {name: resource}
           - {name: -n}
           - {name: --list}
-  - name: wait
-    description: "Wait for creation, deletion, a status condition, or a jsonpath value"
-    args:
-      - {name: resource, required: true}
-      - {name: names, required: true}
-      - {name: --for, required: true}
-      - {name: --fail-on}
-      - {name: --timeout}
-      - {name: --quiet}
-      - {name: -n}
   - name: rollout
     description: "Inspect or restart workload rollouts"
     subcommands:

@@ -4,8 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from datus_k8s_plugin.cli import _condition_met, main
-from datus_k8s_plugin.errors import UsageError
+from datus_k8s_plugin.cli import main
 
 
 class FakeResource:
@@ -221,129 +220,11 @@ def test_logs_all_containers_conflicts_are_usage_errors(patch_context, capsys):
     assert "cannot be combined with -f/--follow" in capsys.readouterr().err
 
 
-def test_wait_accepts_a_jsonpath_condition_on_a_custom_status_field(patch_context, capsys):
-    argv = ["wait", "pods", "pod-a", "-n", "analytics", "--for", "jsonpath={.status.phase}=Running"]
-    assert main(argv, profile()) == 0
-    assert "condition met" in capsys.readouterr().out
-
-
-def test_wait_times_out_when_the_jsonpath_value_never_matches(patch_context, capsys):
-    argv = [
-        "wait",
-        "pods",
-        "pod-a",
-        "-n",
-        "analytics",
-        "--for",
-        "jsonpath={.status.phase}=Succeeded",
-        "--timeout",
-        "1s",
-    ]
-    assert main(argv, profile()) == 1
-    # The timeout has to name the value that was actually observed; "timed out
-    # waiting for pod-a" alone is what sent a caller back to polling by hand.
-    error = capsys.readouterr().err
-    assert "timed out after 1s" in error
-    assert "status.phase=Running" in error
-
-
-#: A FlinkDeployment that came up but whose job died on a missing class — the
-#: shape that made a `--for=...READY` wait report success over a dead job.
 FAILED_JOB_STATUS = {
     "jobManagerDeploymentStatus": "READY",
     "jobStatus": {"state": "FAILED"},
     "error": '{"message":"NoClassDefFoundError: org/apache/hadoop/conf/Configuration"}',
 }
-
-
-def _waiting_for_running(*extra: str) -> list[str]:
-    return [
-        "wait",
-        "flinkdeployment",
-        "job-a",
-        "-n",
-        "analytics",
-        "--for",
-        "jsonpath={.status.jobStatus.state}=RUNNING",
-        "--timeout",
-        "1s",
-        *extra,
-    ]
-
-
-def test_wait_aborts_on_status_error_instead_of_waiting_out_the_timeout(
-    patch_context, monkeypatch, capsys
-):
-    monkeypatch.setattr(FakeResource, "status_payload", FAILED_JOB_STATUS)
-    assert main(_waiting_for_running(), profile()) == 1
-    error = capsys.readouterr().err
-    assert "failed while waiting" in error
-    assert "NoClassDefFoundError" in error
-    assert "timed out" not in error
-
-
-def test_wait_reports_an_explicit_fail_on_condition_with_the_observed_value(
-    patch_context, monkeypatch, capsys
-):
-    monkeypatch.setattr(FakeResource, "status_payload", {"jobStatus": {"state": "FAILED"}})
-    argv = _waiting_for_running("--fail-on", "jsonpath={.status.jobStatus.state}=FAILED")
-    assert main(argv, profile()) == 1
-    error = capsys.readouterr().err
-    assert "status.jobStatus.state=FAILED" in error
-    assert "timed out" not in error
-
-
-def test_wait_none_opts_out_of_failure_detection(patch_context, monkeypatch, capsys):
-    monkeypatch.setattr(FakeResource, "status_payload", FAILED_JOB_STATUS)
-    assert main(_waiting_for_running("--fail-on", "none"), profile()) == 1
-    error = capsys.readouterr().err
-    assert "timed out after 1s" in error
-    assert "failed while waiting" not in error
-
-
-def test_wait_reports_success_even_when_the_resource_also_carries_an_error(
-    patch_context, monkeypatch, capsys
-):
-    """A previous failure recorded in status.error must not veto a condition that
-    is already satisfied — the resource has arrived."""
-    monkeypatch.setattr(
-        FakeResource,
-        "status_payload",
-        {"jobStatus": {"state": "RUNNING"}, "error": "a checkpoint failed an hour ago"},
-    )
-    assert main(_waiting_for_running(), profile()) == 0
-    assert "condition met" in capsys.readouterr().out
-
-
-def test_wait_none_cannot_be_combined_with_another_condition(patch_context, capsys):
-    argv = _waiting_for_running("--fail-on", "none", "--fail-on", "condition=Failed")
-    assert main(argv, profile()) == 2
-    assert "--fail-on=none cannot be combined" in capsys.readouterr().err
-
-
-def test_wait_reports_progress_on_stderr_and_keeps_stdout_for_the_result(patch_context, capsys):
-    argv = ["wait", "pods", "pod-a", "-n", "analytics", "--for", "jsonpath={.status.phase}=Running"]
-    assert main(argv, profile()) == 0
-    captured = capsys.readouterr()
-    assert captured.out == "pods/pod-a condition met\n"
-    assert "waiting for pods/pod-a: status.phase=Running" in captured.err
-
-
-def test_wait_quiet_suppresses_progress_but_not_the_result(patch_context, capsys):
-    argv = [
-        "wait",
-        "pods",
-        "pod-a",
-        "-n",
-        "analytics",
-        "--for",
-        "jsonpath={.status.phase}=Running",
-        "--quiet",
-    ]
-    assert main(argv, profile()) == 0
-    captured = capsys.readouterr()
-    assert captured.out == "pods/pod-a condition met\n"
-    assert captured.err == ""
 
 
 def test_get_jsonpath_output_prints_one_field_instead_of_the_whole_object(
@@ -361,10 +242,9 @@ def test_get_rejects_an_output_format_it_cannot_render(patch_context, capsys):
     assert "unsupported output format" in capsys.readouterr().err
 
 
-def test_wait_rejects_an_unsupported_for_expression(patch_context, capsys):
-    argv = ["wait", "pods", "pod-a", "-n", "analytics", "--for", "phase=Running"]
-    assert main(argv, profile()) == 2
-    assert "--for must be" in capsys.readouterr().err
+def test_wait_is_not_a_command(capsys):
+    assert main(["wait", "pods", "pod-a"], profile()) == 2
+    assert "invalid choice: 'wait'" in capsys.readouterr().err
 
 
 def test_unknown_command_is_usage_error(capsys):
@@ -374,45 +254,3 @@ def test_unknown_command_is_usage_error(capsys):
 def test_missing_profile_is_config_error(capsys):
     assert main(["get", "pods"], {}) == 3
     assert "exactly one of kubeconfig or provider" in capsys.readouterr().err
-
-
-@pytest.mark.parametrize(
-    "condition,expected",
-    [
-        # A FlinkDeployment-shaped status: readiness lives outside status.conditions.
-        ("jsonpath={.status.jobStatus.state}=RUNNING", True),
-        ("jsonpath={.status.jobStatus.state}=FAILED", False),
-        ("jsonpath={.status.jobManagerDeploymentStatus}", True),
-        ("jsonpath={.status.absent}", False),
-        ("jsonpath={.status.replicas[0].name}=tm-0", True),
-        ("jsonpath={.status.replicas[9].name}=tm-0", False),
-        ("jsonpath=.status.jobStatus.state=RUNNING", True),
-        ("condition=Ready", True),
-        ("condition=Ready=False", False),
-    ],
-)
-def test_condition_met_supports_conditions_and_the_jsonpath_subset(condition, expected):
-    item = {
-        "status": {
-            "jobManagerDeploymentStatus": "READY",
-            "jobStatus": {"state": "RUNNING"},
-            "replicas": [{"name": "tm-0"}],
-            "conditions": [{"type": "Ready", "status": "True"}],
-        }
-    }
-    assert _condition_met(item, condition) is expected
-
-
-@pytest.mark.parametrize(
-    "condition",
-    [
-        "jsonpath={.status.state",  # unterminated brace
-        "jsonpath={.status.a[*]}",  # wildcard is not in the supported subset
-        "jsonpath={.status.a}!=b",  # only =VALUE may follow the expression
-        "jsonpath=status.state",  # must start at the object root
-        "phase=Running",  # not one of the supported --for forms
-    ],
-)
-def test_condition_met_rejects_expressions_it_cannot_evaluate_exactly(condition):
-    with pytest.raises(UsageError):
-        _condition_met({"status": {"a": ["x"]}}, condition)
