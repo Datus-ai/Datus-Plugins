@@ -3,7 +3,8 @@ from __future__ import annotations
 import argparse
 import sys
 from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from tempfile import SpooledTemporaryFile
 from typing import Any
 
 from datus_azure_common import (
@@ -18,6 +19,8 @@ from datus_azure_common import (
 from .client import AdlsContext
 from .config import Settings
 from .paths import AdlsPath, is_adls, parse_adls_uri
+
+SPOOL_MAX_BYTES = 32 * 1024 * 1024
 
 
 def _confirm(prompt: str, yes: bool) -> None:
@@ -157,8 +160,30 @@ def cmd_stat(ctx, ns):
 
 
 def _download(ctx, path, offset=None, length=None):
+    """Read a bounded range into memory. Only for `cat` and `head` previews."""
     stream = call(_file(ctx, path).download_file, offset=offset, length=length)
     return call(stream.readall)
+
+
+def _download_into(ctx, path: AdlsPath, sink) -> None:
+    stream = call(_file(ctx, path).download_file)
+    call(stream.readinto, sink)
+
+
+def _local_target(dst: Path, relative: str) -> Path:
+    """Resolve a remote-derived relative name below `dst`, or refuse it.
+
+    Blob names may contain any character combination, including `..` segments
+    that would otherwise escape the destination directory.
+    """
+    candidate = PurePosixPath(relative)
+    if candidate.is_absolute() or ".." in candidate.parts:
+        raise UsageError(f"refusing to write outside {dst}: {relative}")
+    root = dst.resolve()
+    target = root.joinpath(*candidate.parts).resolve()
+    if target != root and root not in target.parents:
+        raise UsageError(f"refusing to write outside {dst}: {relative}")
+    return target
 
 
 def cmd_cat(ctx, ns):
@@ -189,16 +214,25 @@ def _upload(ctx, source: Path, dst: AdlsPath):
     key = f"{dst.key}{source.name}" if dst.is_prefix() else dst.key
     target = AdlsPath(dst.filesystem, key)
     _ensure_dirs(ctx, target)
-    call(_file(ctx, target).upload_data, source.read_bytes(), overwrite=True)
+    with source.open("rb") as handle:
+        call(
+            _file(ctx, target).upload_data,
+            handle,
+            length=source.stat().st_size,
+            overwrite=True,
+        )
     print(f"upload {source} -> {target.uri}")
 
 
 def _copy_remote(ctx, src: AdlsPath, dst: AdlsPath):
-    data = _download(ctx, src)
     key = f"{dst.key}{Path(src.key).name}" if dst.is_prefix() else dst.key
     target = AdlsPath(dst.filesystem, key)
     _ensure_dirs(ctx, target)
-    call(_file(ctx, target).upload_data, data, overwrite=True)
+    with SpooledTemporaryFile(max_size=SPOOL_MAX_BYTES) as buffer:
+        _download_into(ctx, src, buffer)
+        length = buffer.tell()
+        buffer.seek(0)
+        call(_file(ctx, target).upload_data, buffer, length=length, overwrite=True)
     print(f"copy {src.uri} -> {target.uri}")
 
 
@@ -250,12 +284,13 @@ def cmd_cp(ctx, ns):
             name = str(_props(item).get("name")) if item is not None else src.key
             remote = AdlsPath(src.filesystem, name)
             target = (
-                dst / name[len(src.key) :].lstrip("/")
+                _local_target(dst, name[len(src.key) :].lstrip("/"))
                 if ns.recursive
                 else (dst / Path(src.key).name if dst.is_dir() else dst)
             )
             target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_bytes(_download(ctx, remote))
+            with target.open("wb") as handle:
+                _download_into(ctx, remote, handle)
             print(f"download {remote.uri} -> {target}")
         return 0
     raise UsageError("at least one of src/dst must be an abfss:// URI")
@@ -310,6 +345,12 @@ def cmd_rm(ctx, ns):
 
 
 def cmd_sas(ctx, ns):
+    if ctx.settings.sas_token and not ctx.settings.account_key:
+        raise UsageError(
+            "sas_token profiles cannot mint a SAS; a user delegation key requires a "
+            "Microsoft Entra credential with generateUserDelegationKey permission, "
+            "so configure account_key or an Entra identity instead"
+        )
     try:
         from azure.storage.blob import (
             BlobSasPermissions,

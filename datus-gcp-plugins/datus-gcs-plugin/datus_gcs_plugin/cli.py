@@ -251,7 +251,25 @@ def cmd_sync(ctx, ns):
     return 0
 
 
+def _overlaps(src: GcsPath, dst: GcsPath) -> bool:
+    if src.bucket != dst.bucket:
+        return False
+    if dst.key == src.key:
+        return True
+    prefix = src.key if not src.key or src.key.endswith("/") else f"{src.key}/"
+    return dst.key.startswith(prefix)
+
+
 def cmd_mv(ctx, ns):
+    if (
+        is_gcs(ns.src)
+        and is_gcs(ns.dst)
+        and _overlaps(_path(ctx, ns.src), _path(ctx, ns.dst))
+    ):
+        raise UsageError(
+            "mv destination overlaps the source; the delete step would remove the "
+            "objects just copied"
+        )
     rc = cmd_cp(ctx, ns)
     if is_gcs(ns.src):
         shadow = argparse.Namespace(uri=ns.src, recursive=ns.recursive, yes=True)

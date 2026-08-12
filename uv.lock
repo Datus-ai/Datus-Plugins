@@ -35,6 +35,7 @@ members = [
 
 [manifest.dependency-groups]
 e2e = [
+    { name = "jinja2", specifier = ">=3.1" },
     { name = "pytest", specifier = ">=8.0" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
@@ -631,6 +632,7 @@ dependencies = [
     { name = "alibabacloud-credentials" },
     { name = "alibabacloud-cs20151215" },
     { name = "alibabacloud-tea-openapi" },
+    { name = "alibabacloud-tea-util" },
     { name = "pyyaml" },
 ]
 
@@ -646,6 +648,7 @@ requires-dist = [
     { name = "alibabacloud-credentials", specifier = ">=1.0" },
     { name = "alibabacloud-cs20151215", specifier = ">=4.7" },
     { name = "alibabacloud-tea-openapi", specifier = ">=0.3" },
+    { name = "alibabacloud-tea-util", specifier = ">=0.3" },
     { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1" },
     { name = "jsonschema", marker = "extra == 'dev'", specifier = ">=4.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },

@@ -11,6 +11,7 @@ EXTRA_KEYS = {
     "cluster",
     "kubernetes_server_id",
     "use_private_endpoint",
+    "api_version",
 }
 DEFAULT_SERVER_ID = "6dae42f8-4368-4678-94ff-3960e28e3630"
 
@@ -30,6 +31,7 @@ class Settings:
     cluster: str
     kubernetes_server_id: str = DEFAULT_SERVER_ID
     use_private_endpoint: bool = False
+    api_version: str | None = None
 
     @classmethod
     def from_profile(cls, profile: dict[str, Any] | None) -> "Settings":
@@ -50,6 +52,7 @@ class Settings:
             values[2],
             str(data.get("kubernetes_server_id") or DEFAULT_SERVER_ID).strip(),
             _bool(data.get("use_private_endpoint")),
+            str(data.get("api_version") or "").strip() or None,
         )
 
     @property

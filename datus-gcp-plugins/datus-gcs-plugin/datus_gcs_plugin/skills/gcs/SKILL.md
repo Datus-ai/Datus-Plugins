@@ -16,6 +16,10 @@ Object arguments use `gs://bucket/key`. A bare key uses the profile's default
 a prefix. Commands with `-o` accept `table|json|yaml|plain`; prefer JSON for
 exact metadata.
 
+`cp` and `mv` are the exception: they treat every operand without a `gs://`
+prefix as a local path, so each remote operand must be written as an explicit
+`gs://` URI even when the profile sets a default `bucket`.
+
 ## Command catalogue
 
 Browse and read:

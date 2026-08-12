@@ -24,6 +24,7 @@ config_schema:
     managed_identity_client_id: {type: string, description: "User-assigned managed identity client ID"}
     kubernetes_server_id: {type: string, description: "AKS API server application ID override"}
     use_private_endpoint: {type: string, enum: ["true", "false"], default: "false"}
+    api_version: {type: string, description: "Container Service API version to pin, e.g. for a sovereign cloud that lags the SDK default"}
     timeout: {type: string, default: "60"}
     max_attempts: {type: string, default: "3"}
 commands:

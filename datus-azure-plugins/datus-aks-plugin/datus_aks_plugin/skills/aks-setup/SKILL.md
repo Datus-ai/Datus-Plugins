@@ -54,6 +54,11 @@ browser authentication is disabled.
 application ID. `use_private_endpoint` selects the private FQDN returned by AKS;
 the Datus host must resolve and reach it.
 
+The SDK picks its newest Container Service API version, which China and
+Government clouds may not serve yet. If a call there fails with an unsupported
+API version, pin `api_version` to a version that cloud supports (for example
+`api_version: "2023-10-01"`); leave it unset on public Azure.
+
 Grant Azure RBAC read access to the cluster resources and permission for
 `listClusterUserCredential/action`; Kubernetes RBAC separately controls what
 the resulting identity can do inside the cluster.
