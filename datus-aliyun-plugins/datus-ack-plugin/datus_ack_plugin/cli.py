@@ -63,6 +63,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_output(cmd)
     cmd.set_defaults(func=_auth_check)
     group = _group(sub, "kubernetes")
+    group.add_parser("access").set_defaults(func=_kubernetes_access)
     group.add_parser("cluster").set_defaults(func=_kubernetes_cluster)
     group.add_parser("credential").set_defaults(func=_kubernetes_credential)
     return parser
@@ -151,7 +152,14 @@ def _auth_check(ctx, ns):
     value = ctx.exec_credential()
     print(
         render(
-            {"authenticated": True, "expires_at": value.expiration_timestamp}, ns.output
+            {
+                "authenticated": True,
+                "credential_type": (
+                    "bearer_token" if value.token else "client_certificate"
+                ),
+                "expires_at": value.expiration_timestamp,
+            },
+            ns.output,
         )
     )
     return 0
@@ -159,6 +167,11 @@ def _auth_check(ctx, ns):
 
 def _kubernetes_cluster(ctx, _ns):
     print(json.dumps(ctx.cluster_connection().to_dict(), separators=(",", ":")))
+    return 0
+
+
+def _kubernetes_access(ctx, _ns):
+    print(json.dumps(ctx.kubernetes_access().to_dict(), separators=(",", ":")))
     return 0
 
 

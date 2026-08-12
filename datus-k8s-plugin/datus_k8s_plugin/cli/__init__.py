@@ -333,7 +333,7 @@ def _cmd_version(ctx: Context, ns: argparse.Namespace) -> int:
     try:
         plugin = package_version("datus-k8s-plugin")
     except PackageNotFoundError:
-        plugin = "0.1.0"
+        plugin = "0.2.0"
     data: dict[str, Any] = {
         "pluginVersion": plugin,
         "pythonClientVersion": package_version("kubernetes"),
@@ -1075,7 +1075,13 @@ def main(argv: list[str], profile: dict[str, Any]) -> int:
         return exc.exit_code
     try:
         settings = Settings.from_profile(profile)
-        return int(ns.func(Context(settings), ns) or 0)
+        context = Context(settings)
+        try:
+            return int(ns.func(context, ns) or 0)
+        finally:
+            close = getattr(context, "close", None)
+            if close is not None:
+                close()
     except PluginError as exc:
         print(f"error: {exc}", file=sys.stderr)
         return exc.exit_code

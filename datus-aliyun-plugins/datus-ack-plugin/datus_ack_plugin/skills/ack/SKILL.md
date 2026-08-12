@@ -27,6 +27,7 @@ datus ack addons describe [-o json]
 datus ack tasks list [-o json]
 datus ack tasks describe <name> [-o json]
 datus ack auth check [-o json]
+datus ack kubernetes access
 datus ack kubernetes cluster
 datus ack kubernetes credential
 ```
@@ -39,10 +40,12 @@ datus ack kubernetes credential
   reads cluster add-on upgrade status and takes no name argument.
 - `tasks` inspects cluster tasks; `tasks describe` takes a task ID.
 - `auth check` requests temporary user kubeconfig material but prints only
-  authentication status and expiry.
-- `kubernetes cluster` emits the endpoint/CA contract. `kubernetes credential`
-  emits a bearer token and is denied to Agent bash. Never invoke or print it;
-  the k8s plugin calls it internally.
+  authentication status, credential type, and expiry.
+- `kubernetes access` emits endpoint/CA plus the initial credential in one
+  provider call. `kubernetes credential` emits a refreshed credential. Both
+  contain secret material and are denied to Agent bash; never invoke or print
+  them. The k8s plugin calls them internally. `kubernetes cluster` is the
+  backward-compatible, non-secret endpoint/CA command.
 
 All public inspection commands are read-only, but RAM permissions must allow
 the matching CS OpenAPI reads and temporary user kubeconfig retrieval. Never
@@ -68,10 +71,10 @@ datus k8s --profile prod get pods -n analytics
 ```
 
 The k8s profile must use `provider: ack`; set `provider_profile` when names
-differ. This plugin currently requires ACK's temporary kubeconfig to contain a
-bearer token. A client-certificate-only kubeconfig is rejected. When
-`use_private_endpoint` is enabled, the Datus host must reach the private API
-server.
+differ. ACK temporary kubeconfigs may contain either a bearer token or a client
+certificate/private key pair; the provider maps both forms to the Kubernetes
+`ExecCredential` v1 contract. When `use_private_endpoint` is enabled, the Datus
+host must reach the private API server.
 
 ## Exit codes
 

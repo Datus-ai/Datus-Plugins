@@ -7,7 +7,7 @@ permissions:
   normal: &permissions
     allow: ["clusters list:*", "clusters describe:*", "nodepools list:*", "nodepools describe:*", "addons list:*", "addons describe:*", "tasks list:*", "tasks describe:*", "auth check:*", "kubernetes cluster:*"]
     ask: []
-    deny: ["kubernetes credential:*"]
+    deny: ["kubernetes access:*", "kubernetes credential:*"]
   auto: *permissions
 config_schema:
   type: object
@@ -39,4 +39,4 @@ commands:
   - name: auth
     subcommands: [{name: check}]
   - name: kubernetes
-    subcommands: [{name: cluster}, {name: credential}]
+    subcommands: [{name: access}, {name: cluster}, {name: credential}]

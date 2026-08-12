@@ -7,7 +7,7 @@ from typing import Any
 
 import yaml
 
-from .cloud_contract import ClusterConnection, ExecCredential
+from .cloud_contract import ClusterConnection, ExecCredential, KubernetesAccess
 from .config import Settings
 from .errors import ApiError, ConfigError, MissingDependencyError
 
@@ -53,6 +53,31 @@ def _api_expiry(value: Any) -> datetime | None:
     except ValueError:
         return None
     return parsed if parsed.tzinfo else parsed.replace(tzinfo=timezone.utc)
+
+
+def _pem_from_kubeconfig(value: Any, *, kind: str) -> str:
+    encoded = str(value or "").strip()
+    if not encoded:
+        raise ConfigError(f"ACK kubeconfig is missing client {kind} data")
+    try:
+        decoded = base64.b64decode("".join(encoded.split()), validate=True).decode(
+            "utf-8"
+        )
+    except (ValueError, UnicodeDecodeError) as exc:
+        raise ConfigError(f"ACK kubeconfig contains invalid client {kind} data") from exc
+    markers = (
+        ("-----BEGIN CERTIFICATE-----", "-----END CERTIFICATE-----")
+        if kind == "certificate"
+        else (
+            ("-----BEGIN PRIVATE KEY-----", "-----END PRIVATE KEY-----"),
+            ("-----BEGIN RSA PRIVATE KEY-----", "-----END RSA PRIVATE KEY-----"),
+            ("-----BEGIN EC PRIVATE KEY-----", "-----END EC PRIVATE KEY-----"),
+        )
+    )
+    pairs = (markers,) if kind == "certificate" else markers
+    if not any(begin in decoded and end in decoded for begin, end in pairs):
+        raise ConfigError(f"ACK kubeconfig client {kind} data is not PEM encoded")
+    return decoded.strip() + "\n"
 
 
 class AckContext:
@@ -179,10 +204,9 @@ class AckContext:
 
     def cluster_connection(self) -> ClusterConnection:
         data = self.user_kubeconfig()
-        clusters = data.get("clusters") or []
-        if not clusters:
+        cluster, _user = self._active_cluster_and_user(data)
+        if not cluster:
             raise ApiError("ACK kubeconfig contains no cluster")
-        cluster = clusters[0].get("cluster") or {}
         return ClusterConnection(
             "ack",
             self.settings.cluster_id,
@@ -192,17 +216,52 @@ class AckContext:
 
     def exec_credential(self) -> ExecCredential:
         data = self.user_kubeconfig()
-        users = data.get("users") or []
-        user = users[0].get("user") if users else None
-        token = str((user or {}).get("token") or "")
-        if not token:
-            raise ConfigError(
-                "ACK returned a client-certificate kubeconfig; this version requires a temporary bearer token"
-            )
+        _cluster, user = self._active_cluster_and_user(data)
+        if not user:
+            raise ConfigError("ACK kubeconfig contains no user credential")
         fallback = datetime.now(timezone.utc) + timedelta(
             minutes=self.settings.credential_ttl_minutes - 1
         )
-        expiry = _jwt_expiry(token, fallback)
+        token = str(user.get("token") or "").strip()
+        expiry = _jwt_expiry(token, fallback) if token else fallback
         if self._expiration is not None:
             expiry = min(expiry, self._expiration)
-        return ExecCredential(token, expiry)
+        if token:
+            return ExecCredential(token, expiry)
+        certificate = _pem_from_kubeconfig(
+            user.get("client-certificate-data"), kind="certificate"
+        )
+        private_key = _pem_from_kubeconfig(user.get("client-key-data"), kind="key")
+        return ExecCredential(None, expiry, certificate, private_key)
+
+    def kubernetes_access(self) -> KubernetesAccess:
+        return KubernetesAccess(self.cluster_connection(), self.exec_credential())
+
+    @staticmethod
+    def _active_cluster_and_user(
+        data: dict[str, Any],
+    ) -> tuple[dict[str, Any], dict[str, Any]]:
+        clusters = data.get("clusters") or []
+        users = data.get("users") or []
+        contexts = data.get("contexts") or []
+        current = str(data.get("current-context") or "")
+        selected = next(
+            (item.get("context") or {} for item in contexts if item.get("name") == current),
+            {},
+        )
+
+        def named(items: list[Any], name: Any, field: str) -> dict[str, Any]:
+            if name:
+                for item in items:
+                    if isinstance(item, dict) and item.get("name") == name:
+                        value = item.get(field) or {}
+                        return value if isinstance(value, dict) else {}
+            if items and isinstance(items[0], dict):
+                value = items[0].get(field) or {}
+                return value if isinstance(value, dict) else {}
+            return {}
+
+        return (
+            named(clusters, selected.get("cluster"), "cluster"),
+            named(users, selected.get("user"), "user"),
+        )

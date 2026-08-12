@@ -16,6 +16,8 @@ CONNECTION_API_VERSION = "cloud-k8s.datus.ai/v1"
 CONNECTION_KIND = "ClusterConnection"
 EXEC_API_VERSION = "client.authentication.k8s.io/v1"
 EXEC_KIND = "ExecCredential"
+ACCESS_API_VERSION = "cloud-k8s.datus.ai/v2"
+ACCESS_KIND = "KubernetesAccess"
 
 
 class ContractError(ValueError):
@@ -85,8 +87,14 @@ class ClusterConnection:
 
 @dataclass(frozen=True)
 class ExecCredential:
-    token: str
+    token: str | None
     expiration_timestamp: datetime
+    client_certificate_data: str | None = None
+    client_key_data: str | None = None
+
+    @property
+    def certificate_based(self) -> bool:
+        return self.client_certificate_data is not None
 
     @classmethod
     def from_dict(cls, payload: Mapping[str, Any]) -> "ExecCredential":
@@ -98,7 +106,27 @@ class ExecCredential:
         if data.get("kind") != EXEC_KIND:
             raise ContractError(f"unexpected exec credential kind: {data.get('kind')!r}")
         status = _object(data.get("status"), "exec credential status")
-        token = _text(status, "token", "exec credential status")
+        token = str(status.get("token") or "").strip() or None
+        certificate = str(status.get("clientCertificateData") or "") or None
+        private_key = str(status.get("clientKeyData") or "") or None
+        if bool(certificate) != bool(private_key):
+            raise ContractError(
+                "exec credential clientCertificateData and clientKeyData must be provided together"
+            )
+        if bool(token) == bool(certificate):
+            raise ContractError(
+                "exec credential must contain exactly one of token or a client certificate/private key pair"
+            )
+        if certificate and (
+            "-----BEGIN CERTIFICATE-----" not in certificate.strip()
+            or "-----END CERTIFICATE-----" not in certificate.strip()
+        ):
+            raise ContractError("exec credential client certificate is not PEM encoded")
+        if private_key and (
+            "-----BEGIN " not in private_key.strip()
+            or "PRIVATE KEY-----" not in private_key.strip()
+        ):
+            raise ContractError("exec credential client private key is not PEM encoded")
         raw_expiry = _text(status, "expirationTimestamp", "exec credential status")
         try:
             expiry = datetime.fromisoformat(raw_expiry.replace("Z", "+00:00"))
@@ -111,15 +139,58 @@ class ExecCredential:
         expiry = expiry.astimezone(timezone.utc)
         if expiry <= datetime.now(timezone.utc):
             raise ContractError("exec credential is already expired")
-        return cls(token, expiry)
+        return cls(token, expiry, certificate, private_key)
 
     def to_dict(self) -> dict[str, Any]:
         expiry = self.expiration_timestamp.astimezone(timezone.utc)
+        status: dict[str, str] = {
+            "expirationTimestamp": expiry.isoformat().replace("+00:00", "Z"),
+        }
+        if self.token:
+            status["token"] = self.token
+        else:
+            status["clientCertificateData"] = str(self.client_certificate_data)
+            status["clientKeyData"] = str(self.client_key_data)
         return {
             "apiVersion": EXEC_API_VERSION,
             "kind": EXEC_KIND,
-            "status": {
-                "expirationTimestamp": expiry.isoformat().replace("+00:00", "Z"),
-                "token": self.token,
-            },
+            "status": status,
+        }
+
+
+@dataclass(frozen=True)
+class KubernetesAccess:
+    connection: ClusterConnection
+    credential: ExecCredential
+
+    @classmethod
+    def from_dict(
+        cls,
+        payload: Mapping[str, Any],
+        *,
+        expected_provider: str,
+    ) -> "KubernetesAccess":
+        data = _object(payload, "Kubernetes access")
+        if data.get("apiVersion") != ACCESS_API_VERSION:
+            raise ContractError(
+                f"unsupported Kubernetes access apiVersion: {data.get('apiVersion')!r}"
+            )
+        if data.get("kind") != ACCESS_KIND:
+            raise ContractError(f"unexpected Kubernetes access kind: {data.get('kind')!r}")
+        return cls(
+            ClusterConnection.from_dict(
+                _object(data.get("connection"), "Kubernetes access connection"),
+                expected_provider=expected_provider,
+            ),
+            ExecCredential.from_dict(
+                _object(data.get("credential"), "Kubernetes access credential")
+            ),
+        )
+
+    def to_dict(self) -> dict[str, Any]:
+        return {
+            "apiVersion": ACCESS_API_VERSION,
+            "kind": ACCESS_KIND,
+            "connection": self.connection.to_dict(),
+            "credential": self.credential.to_dict(),
         }

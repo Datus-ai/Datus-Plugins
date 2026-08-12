@@ -35,7 +35,10 @@ agent:
 
 The k8s plugin asks `datus eks --profile datus-dev` for the EKS endpoint, CA,
 and a short-lived
-credential. It never runs the AWS CLI and never persists the token.
+credential. It never runs the cloud CLI and never persists complete kubeconfig
+or bearer tokens. Providers may return a client certificate/private key through
+the standard Kubernetes `ExecCredential` contract; those are held in owner-only
+temporary files and removed when the `datus k8s` process exits.
 `provider_profile` defaults to the k8s profile name. Set it only when the two
 profile names differ. When the provider profile is loaded with a non-default
 `--config`, set `provider_config` to that agent.yml path so nested calls resolve
