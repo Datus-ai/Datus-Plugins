@@ -16,6 +16,7 @@ PKG = ROOT / "datus_flink_plugin"
 SKILLS = PKG / "skills"
 SKILL = SKILLS / "flink-k8s-operator"
 LOCAL_DEV = SKILLS / "flink-local-dev"
+FLINK_SQL = SKILLS / "flink-sql"
 
 
 def manifest() -> dict:
@@ -88,10 +89,26 @@ def test_local_dev_skill_frontmatter():
         assert phrase in frontmatter["description"], phrase
 
 
-def test_bundled_skills_are_exactly_the_two_documented_runtimes():
+def test_flink_sql_skill_frontmatter():
+    frontmatter = skill_frontmatter(FLINK_SQL)
+    assert set(frontmatter) == {"name", "description"}
+    assert frontmatter["name"] == "flink-sql"
+    for phrase in (
+        "Application Mode",
+        "Flink 1.x",
+        "runner JAR",
+        "Flink 2.x",
+        "SqlDriver",
+        "without jarURI",
+    ):
+        assert phrase in frontmatter["description"], phrase
+
+
+def test_bundled_skills_are_exactly_the_three_documented_runtimes():
     assert sorted(path.name for path in SKILLS.iterdir()) == [
         "flink-k8s-operator",
         "flink-local-dev",
+        "flink-sql",
     ]
 
 
@@ -101,7 +118,7 @@ def test_every_skill_is_one_self_contained_file():
     Everything a skill hands to a project (manifests, Dockerfiles, SQL overlays,
     the runner script) must therefore be inlined in that single file.
     """
-    for skill in (SKILL, LOCAL_DEV):
+    for skill in (SKILL, LOCAL_DEV, FLINK_SQL):
         assert [path.name for path in skill.iterdir()] == ["SKILL.md"], sorted(
             path.name for path in skill.iterdir()
         )
@@ -110,12 +127,18 @@ def test_every_skill_is_one_self_contained_file():
         assert re.search(r"\]\((?!https?://|#)[^)]+\)", text) is None, skill
 
 
-def test_local_dev_hands_production_deployment_to_the_operator_skill():
+def test_sql_workflow_hands_off_between_the_three_skills():
     skill = (LOCAL_DEV / "SKILL.md").read_text(encoding="utf-8")
+    assert "flink-sql" in skill
     assert "flink-k8s-operator" in skill
     # The local skill validates; it never deploys or builds production images.
     for forbidden in ("datus k8s ", "docker build", "docker push"):
         assert forbidden not in skill, forbidden
+
+    sql_skill = (FLINK_SQL / "SKILL.md").read_text(encoding="utf-8")
+    assert "flink-local-dev" in sql_skill
+    assert "flink-k8s-operator" in sql_skill
+    assert "Do not perform Kubernetes workload operations from this skill" in sql_skill
 
 
 def test_local_dev_never_recommends_a_remote_execution_target():

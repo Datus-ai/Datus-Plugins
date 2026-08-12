@@ -51,6 +51,7 @@ def _nested(value: Any, dotted: str) -> Any:
 def _files(config: dict[str, Any], *, workspace: Path, **_: Any) -> OracleResult:
     patterns = config.get("patterns") or []
     content = config.get("content") or {}
+    not_content = config.get("notContent") or {}
     found: dict[str, list[str]] = {}
     failures: list[str] = []
     for pattern in patterns:
@@ -67,6 +68,16 @@ def _files(config: dict[str, Any], *, workspace: Path, **_: Any) -> OracleResult
         for expression in expressions:
             if not any(re.search(expression, path.read_text(encoding="utf-8", errors="replace"), re.MULTILINE) for path in matches):
                 failures.append(f"{pattern!r} did not contain /{expression}/")
+    for pattern, expressions in not_content.items():
+        matches = [path for path in workspace.glob(pattern) if path.is_file() and not path.is_symlink()]
+        for expression in expressions:
+            offending = [
+                path.relative_to(workspace).as_posix()
+                for path in matches
+                if re.search(expression, path.read_text(encoding="utf-8", errors="replace"), re.MULTILINE)
+            ]
+            if offending:
+                failures.append(f"{pattern!r} contained forbidden /{expression}/ in {offending}")
     return OracleResult("files", not failures, {"matches": found, "failures": failures}, "; ".join(failures) or None)
 
 
@@ -176,7 +187,7 @@ def _flink_paimon(config: dict[str, Any], *, environment: EnvironmentContext, va
                             "imagePullPolicy": "Never",
                             "command": ["java"],
                             "args": [
-                                "-cp", "/opt/flink/lib/*:/opt/flink/usrlib/sql-runner.jar",
+                                "-cp", "/opt/flink/lib/*",
                                 "ai.datus.e2e.PaimonVerifier",
                                 "--endpoint", variables["MINIO_ENDPOINT"],
                                 "--warehouse", variables["PAIMON_WAREHOUSE"],

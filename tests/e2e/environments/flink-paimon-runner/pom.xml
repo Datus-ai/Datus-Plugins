@@ -8,8 +8,9 @@
   <version>1.0.0</version>
   <properties>
     <maven.compiler.release>17</maven.compiler.release>
-    <flink.version>1.20.1</flink.version>
-    <paimon.version>1.0.1</paimon.version>
+    <flink.version>2.0.2</flink.version>
+    <paimon.flink.version>2.0</paimon.flink.version>
+    <paimon.version>1.4.1</paimon.version>
     <hadoop.version>3.3.6</hadoop.version>
     <jackson.version>2.19.2</jackson.version>
   </properties>
@@ -28,7 +29,7 @@
     </dependency>
     <dependency>
       <groupId>org.apache.paimon</groupId>
-      <artifactId>paimon-flink-1.20</artifactId>
+      <artifactId>paimon-flink-${paimon.flink.version}</artifactId>
       <version>${paimon.version}</version>
     </dependency>
     <dependency>
@@ -53,7 +54,7 @@
     </dependency>
   </dependencies>
   <build>
-    <finalName>sql-runner</finalName>
+    <finalName>e2e-verifier</finalName>
     <plugins>
       <plugin>
         <groupId>org.apache.maven.plugins</groupId>

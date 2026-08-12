@@ -1,15 +1,17 @@
 # datus-flink-plugin
 
 A skill-only Datus plugin for creating and operating Apache Flink jobs. It
-bundles two skills, one per stage of a job's life:
+bundles three skills across local validation, SQL packaging, and operation:
 
 | Skill | Use it for |
 |---|---|
 | `flink-local-dev` | Running a Flink SQL job on the current machine, in an in-process MiniCluster, to validate its logic before it goes anywhere |
+| `flink-sql` | Packaging a validated SQL script for Application Mode: build a runner JAR on Flink 1.x or use the built-in `SqlDriver` without `jarURI` on Flink 2.x |
 | `flink-k8s-operator` | Building, deploying, and operating the job on the Apache Flink Kubernetes Operator |
 
 The plugin intentionally declares no `datus flink` CLI and no Flink profiles.
-`flink-local-dev` drives the Flink SQL Client in the local shell;
+`flink-local-dev` drives the Flink SQL Client in the local shell; `flink-sql`
+selects and verifies the version-specific SQL application entry point;
 `flink-k8s-operator` builds JVM or PyFlink projects, prepares Operator custom
 resources, and delegates every Kubernetes workload operation to the separately
 installed `datus k8s` plugin.
@@ -35,10 +37,10 @@ Then install this plugin:
 datus plugin install src:./datus-flink-plugin
 ```
 
-Both skills appear in the Datus skill catalogue. Invoke `flink-local-dev` when
-writing or debugging a Flink SQL job; invoke `flink-k8s-operator` when creating,
-upgrading, suspending, resuming, snapshotting, or diagnosing a FlinkDeployment
-or FlinkSessionJob.
+All three skills appear in the Datus skill catalogue. Invoke `flink-local-dev`
+when writing or debugging a Flink SQL job, `flink-sql` when packaging it for
+production, and `flink-k8s-operator` when creating, upgrading, suspending,
+resuming, snapshotting, or diagnosing a FlinkDeployment or FlinkSessionJob.
 
 ## Local validation, then production
 
@@ -49,9 +51,11 @@ The intended path for a Flink SQL job:
    endpoints; every sink is shadowed with `print`, `blackhole`, or a local
    `file://` table, so the run cannot write to a real system. Judge the output
    rows, changelog kinds, and counts against what the query should produce.
-2. **`flink-k8s-operator`** — package the validated script, deliver the image,
-   render the FlinkDeployment or FlinkSessionJob, and apply it through
-   `datus k8s`.
+2. **`flink-sql`** — choose the Application Mode entry point, build and test a
+   runner JAR for Flink 1.x or select the built-in `SqlDriver` for Flink 2.x,
+   then verify the SQL and dependencies in the final image.
+3. **`flink-k8s-operator`** — deliver the settled image, render the
+   FlinkDeployment, and apply it through `datus k8s`.
 
 The production artifact (`sql/job.sql`) is byte-identical in both stages;
 everything local lives in a separate, never-shipped overlay:
@@ -89,8 +93,9 @@ supports. It does not need Docker or cluster access.
 - Session jobs normally use an Operator-accessible HTTPS, S3, or HDFS
   artifact URI. A `local://` URI refers to the Operator pod filesystem, not
   merely the Session Cluster image.
-- The Operator submits jars, not SQL scripts: a validated SQL script reaches
-  production through a SQL runner jar or a SQL Gateway, decided per project.
+- A Flink 1.x SQL application needs a version-matched runner JAR. Flink 2.x can
+  use `org.apache.flink.table.runtime.application.SqlDriver` from the system
+  classpath with no `jarURI`; connector and filesystem JARs are still required.
 
 The initial schema guidance targets the stable Operator 1.15 API while
 discovering the actual `flink.apache.org` resource version from the target

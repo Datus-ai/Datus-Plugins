@@ -57,8 +57,10 @@ For stateful jobs, do not choose an upgrade mode implicitly. Ask the user when
 the project or existing manifest does not make the required state guarantees
 clear.
 
-For a job whose logic is Flink SQL, validate it with the `flink-local-dev`
-skill before deploying it here.
+For a job whose logic is Flink SQL, require it to pass through
+`flink-local-dev` and then `flink-sql` before deploying it here. Treat the
+version-specific runner or built-in `SqlDriver` decision from `flink-sql` as
+authoritative; do not rebuild a settled SQL artifact.
 
 ## 2. Run fail-closed preflight
 
@@ -129,9 +131,13 @@ Exclude source, test, original, and dependency-only JARs when locating the job
 artifact. If several runnable JARs remain, inspect their manifests and build
 configuration, then ask which one is the Flink job. Do not guess.
 
-For Application mode, copy the selected JAR to `/opt/flink/usrlib/job.jar` and
-use `jarURI: local:///opt/flink/usrlib/job.jar`. Set `entryClass` when the JAR
-manifest does not unambiguously identify the job entry point.
+For a JVM project that produces an application artifact, copy the selected JAR
+to `/opt/flink/usrlib/job.jar` and use
+`jarURI: local:///opt/flink/usrlib/job.jar`. Set `entryClass` when the JAR
+manifest does not unambiguously identify the job entry point. A Flink 2.x SQL
+job settled by `flink-sql` is the exception: preserve its no-`jarURI`
+`SqlDriver` fields and required `spec.mode: standalone`; do not invent a JAR to
+fit this generic JVM path.
 
 **PyFlink projects.** Inspect `pyproject.toml`, lockfiles, `requirements*.txt`,
 existing images, entry scripts, and the declared `apache-flink` version. Run the
@@ -329,7 +335,7 @@ Resource selection:
 Keep all linked Session resources in the same namespace, and verify the
 referenced Session Cluster exists and reports JobManager `READY` before creating
 a FlinkSessionJob. Treat these fields as a coupled set: `spec.image`,
-`spec.flinkVersion`, `spec.serviceAccount`, `spec.flinkConfiguration`,
+`spec.mode`, `spec.flinkVersion`, `spec.serviceAccount`, `spec.flinkConfiguration`,
 `spec.jobManager.resource`, `spec.taskManager.resource`, and
 `spec.job.{jarURI,entryClass,args,parallelism,state,upgradeMode}`.
 

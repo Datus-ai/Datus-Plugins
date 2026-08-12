@@ -4,4 +4,4 @@ metadata:
   name: recovery-__RUN_ID__
 spec:
   image: invalid.example/flink:missing
-  flinkVersion: v1_20
+  flinkVersion: v2_0
