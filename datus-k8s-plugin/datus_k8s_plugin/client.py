@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import os
 import subprocess
+import tempfile
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,6 +17,7 @@ from .cloud_contract import (
     ClusterConnection,
     ContractError,
     ExecCredential,
+    KubernetesAccess,
 )
 
 from .config import Settings
@@ -77,6 +80,9 @@ class ManagedCredentialProvider:
     def __init__(self, settings: Settings):
         self.settings = settings
         self._credential: ExecCredential | None = None
+        self._credential_dir: tempfile.TemporaryDirectory[str] | None = None
+        self._cert_file: Path | None = None
+        self._key_file: Path | None = None
 
     def connection(self) -> ClusterConnection:
         payload = run_cloud_provider(self.settings, "kubernetes", "cluster")
@@ -87,6 +93,17 @@ class ManagedCredentialProvider:
             )
         except ContractError as exc:
             raise ConfigError(f"unsafe managed Kubernetes connection: {exc}") from exc
+
+    def access(self) -> KubernetesAccess:
+        payload = run_cloud_provider(self.settings, "kubernetes", "access")
+        try:
+            access = KubernetesAccess.from_dict(
+                payload, expected_provider=str(self.settings.provider)
+            )
+        except ContractError as exc:
+            raise ConfigError(f"unsafe managed Kubernetes access: {exc}") from exc
+        self._credential = access.credential
+        return access
 
     def credential(self) -> ExecCredential:
         now = datetime.now(timezone.utc)
@@ -102,10 +119,61 @@ class ManagedCredentialProvider:
             raise ConfigError(f"unsafe managed Kubernetes credential: {exc}") from exc
         return self._credential
 
-    def refresh(self, configuration: Any) -> None:
+    @staticmethod
+    def _write_secret(path: Path, value: str) -> None:
+        temporary = path.with_suffix(path.suffix + ".new")
+        descriptor = os.open(
+            temporary,
+            os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+            0o600,
+        )
+        try:
+            with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+                handle.write(value)
+                handle.flush()
+                os.fsync(handle.fileno())
+            os.chmod(temporary, 0o600)
+            os.replace(temporary, path)
+        except Exception:
+            try:
+                temporary.unlink()
+            except OSError:
+                pass
+            raise
+
+    def _install_certificate(self, credential: ExecCredential) -> None:
+        if self._credential_dir is None:
+            self._credential_dir = tempfile.TemporaryDirectory(prefix="datus-k8s-")
+            os.chmod(self._credential_dir.name, 0o700)
+            self._cert_file = Path(self._credential_dir.name) / "client.crt"
+            self._key_file = Path(self._credential_dir.name) / "client.key"
+        self._write_secret(self._cert_file, str(credential.client_certificate_data))
+        self._write_secret(self._key_file, str(credential.client_key_data))
+
+    def refresh(self, configuration: Any) -> bool:
+        previous = self._credential
         credential = self.credential()
-        configuration.api_key["authorization"] = credential.token
-        configuration.api_key_prefix["authorization"] = "Bearer"
+        changed = credential is not previous
+        if credential.token:
+            configuration.cert_file = None
+            configuration.key_file = None
+            configuration.api_key["authorization"] = credential.token
+            configuration.api_key_prefix["authorization"] = "Bearer"
+        else:
+            if changed or self._cert_file is None or self._key_file is None:
+                self._install_certificate(credential)
+            configuration.api_key.pop("authorization", None)
+            configuration.api_key_prefix.pop("authorization", None)
+            configuration.cert_file = str(self._cert_file)
+            configuration.key_file = str(self._key_file)
+        return changed
+
+    def close(self) -> None:
+        if self._credential_dir is not None:
+            self._credential_dir.cleanup()
+            self._credential_dir = None
+            self._cert_file = None
+            self._key_file = None
 
 
 def _import_kubernetes():
@@ -163,6 +231,16 @@ class LoadedClient:
     credential_provider: Any = None
     managed_cluster: str | None = None
 
+    def close(self) -> None:
+        close = getattr(self.api_client, "close", None)
+        if close is not None:
+            close()
+        pool = getattr(getattr(self.api_client, "rest_client", None), "pool_manager", None)
+        if pool is not None:
+            pool.clear()
+        if self.credential_provider is not None:
+            self.credential_provider.close()
+
     @classmethod
     def load(cls, settings: Settings) -> "LoadedClient":
         (
@@ -210,8 +288,13 @@ class LoadedClient:
         watch: Any,
     ) -> "LoadedClient":
         provider = ManagedCredentialProvider(settings)
-        connection = provider.connection()
-        credential = provider.credential()
+        if settings.provider == "ack":
+            access = provider.access()
+            connection = access.connection
+            credential = access.credential
+        else:
+            connection = provider.connection()
+            credential = provider.credential()
         config_dict = {
             "apiVersion": "v1",
             "kind": "Config",
@@ -224,9 +307,7 @@ class LoadedClient:
                     },
                 }
             ],
-            "users": [
-                {"name": "managed", "user": {"token": credential.token}}
-            ],
+            "users": [{"name": "managed", "user": {}}],
             "contexts": [
                 {
                     "name": "managed",
@@ -251,8 +332,23 @@ class LoadedClient:
                 f"provider profile {settings.provider_profile!r}: {exc}"
             ) from exc
         provider.refresh(configuration)
-        configuration.refresh_api_key_hook = provider.refresh
-        api_client = client.ApiClient(configuration=configuration)
+        if credential.token:
+            configuration.refresh_api_key_hook = provider.refresh
+        try:
+            api_client = client.ApiClient(configuration=configuration)
+        except Exception:
+            provider.close()
+            raise
+        original_call_api = api_client.call_api
+
+        def call_api_with_credential_refresh(*args: Any, **kwargs: Any) -> Any:
+            if provider.refresh(configuration) and provider.credential().certificate_based:
+                pool = getattr(getattr(api_client, "rest_client", None), "pool_manager", None)
+                if pool is not None:
+                    pool.clear()
+            return original_call_api(*args, **kwargs)
+
+        api_client.call_api = call_api_with_credential_refresh
         return cls(
             settings,
             None,
@@ -584,6 +680,11 @@ class Context:
         if self._client is None:
             self._client = LoadedClient.load(self.settings)
         return self._client
+
+    def close(self) -> None:
+        if self._client is not None:
+            self._client.close()
+            self._client = None
 
 
 def format_api_exception(exc: Exception) -> ApiError:

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import sys
+import stat
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
@@ -8,7 +10,11 @@ import yaml
 
 from datetime import datetime, timedelta, timezone
 
-from datus_k8s_plugin.cloud_contract import ClusterConnection, ExecCredential
+from datus_k8s_plugin.cloud_contract import (
+    ClusterConnection,
+    ExecCredential,
+    KubernetesAccess,
+)
 from datus_k8s_plugin.client import (
     LoadedClient,
     ManagedCredentialProvider,
@@ -174,6 +180,87 @@ def test_managed_profile_builds_real_kubernetes_configuration(monkeypatch):
         "Bearer secret-token"
     )
     assert loaded.credential_provider is not None
+    loaded.close()
+
+
+def test_managed_profile_installs_and_cleans_up_client_certificate(monkeypatch):
+    configured = Settings.from_profile(
+        {"name": "dev", "provider": "ack", "namespace": "analytics"}
+    )
+    certificate = "-----BEGIN CERTIFICATE-----\nCERT\n-----END CERTIFICATE-----\n"
+    private_key = "-----BEGIN PRIVATE KEY-----\nKEY\n-----END PRIVATE KEY-----\n"
+
+    calls = []
+
+    def fake_run(_settings, *args):
+        calls.append(args)
+        credential = ExecCredential(
+            None,
+            datetime.now(timezone.utc) + timedelta(minutes=10),
+            certificate,
+            private_key,
+        )
+        if args == ("kubernetes", "access"):
+            return KubernetesAccess(
+                ClusterConnection(
+                    "ack", "orders", "https://cluster.example", "Q0E="
+                ),
+                credential,
+            ).to_dict()
+        return credential.to_dict()
+
+    monkeypatch.setattr("datus_k8s_plugin.client.run_cloud_provider", fake_run)
+    loaded = LoadedClient.load(configured)
+    configuration = loaded.api_client.configuration
+    cert_file = Path(configuration.cert_file)
+    key_file = Path(configuration.key_file)
+    assert cert_file.read_text() == certificate
+    assert key_file.read_text() == private_key
+    assert stat.S_IMODE(cert_file.stat().st_mode) == 0o600
+    assert stat.S_IMODE(key_file.stat().st_mode) == 0o600
+    assert stat.S_IMODE(cert_file.parent.stat().st_mode) == 0o700
+    assert "authorization" not in configuration.api_key
+    assert calls == [("kubernetes", "access")]
+    loaded.close()
+    assert not cert_file.parent.exists()
+
+
+def test_managed_provider_refreshes_expiring_client_certificate_in_place(monkeypatch):
+    configured = Settings.from_profile(
+        {"name": "dev", "provider": "ack", "namespace": "analytics"}
+    )
+    old = ExecCredential(
+        None,
+        datetime.now(timezone.utc) + timedelta(seconds=30),
+        "-----BEGIN CERTIFICATE-----\nOLD\n-----END CERTIFICATE-----\n",
+        "-----BEGIN PRIVATE KEY-----\nOLD\n-----END PRIVATE KEY-----\n",
+    )
+    new = ExecCredential(
+        None,
+        datetime.now(timezone.utc) + timedelta(minutes=10),
+        "-----BEGIN CERTIFICATE-----\nNEW\n-----END CERTIFICATE-----\n",
+        "-----BEGIN PRIVATE KEY-----\nNEW\n-----END PRIVATE KEY-----\n",
+    )
+    calls = []
+
+    def fake_run(_settings, *args):
+        calls.append(args)
+        return new.to_dict()
+
+    monkeypatch.setattr("datus_k8s_plugin.client.run_cloud_provider", fake_run)
+    provider = ManagedCredentialProvider(configured)
+    provider._credential = old
+    configuration = SimpleNamespace(
+        api_key={}, api_key_prefix={}, cert_file=None, key_file=None
+    )
+    assert provider.refresh(configuration) is True
+    cert_file = Path(configuration.cert_file)
+    key_file = Path(configuration.key_file)
+    assert "NEW" in cert_file.read_text()
+    assert "NEW" in key_file.read_text()
+    assert calls == [("kubernetes", "credential")]
+    provider.close()
+    assert not cert_file.parent.exists()
 
 
 def test_cluster_scoped_resource_is_rejected_before_use(tmp_path):

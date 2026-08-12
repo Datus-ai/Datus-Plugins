@@ -58,8 +58,10 @@ the requested temporary kubeconfig duration and must be between 15 and 4320
 
 Grant only the RAM permissions needed to read clusters/node pools/add-ons/tasks
 and retrieve temporary user kubeconfig. Kubernetes RBAC separately limits the
-returned cluster identity. This version requires the temporary kubeconfig to
-contain a bearer token; client-certificate-only output is unsupported.
+returned cluster identity. Temporary kubeconfigs containing either a bearer
+token or a client certificate/private key pair are supported. The complete
+kubeconfig is never persisted; certificate credentials are held in owner-only
+temporary files for the lifetime of one `datus k8s` process.
 
 If k8s and ACK profile names differ, add `provider_profile: prod` to k8s. For a
 non-default provider config file, also set `provider_config`. Keep Alibaba Cloud
@@ -74,9 +76,8 @@ datus k8s --profile prod version
 datus k8s --profile prod auth can-i get pods -n analytics
 ```
 
-For failures, distinguish credential-chain/RAM errors, unsupported
-client-certificate kubeconfig, Kubernetes RBAC denial, and private endpoint
-reachability.
+For failures, distinguish credential-chain/RAM errors, malformed temporary
+kubeconfig, Kubernetes RBAC denial, and private endpoint reachability.
 
 If this environment cannot edit the active config, ask the deployment
 administrator to make the change.

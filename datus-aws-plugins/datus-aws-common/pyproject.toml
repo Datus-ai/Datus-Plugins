@@ -1,10 +1,10 @@
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling>=1.27,<1.28"]
 build-backend = "hatchling.build"
 
 [project]
 name = "datus-aws-common"
-version = "0.1.0"
+version = "0.1.1"
 description = "Shared plumbing for Datus AWS plugins: boto3 session/AssumeRole, config, error mapping, output rendering, CLI helpers"
 readme = "README.md"
 requires-python = ">=3.12"

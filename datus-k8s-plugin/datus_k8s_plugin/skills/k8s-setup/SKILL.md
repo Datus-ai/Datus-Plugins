@@ -67,7 +67,9 @@ agent:
 
 For managed Kubernetes, `allowed_namespaces` defaults to `namespace`. The cloud
 plugin owns identity, AssumeRole/workload identity, cluster discovery, and
-short-lived token refresh; never copy cloud credentials into the k8s profile.
+short-lived credential refresh. Credentials may be bearer tokens or client
+certificate/private key pairs; never copy cloud credentials into the k8s
+profile.
 If the provider profile has a different name, set `provider_profile`. If it
 comes from a non-default `--config` file, set `provider_config` to that same
 agent.yml path.

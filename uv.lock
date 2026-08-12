@@ -655,7 +655,7 @@ wheels = [
 
 [[package]]
 name = "datus-ack-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-aliyun-plugins/datus-ack-plugin" }
 dependencies = [
     { name = "alibabacloud-credentials" },
@@ -771,7 +771,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-aws-common"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "datus-aws-plugins/datus-aws-common" }
 dependencies = [
     { name = "boto3" },
@@ -1095,7 +1095,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-k8s-plugin"
-version = "0.1.0"
+version = "0.2.0"
 source = { editable = "datus-k8s-plugin" }
 dependencies = [
     { name = "kubernetes" },
