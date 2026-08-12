@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import os
 import subprocess
 import tempfile
@@ -26,6 +27,17 @@ from .output import plain
 
 #: SPDY/WebSocket channel the API server uses for the exec termination status.
 EXEC_ERROR_CHANNEL = 3
+
+# Kubernetes 1.30+ serves the same aggregated discovery document used by
+# kubectl's RESTMapper.  Older servers ignore this Accept header and return the
+# legacy APIVersions/APIGroupList documents, which we detect and fall back from.
+AGGREGATED_DISCOVERY_ACCEPT = (
+    "application/json;g=apidiscovery.k8s.io;v=v2;as=APIGroupDiscoveryList,"
+    "application/json;g=apidiscovery.k8s.io;v=v2beta1;as=APIGroupDiscoveryList,"
+    "application/json"
+)
+
+logger = logging.getLogger(__name__)
 
 
 def _provider_command(settings: Settings, *args: str) -> list[str]:
@@ -228,6 +240,7 @@ class LoadedClient:
     typed: Any
     watch_module: Any
     _dynamic: Any = None
+    _discovered_resources: list[Any] | None = None
     credential_provider: Any = None
     managed_cluster: str | None = None
 
@@ -367,6 +380,263 @@ class LoadedClient:
             self._dynamic = self.dynamic_module.DynamicClient(self.api_client)
         return self._dynamic
 
+    def _discovery_call(self, path: str, *, aggregated: bool = False) -> Any:
+        headers = {"Accept": AGGREGATED_DISCOVERY_ACCEPT} if aggregated else None
+        return plain(
+            self.api_client.call_api(
+                path,
+                "GET",
+                header_params=headers,
+                response_type="object",
+                auth_settings=["BearerToken"],
+                _return_http_data_only=True,
+            )
+        )
+
+    def _make_resource(
+        self,
+        *,
+        prefix: str,
+        group: str,
+        version: str,
+        preferred: bool,
+        raw: dict[str, Any],
+        aggregated: bool,
+    ) -> Any | None:
+        if aggregated:
+            name = str(raw.get("resource") or "")
+            response_kind = raw.get("responseKind") or {}
+            kind = str(response_kind.get("kind") or "")
+            namespaced = raw.get("scope") == "Namespaced"
+            singular = raw.get("singularResource")
+            short_names = raw.get("shortNames")
+            categories = raw.get("categories")
+            subresources = {
+                str(item.get("subresource")): {
+                    "kind": str((item.get("responseKind") or {}).get("kind") or kind),
+                    "name": f"{name}/{item.get('subresource')}",
+                    "subresource": str(item.get("subresource")),
+                    "namespaced": namespaced,
+                    "verbs": list(item.get("verbs") or []),
+                    "singularName": "",
+                }
+                for item in raw.get("subresources") or []
+                if isinstance(item, dict) and item.get("subresource")
+            }
+        else:
+            name = str(raw.get("name") or "")
+            kind = str(raw.get("kind") or "")
+            namespaced = bool(raw.get("namespaced"))
+            singular = raw.get("singularName")
+            short_names = raw.get("shortNames")
+            categories = raw.get("categories")
+            subresources = raw.get("subresources") or {}
+        if not name or not kind or "/" in name:
+            return None
+        return self.dynamic_module.Resource(
+            prefix=prefix,
+            group=group,
+            api_version=version,
+            kind=kind,
+            namespaced=namespaced,
+            verbs=list(raw.get("verbs") or []),
+            name=name,
+            preferred=preferred,
+            client=self.dynamic,
+            singularName=singular,
+            shortNames=list(short_names or []),
+            categories=list(categories or []),
+            subresources=subresources,
+        )
+
+    def _aggregated_resources(
+        self, core: dict[str, Any], groups: dict[str, Any]
+    ) -> list[Any] | None:
+        expected = {"v2", "v2beta1"}
+        documents = (("api", core), ("apis", groups))
+        if any(
+            not isinstance(document, dict)
+            or document.get("kind") != "APIGroupDiscoveryList"
+            or str(document.get("apiVersion") or "").rsplit("/", 1)[-1] not in expected
+            for _prefix, document in documents
+        ):
+            return None
+        found = []
+        for prefix, document in documents:
+            for group_item in document.get("items") or []:
+                if not isinstance(group_item, dict):
+                    continue
+                group = str((group_item.get("metadata") or {}).get("name") or "")
+                for index, version_item in enumerate(group_item.get("versions") or []):
+                    if not isinstance(version_item, dict):
+                        continue
+                    version = str(version_item.get("version") or "")
+                    if not version or version_item.get("freshness") == "Stale":
+                        continue
+                    for raw in version_item.get("resources") or []:
+                        if not isinstance(raw, dict):
+                            continue
+                        resource = self._make_resource(
+                            prefix=prefix,
+                            group=group,
+                            version=version,
+                            preferred=index == 0,
+                            raw=raw,
+                            aggregated=True,
+                        )
+                        if resource is not None:
+                            found.append(resource)
+        return found
+
+    def _legacy_resource_list(
+        self, path: str, *, prefix: str, group: str, version: str, preferred: bool
+    ) -> list[Any]:
+        document = self._discovery_call(path)
+        if not isinstance(document, dict) or document.get("kind") != "APIResourceList":
+            actual = document.get("kind") if isinstance(document, dict) else type(document).__name__
+            logger.warning(
+                "skipping malformed Kubernetes discovery endpoint %s: "
+                "expected APIResourceList, got %r",
+                path,
+                actual,
+            )
+            return []
+        raw_resources = [
+            raw for raw in document.get("resources") or [] if isinstance(raw, dict)
+        ]
+        subresources: dict[str, dict[str, dict[str, Any]]] = {}
+        for raw in raw_resources:
+            raw_name = str(raw.get("name") or "")
+            if "/" not in raw_name:
+                continue
+            parent, subresource = raw_name.split("/", 1)
+            subresources.setdefault(parent, {})[subresource] = {
+                **raw,
+                "subresource": subresource,
+            }
+        found = []
+        for raw in raw_resources:
+            if "/" in str(raw.get("name") or ""):
+                continue
+            raw = {
+                **raw,
+                "subresources": subresources.get(str(raw.get("name") or ""), {}),
+            }
+            resource = self._make_resource(
+                prefix=prefix,
+                group=group,
+                version=version,
+                preferred=preferred,
+                raw=raw,
+                aggregated=False,
+            )
+            if resource is not None:
+                found.append(resource)
+        return found
+
+    def _legacy_resources(
+        self, core: dict[str, Any], groups: dict[str, Any]
+    ) -> list[Any]:
+        found = []
+        versions = core.get("versions") if isinstance(core, dict) else []
+        for index, version in enumerate(versions or []):
+            value = str(version or "")
+            if value:
+                found.extend(
+                    self._legacy_resource_list(
+                        f"/api/{value}",
+                        prefix="api",
+                        group="",
+                        version=value,
+                        preferred=index == 0,
+                    )
+                )
+        for group_item in groups.get("groups", []) if isinstance(groups, dict) else []:
+            if not isinstance(group_item, dict):
+                continue
+            group = str(group_item.get("name") or "")
+            preferred_version = str(
+                (group_item.get("preferredVersion") or {}).get("version") or ""
+            )
+            for version_item in group_item.get("versions") or []:
+                if not isinstance(version_item, dict):
+                    continue
+                version = str(version_item.get("version") or "")
+                if version:
+                    found.extend(
+                        self._legacy_resource_list(
+                            f"/apis/{group}/{version}",
+                            prefix="apis",
+                            group=group,
+                            version=version,
+                            preferred=version == preferred_version,
+                        )
+                    )
+        return found
+
+    def _resource_catalog(self) -> list[Any] | None:
+        if self._discovered_resources is not None:
+            return self._discovered_resources
+        if not callable(getattr(self.api_client, "call_api", None)):
+            return None
+        try:
+            core = self._discovery_call("/api", aggregated=True)
+            groups = self._discovery_call("/apis", aggregated=True)
+        except Exception as exc:
+            if getattr(exc, "status", None) != 406:
+                raise
+            core = self._discovery_call("/api")
+            groups = self._discovery_call("/apis")
+        resources = self._aggregated_resources(core, groups)
+        if resources is None:
+            resources = self._legacy_resources(core, groups)
+        self._discovered_resources = resources
+        return resources
+
+    @staticmethod
+    def _resource_aliases(resource: Any) -> set[str]:
+        return {
+            str(getattr(resource, "name", "") or "").casefold(),
+            str(getattr(resource, "singular_name", "") or "").casefold(),
+            str(getattr(resource, "kind", "") or "").casefold(),
+            *{
+                str(value).casefold()
+                for value in (getattr(resource, "short_names", []) or [])
+            },
+        }
+
+    def _catalog_resource(
+        self,
+        resources: list[Any],
+        token: str,
+        *,
+        api_version: str | None,
+        kind: str | None,
+    ) -> Any:
+        folded = token.casefold()
+        candidates = []
+        for candidate in resources:
+            aliases = self._resource_aliases(candidate)
+            group = str(getattr(candidate, "group", "") or "").casefold()
+            qualified = {f"{alias}.{group}" for alias in aliases if alias and group}
+            if kind and str(getattr(candidate, "kind", "")).casefold() != kind.casefold():
+                continue
+            if api_version and str(getattr(candidate, "group_version", "")) != api_version:
+                continue
+            if not kind and folded not in aliases and folded not in qualified:
+                continue
+            candidates.append(candidate)
+        if not candidates:
+            raise LookupError(f"No matches found for {kind or token!r}")
+        candidates.sort(
+            key=lambda item: (
+                not bool(getattr(item, "preferred", False)),
+                bool(getattr(item, "group", "")),
+                str(getattr(item, "group_version", "")),
+            )
+        )
+        return candidates[0]
+
     def resource(
         self,
         name: str | None = None,
@@ -376,7 +646,12 @@ class LoadedClient:
     ) -> Any:
         token = str(name or "").split("/", 1)[0]
         try:
-            if api_version and kind:
+            catalog = self._resource_catalog()
+            if catalog is not None:
+                resource = self._catalog_resource(
+                    catalog, token, api_version=api_version, kind=kind
+                )
+            elif api_version and kind:
                 resource = self.dynamic.resources.get(api_version=api_version, kind=kind)
             elif api_version and name:
                 resource = self.dynamic.resources.get(
@@ -391,15 +666,7 @@ class LoadedClient:
                         candidate_kind = str(getattr(candidate, "kind", "") or "")
                         if candidate_kind.endswith("List"):
                             continue
-                        aliases = {
-                            str(getattr(candidate, "name", "") or "").casefold(),
-                            str(getattr(candidate, "singular_name", "") or "").casefold(),
-                            candidate_kind.casefold(),
-                            *{
-                                str(value).casefold()
-                                for value in (getattr(candidate, "short_names", []) or [])
-                            },
-                        }
+                        aliases = self._resource_aliases(candidate)
                         if token.casefold() in aliases:
                             candidates.append(candidate)
                     if not candidates:
@@ -557,7 +824,9 @@ class LoadedClient:
 
     def api_resources(self) -> list[dict[str, Any]]:
         try:
-            found = self.dynamic.resources.search()
+            found = self._resource_catalog()
+            if found is None:
+                found = self.dynamic.resources.search()
         except Exception as exc:
             raise ApiError(f"cannot discover API resources: {exc}") from exc
         rows = []

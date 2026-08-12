@@ -361,6 +361,181 @@ def test_resource_resolves_singular_and_short_names(tmp_path):
     assert loaded.resource("deploy") is deployment
 
 
+def _discovery_dynamic_module():
+    class Resource:
+        def __init__(
+            self,
+            *,
+            prefix,
+            group,
+            api_version,
+            kind,
+            namespaced,
+            verbs,
+            name,
+            preferred,
+            client,
+            singularName=None,
+            shortNames=None,
+            categories=None,
+            subresources=None,
+            **_kwargs,
+        ):
+            self.prefix = prefix
+            self.group = group
+            self.api_version = api_version
+            self.group_version = f"{group}/{api_version}" if group else api_version
+            self.kind = kind
+            self.namespaced = namespaced
+            self.verbs = verbs
+            self.name = name
+            self.preferred = preferred
+            self.client = client
+            self.singular_name = singularName or ""
+            self.short_names = shortNames or []
+            self.categories = categories or []
+            self.subresources = subresources or {}
+
+    class DynamicClient:
+        def __init__(self, api_client):
+            self.api_client = api_client
+
+    return SimpleNamespace(Resource=Resource, DynamicClient=DynamicClient)
+
+
+def _loaded_for_discovery(tmp_path, api_client):
+    kubeconfig = tmp_path / "config"
+    kubeconfig.write_text("apiVersion: v1\n", encoding="utf-8")
+    return LoadedClient(
+        settings(kubeconfig),
+        kubeconfig,
+        "dev",
+        api_client,
+        _discovery_dynamic_module(),
+        object(),
+        object(),
+    )
+
+
+def test_resource_uses_aggregated_discovery_without_visiting_each_group(tmp_path):
+    calls = []
+    core = {
+        "kind": "APIGroupDiscoveryList",
+        "apiVersion": "apidiscovery.k8s.io/v2",
+        "items": [
+            {
+                "metadata": {},
+                "versions": [
+                    {
+                        "version": "v1",
+                        "freshness": "Current",
+                        "resources": [
+                            {
+                                "resource": "pods",
+                                "responseKind": {"kind": "Pod"},
+                                "scope": "Namespaced",
+                                "singularResource": "pod",
+                                "verbs": ["get", "list"],
+                                "shortNames": ["po"],
+                            }
+                        ],
+                    }
+                ],
+            }
+        ],
+    }
+    groups = {
+        "kind": "APIGroupDiscoveryList",
+        "apiVersion": "apidiscovery.k8s.io/v2",
+        "items": [
+            {
+                "metadata": {"name": "metrics"},
+                "versions": [
+                    {
+                        "version": "v1alpha1",
+                        "freshness": "Current",
+                        "resources": [],
+                    }
+                ],
+            }
+        ],
+    }
+
+    class ApiClient:
+        def call_api(self, path, *_args, **_kwargs):
+            calls.append(path)
+            if path == "/api":
+                return core
+            if path == "/apis":
+                return groups
+            raise AssertionError(f"aggregated discovery must not request {path}")
+
+    resource = _loaded_for_discovery(tmp_path, ApiClient()).resource("pods")
+    assert resource.group_version == "v1"
+    assert resource.kind == "Pod"
+    assert calls == ["/api", "/apis"]
+
+
+def test_legacy_discovery_skips_malformed_unrelated_api_group(tmp_path):
+    calls = []
+
+    class ApiClient:
+        def call_api(self, path, *_args, **_kwargs):
+            calls.append(path)
+            if path == "/api":
+                return {"kind": "APIVersions", "versions": ["v1"]}
+            if path == "/api/v1":
+                return {
+                    "kind": "APIResourceList",
+                    "groupVersion": "v1",
+                    "resources": [
+                        {
+                            "name": "pods",
+                            "singularName": "pod",
+                            "namespaced": True,
+                            "kind": "Pod",
+                            "verbs": ["get", "list"],
+                            "shortNames": ["po"],
+                        },
+                        {
+                            "name": "pods/status",
+                            "singularName": "",
+                            "namespaced": True,
+                            "kind": "Pod",
+                            "verbs": ["get", "patch", "update"],
+                        }
+                    ],
+                }
+            if path == "/apis":
+                return {
+                    "kind": "APIGroupList",
+                    "groups": [
+                        {
+                            "name": "metrics",
+                            "preferredVersion": {
+                                "groupVersion": "metrics/v1alpha1",
+                                "version": "v1alpha1",
+                            },
+                            "versions": [
+                                {
+                                    "groupVersion": "metrics/v1alpha1",
+                                    "version": "v1alpha1",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            if path == "/apis/metrics/v1alpha1":
+                return {"Text": "alibabacloud metrics-server is running."}
+            raise AssertionError(path)
+
+    resource = _loaded_for_discovery(tmp_path, ApiClient()).resource("pods")
+    assert resource.group_version == "v1"
+    assert resource.kind == "Pod"
+    assert resource.subresources["status"]["kind"] == "Pod"
+    assert "/apis/metrics/v1alpha1" in calls
+
+
 def test_openapi_all_of_reference_is_expanded(tmp_path):
     kubeconfig = tmp_path / "config"
     kubeconfig.write_text("apiVersion: v1\n", encoding="utf-8")
