@@ -58,7 +58,15 @@ spec:
             - "PRIMARY\\s+KEY\\s*\\(id\\)\\s+NOT\\s+ENFORCED"
           deploy/flink/*/*.yaml:
             - "kind:\\s*FlinkDeployment"
+            - "(?m)^\\s*mode:\\s*standalone\\s*$"
+            - "org\\.apache\\.flink\\.table\\.runtime\\.application\\.SqlDriver"
+            - "--scriptUri"
+        notContent:
+          deploy/flink/*/*.yaml:
+            - "(?m)^\\s*jarURI\\s*:"
+            - "sql-runner\\.jar"
             - "ai\\.datus\\.e2e\\.SqlFileRunner"
+            - "pipeline\\.(?:jars|classpaths)"
     - type: flink_paimon
       config:
         deployment: "flink2paimon-{{RUN_ID}}"
@@ -82,6 +90,7 @@ spec:
     maxUnexpectedFailures: 0
     forbiddenCommands:
       - "(^|\\s)kubectl(\\s|$)"
+      - "(^|\\s)(?:mvn|gradle|docker)(?:\\s|$)"
       - "sleep\\s+[0-9]"
     expectedCommands:
       - "^datus k8s"

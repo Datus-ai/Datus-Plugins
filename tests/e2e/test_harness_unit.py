@@ -11,6 +11,7 @@ import yaml
 from tests.e2e.harness.agent import _write_configs, prepare_agent_source, resolve_agent_sha
 from tests.e2e.harness.artifacts import capture_generated, export_session, redact, sha256, snapshot_text
 from tests.e2e.harness.process import check_efficiency, diagnose, load_payloads
+from tests.e2e.harness.oracles import _files
 from tests.e2e.harness.schema import ContractError, RunConfig, Workflow
 
 
@@ -195,6 +196,30 @@ def test_capture_generated_hashes_and_patches_without_following_symlinks(tmp_pat
     assert "-before" in patch
     assert "+after" in patch
     assert not (tmp_path / "artifacts/generated/results/outside.md").exists()
+
+
+def test_files_oracle_rejects_forbidden_content(tmp_path: Path):
+    manifest = tmp_path / "deploy/flink/run/flinkdeployment.yaml"
+    manifest.parent.mkdir(parents=True)
+    manifest.write_text(
+        "job:\n  entryClass: org.apache.flink.table.runtime.application.SqlDriver\n",
+        encoding="utf-8",
+    )
+    config = {
+        "patterns": ["deploy/flink/*/*.yaml"],
+        "notContent": {"deploy/flink/*/*.yaml": [r"(?m)^\s*jarURI\s*:"]},
+    }
+
+    assert _files(config, workspace=tmp_path).passed
+
+    manifest.write_text(
+        "job:\n  jarURI: local:///opt/flink/usrlib/sql-runner.jar\n",
+        encoding="utf-8",
+    )
+    result = _files(config, workspace=tmp_path)
+
+    assert not result.passed
+    assert "contained forbidden" in (result.error or "")
 
 
 def test_redact_handles_nested_secret_values():

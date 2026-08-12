@@ -185,6 +185,7 @@ class EnvironmentContext:
             [
                 "minikube", "-p", self.profile, "image", "build", "-t", tag,
                 "--build-opt", f"build-arg=FLINK_VERSION={self.lock['flink']}",
+                "--build-opt", f"build-arg=PAIMON_FLINK_VERSION={'.'.join(str(self.lock['flink']).split('.')[:2])}",
                 "--build-opt", f"build-arg=PAIMON_VERSION={self.lock['paimon']}",
                 "--build-opt", f"build-arg=HADOOP_VERSION={self.lock['hadoop']}",
                 str(source),

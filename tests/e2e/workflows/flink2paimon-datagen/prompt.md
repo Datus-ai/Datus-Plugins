@@ -1,7 +1,8 @@
 Build and run a bounded Flink-to-Paimon job in the isolated test environment.
 
-Use the installed `flink-k8s-operator` skill and perform every Kubernetes workload
-operation through `datus k8s --profile e2e`; do not use kubectl.
+Use the installed `flink-sql` and `flink-k8s-operator` skills and perform every
+Kubernetes workload operation through `datus k8s --profile e2e`; do not use
+kubectl.
 
 Run every `datus k8s` command in its own Bash tool call. Never combine commands
 with `;`, `&&`, `||`, pipes, redirects such as `2>&1`, command substitution, or
@@ -19,7 +20,8 @@ The exact target is:
 - Kubernetes namespace: `{{NAMESPACE}}`
 - FlinkDeployment name: `flink2paimon-{{RUN_ID}}`
 - approved image already loaded in minikube: `{{FLINK_RUNNER_IMAGE}}`
-- FlinkDeployment `spec.flinkVersion`: `v1_20`
+- Flink runtime: `2.0.2`
+- FlinkDeployment `spec.flinkVersion`: `v2_0`
 - FlinkDeployment `spec.serviceAccount`: `flink`
 - Paimon warehouse: `{{PAIMON_WAREHOUSE}}`
 - S3 endpoint from inside Kubernetes: `{{MINIO_ENDPOINT}}`
@@ -37,10 +39,23 @@ Generate a Flink SQL file that:
 
 Generate one multi-document YAML containing the SQL ConfigMap and a
 `flink.apache.org/v1beta1` FlinkDeployment in Application Mode. Mount the SQL at
-`/opt/flink/usrlib/job.sql`. Run
-`local:///opt/flink/usrlib/sql-runner.jar` with entry class
-`ai.datus.e2e.SqlFileRunner` and arguments `--sql /opt/flink/usrlib/job.sql`.
-Use `imagePullPolicy: Never`.
+`/opt/flink/usrlib/job.sql`. Set `spec.mode: standalone`; this selects the
+Operator's standalone Kubernetes deployment mode while the Flink job itself
+remains an Application Mode job. Set `spec.job.entryClass` to the Flink 2.x built-in
+`org.apache.flink.table.runtime.application.SqlDriver`, and pass exactly these
+two job arguments in order: `--scriptUri` and
+`file:///opt/flink/usrlib/job.sql`. Omit `spec.job.jarURI` entirely. The approved
+image already contains the Paimon dependencies and exactly one SQL Gateway JAR
+under `/opt/flink/opt`; `SqlDriver` loads the SQL Gateway `ScriptRunner` from
+that distribution JAR. Use `imagePullPolicy: Never`.
+
+Do not run Maven, Gradle, or Docker. Do not build, download, copy, or reference
+a custom SQL runner or job JAR. In particular, do not use `sql-runner.jar`,
+`ai.datus.e2e.SqlFileRunner`, or any `jarURI`. The environment may contain an
+oracle-only verifier JAR; it is not the Flink job main and must not be referenced
+by the FlinkDeployment. Do not set `pipeline.jars` or `pipeline.classpaths`,
+including to an empty string; the no-JAR `SqlDriver` path depends on
+`spec.mode: standalone`, not empty native-mode pipeline configuration.
 
 Write all deliverables under `deploy/flink/{{RUN_ID}}/`:
 

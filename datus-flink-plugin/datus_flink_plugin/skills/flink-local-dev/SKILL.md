@@ -651,30 +651,16 @@ options, checkpoint interval and directory, parallelism);
 `execution.target` and `table.dml-sync` are local-only — never copy them into a
 manifest.
 
-The Flink Kubernetes Operator submits **jars**, not SQL scripts, so a validated
-script needs a runner. Decide with the user which one and record it next to the
-manifest:
+Invoke the `flink-sql` skill with the values this validation settled: exact
+Flink version and base image, script location and SHA-256, connector JARs with
+versions, runtime mode, production parallelism, expected terminal state, and
+checkpoint/savepoint policy. It selects a version-matched runner JAR for Flink
+1.x or the built-in `SqlDriver` path for Flink 2.x, verifies the packaged SQL,
+and hands the resulting job fields to `flink-k8s-operator`.
 
-- **A SQL runner jar** — a small application that reads the script from the image
-  or a mounted volume and executes its statements in order (the Operator project
-  ships a `flink-sql-runner-example` illustrating the pattern). The script becomes
-  an image layer or a ConfigMap/volume; the manifest passes its path as a job
-  argument.
-- **A SQL Gateway against a session cluster** — the script is submitted to a
-  long-lived cluster instead of being packaged. This changes the operational
-  model; raise it explicitly rather than adopting it by default.
-
-Either way the deployed script must be the same text that passed locally — verify
-it after packaging by reading the file back out of the image or volume.
-
-Then invoke the `flink-k8s-operator` skill with the values this validation
-settled: Flink version and base image, the runner decision and the script's
-location, connector jars with versions, production parallelism and task slots,
-the real endpoints and the Kubernetes Secrets holding their credentials,
-checkpoint/savepoint storage and upgrade mode, and the expected output to compare
-against the first production rows. That skill runs its own fail-closed preflight
-and owns image delivery and the CR; do not pre-empt it, and do not build
-production images from this skill.
+Do not choose or build the production runner here. The deployed script must be
+the same text that passed locally; `flink-sql` verifies it after packaging.
+`flink-k8s-operator` owns image delivery and the custom resource.
 
 After deployment, compare against the local expectation: job state and
 reconciliation status, the first checkpoint completing, rows arriving in the real
