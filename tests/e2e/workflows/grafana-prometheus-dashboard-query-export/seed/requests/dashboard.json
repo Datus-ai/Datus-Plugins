@@ -1,0 +1,36 @@
+{
+  "apiVersion": "dashboard.grafana.app/v1beta1",
+  "kind": "Dashboard",
+  "metadata": {"name": "prometheus-e2e-overview"},
+  "spec": {
+    "title": "Prometheus E2E Overview",
+    "schemaVersion": 41,
+    "version": 0,
+    "editable": true,
+    "refresh": "5s",
+    "time": {"from": "now-15m", "to": "now"},
+    "timezone": "browser",
+    "panels": [],
+    "templating": {
+      "list": [
+        {
+          "name": "job",
+          "label": "Job",
+          "type": "query",
+          "datasource": {"type": "prometheus", "uid": "prometheus-e2e"},
+          "query": {"query": "label_values(up, job)", "refId": "PrometheusVariableQueryEditor-VariableQuery"},
+          "definition": "label_values(up, job)",
+          "multi": true,
+          "includeAll": true,
+          "allValue": ".+",
+          "refresh": 1,
+          "current": {"text": "All", "value": "$__all"},
+          "options": []
+        }
+      ]
+    },
+    "annotations": {"list": []},
+    "links": [],
+    "tags": ["e2e", "prometheus"]
+  }
+}

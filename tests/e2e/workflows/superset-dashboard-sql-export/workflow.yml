@@ -1,0 +1,113 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: superset-dashboard-sql-export
+  description: Build a deterministic Superset population dashboard and export every chart query as project SQL context.
+  tags: [smoke, superset, postgres, dashboard, query-export]
+spec:
+  target:
+    distribution: datus-superset-plugin
+    path: datus-superset-plugin
+    name: superset
+    profile:
+      api_base_url: "{{SUPERSET_HOST_ENDPOINT}}"
+      auth_mode: login
+      username: "{{SUPERSET_USERNAME}}"
+      password: "{{SUPERSET_PASSWORD}}"
+      verify_ssl: "false"
+      timeout: "60"
+  supportPlugins: []
+  agent:
+    prompt: prompt.md
+    timeoutSeconds: 1800
+  environment:
+    components: [minikube, superset-postgres]
+    lock: environment.lock.yml
+  workspace:
+    seed: seed
+    outputs:
+      - results/superset-build.json
+      - reference_sql/superset/population-e2e-overview/manifest.json
+      - reference_sql/superset/population-e2e-overview/*.sql
+      - reference_sql/superset/population-e2e-overview/_source/*.json
+  permissions:
+    bashAllow:
+      - "datus superset status health:*"
+      - "datus superset databases list:*"
+      - "datus superset datasets list:*"
+      - "datus superset datasets create:*"
+      - "datus superset dashboards list:*"
+      - "datus superset dashboards create:*"
+      - "datus superset dashboards update:*"
+      - "datus superset dashboards get:*"
+      - "datus superset dashboards charts:*"
+      - "datus superset charts list:*"
+      - "datus superset charts create:*"
+      - "datus superset charts add-to-dashboard:*"
+      - "datus superset charts data:*"
+      - "datus superset context export-dashboard:*"
+  oracles:
+    - type: superset_dashboard
+      config:
+        title: Population E2E Overview
+        slug: population-e2e-overview
+        schema: public
+        table: world_population_e2e
+        chartTitles:
+          - Population 2014
+          - Population by Region 2014
+          - Population Trend
+        expectedRows:
+          Population 2014:
+            - {"SUM(population_millions)": 3393}
+          Population by Region 2014:
+            - {region: East Asia & Pacific, "SUM(population_millions)": 1491}
+            - {region: South Asia, "SUM(population_millions)": 1480}
+            - {region: Sub-Saharan Africa, "SUM(population_millions)": 275}
+            - {region: Europe & Central Asia, "SUM(population_millions)": 147}
+          Population Trend:
+            - {year: 2004, "SUM(population_millions)": 3013}
+            - {year: 2014, "SUM(population_millions)": 3393}
+    - type: postgres_query
+      config:
+        queries:
+          - sql: SELECT year, SUM(population_millions) FROM public.world_population_e2e GROUP BY year ORDER BY year;
+            expectedRows: [["2004", "3013"], ["2014", "3393"]]
+          - sql: SELECT region, SUM(population_millions) FROM public.world_population_e2e WHERE year = 2014 GROUP BY region ORDER BY SUM(population_millions) DESC, region;
+            expectedRows:
+              - [East Asia & Pacific, "1491"]
+              - [South Asia, "1480"]
+              - [Sub-Saharan Africa, "275"]
+              - [Europe & Central Asia, "147"]
+    - type: query_export_manifest
+      config:
+        manifest: reference_sql/superset/population-e2e-overview/manifest.json
+        platform: superset
+        count: 3
+        language: sql
+        suffix: .sql
+        requiredText: [world_population_e2e]
+    - type: files
+      config:
+        patterns: [results/superset-build.json]
+  efficiency:
+    maxToolCalls: 35
+    maxLlmTurns: 12
+    maxTokens: 100000
+    maxUnexpectedFailures: 0
+    forbiddenCommands:
+      - "(^|\\s)(curl|wget|psql|kubectl|docker)(\\s|$)"
+      - "^python(3)?\\s"
+      - "^datus superset api call"
+      - "^datus superset .*delete"
+    expectedCommands:
+      - "^datus superset status health"
+      - "^datus superset databases list"
+      - "^datus superset datasets create"
+      - "^datus superset dashboards create"
+      - "^datus superset charts create"
+      - "^datus superset charts data"
+      - "^datus superset context export-dashboard"
+  cleanup:
+    deleteNamespace: true
+    deleteBucketPrefix: false

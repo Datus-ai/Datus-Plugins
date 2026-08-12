@@ -1,0 +1,159 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: {{NAMESPACE}}
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 5s
+      evaluation_interval: 5s
+    scrape_configs:
+      - job_name: prometheus
+        static_configs:
+          - targets: ["localhost:9090"]
+      - job_name: node-exporter
+        static_configs:
+          - targets: ["node-exporter:9100"]
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-provisioning
+  namespace: {{NAMESPACE}}
+data:
+  prometheus.yml: |
+    apiVersion: 1
+    deleteDatasources: []
+    datasources:
+      - name: E2E Prometheus
+        uid: prometheus-e2e
+        type: prometheus
+        access: proxy
+        url: http://prometheus:9090
+        isDefault: true
+        editable: false
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: {{NAMESPACE}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: prometheus}
+  template:
+    metadata:
+      labels: {app: prometheus}
+    spec:
+      containers:
+        - name: prometheus
+          image: {{PROMETHEUS_IMAGE}}
+          args: ["--config.file=/etc/prometheus/prometheus.yml", "--storage.tsdb.path=/prometheus"]
+          ports:
+            - {name: http, containerPort: 9090}
+          readinessProbe:
+            httpGet: {path: /-/ready, port: http}
+            initialDelaySeconds: 3
+            periodSeconds: 2
+          volumeMounts:
+            - {name: config, mountPath: /etc/prometheus}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+      volumes:
+        - name: config
+          configMap: {name: prometheus-config}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: {{NAMESPACE}}
+spec:
+  selector: {app: prometheus}
+  ports:
+    - {name: http, port: 9090, targetPort: http}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: node-exporter
+  namespace: {{NAMESPACE}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: node-exporter}
+  template:
+    metadata:
+      labels: {app: node-exporter}
+    spec:
+      containers:
+        - name: node-exporter
+          image: {{NODE_EXPORTER_IMAGE}}
+          ports:
+            - {name: metrics, containerPort: 9100}
+          readinessProbe:
+            httpGet: {path: /, port: metrics}
+            initialDelaySeconds: 3
+            periodSeconds: 2
+          resources:
+            requests: {cpu: 20m, memory: 32Mi}
+            limits: {memory: 128Mi}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  namespace: {{NAMESPACE}}
+spec:
+  selector: {app: node-exporter}
+  ports:
+    - {name: metrics, port: 9100, targetPort: metrics}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: {{NAMESPACE}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: grafana}
+  template:
+    metadata:
+      labels: {app: grafana}
+    spec:
+      containers:
+        - name: grafana
+          image: {{GRAFANA_IMAGE}}
+          env:
+            - {name: GF_SECURITY_ADMIN_USER, value: "{{GRAFANA_USERNAME}}"}
+            - {name: GF_SECURITY_ADMIN_PASSWORD, value: "{{GRAFANA_PASSWORD}}"}
+            - {name: GF_USERS_ALLOW_SIGN_UP, value: "false"}
+            - {name: GF_AUTH_ANONYMOUS_ENABLED, value: "false"}
+          ports:
+            - {name: http, containerPort: 3000}
+          readinessProbe:
+            httpGet: {path: /api/health, port: http}
+            initialDelaySeconds: 5
+            periodSeconds: 3
+          volumeMounts:
+            - {name: provisioning, mountPath: /etc/grafana/provisioning/datasources}
+          resources:
+            requests: {cpu: 100m, memory: 128Mi}
+            limits: {memory: 512Mi}
+      volumes:
+        - name: provisioning
+          configMap: {name: grafana-provisioning}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: {{NAMESPACE}}
+spec:
+  selector: {app: grafana}
+  ports:
+    - {name: http, port: 3000, targetPort: http}

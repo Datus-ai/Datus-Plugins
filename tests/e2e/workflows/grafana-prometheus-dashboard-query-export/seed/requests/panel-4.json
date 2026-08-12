@@ -1,0 +1,10 @@
+{
+  "id": 4,
+  "title": "Resident Memory",
+  "type": "timeseries",
+  "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+  "datasource": {"type": "prometheus", "uid": "prometheus-e2e"},
+  "fieldConfig": {"defaults": {}, "overrides": []},
+  "options": {"legend": {"displayMode": "list", "placement": "bottom"}},
+  "targets": [{"refId": "A", "datasource": {"type": "prometheus", "uid": "prometheus-e2e"}, "expr": "process_resident_memory_bytes{job=~\"$job\"}", "range": true, "editorMode": "code", "legendFormat": ""}]
+}

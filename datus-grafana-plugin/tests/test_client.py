@@ -40,7 +40,7 @@ def test_new_dashboard_api_never_falls_back_on_auth_failure(status):
     with pytest.raises(ApiError) as error:
         client.dashboard_request("GET", "abc")
     assert error.value.status_code == status
-    assert paths == ["/api/health", "/apis/dashboard.grafana.app/v1/namespaces/default/dashboards/abc"]
+    assert paths == ["/api/health", "/apis/dashboard.grafana.app/v1beta1/namespaces/default/dashboards/abc"]
     client.close()
 
 

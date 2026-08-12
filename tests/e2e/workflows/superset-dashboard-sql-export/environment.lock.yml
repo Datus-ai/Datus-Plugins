@@ -1,0 +1,12 @@
+kubernetes: v1.35.0
+minikubeMemory: 6144
+minikubeCpus: 4
+supersetImage: apache/superset:4.1.2@sha256:15e110b8533d3cb6a0d529512ea71252b0ac62e3f72b1f7a5000f1361822ac26
+postgresImage: postgres:15.13@sha256:15d29ec7af31e0f60c2394ed5e3b4d45b6b8d78ffc6faf994e9796c1415b8785
+psycopg2Version: 2.9.10
+supersetUsername: admin
+supersetPassword: admin
+supersetSecretKey: datus-superset-e2e-only-secret-key-2026
+postgresUsername: superset
+postgresPassword: superset
+postgresDatabase: superset_examples

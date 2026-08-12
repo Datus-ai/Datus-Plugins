@@ -38,9 +38,8 @@ class EnvironmentContext:
     suite_dir: Path = field(init=False)
     kubeconfig: Path = field(init=False)
     logs: Path = field(init=False)
-    port_forward: subprocess.Popen[str] | None = field(init=False, default=None)
-    port_forward_stdout: TextIO | None = field(init=False, default=None)
-    port_forward_stderr: TextIO | None = field(init=False, default=None)
+    port_forwards: list[subprocess.Popen[str]] = field(init=False, default_factory=list)
+    port_forward_handles: list[TextIO] = field(init=False, default_factory=list)
 
     def __post_init__(self) -> None:
         if not SAFE_ID.fullmatch(self.suite_id) or not SAFE_ID.fullmatch(self.run_id):
@@ -79,8 +78,15 @@ class EnvironmentContext:
                 running = False
         if not running:
             version = str(self.lock.get("kubernetes", "v1.35.0"))
+            start_args = [
+                "minikube", "start", "-p", self.profile, "--driver=docker", f"--kubernetes-version={version}"
+            ]
+            if self.lock.get("minikubeMemory"):
+                start_args.append(f"--memory={self.lock['minikubeMemory']}")
+            if self.lock.get("minikubeCpus"):
+                start_args.append(f"--cpus={self.lock['minikubeCpus']}")
             self.command(
-                ["minikube", "start", "-p", self.profile, "--driver=docker", f"--kubernetes-version={version}"],
+                start_args,
                 "minikube-start",
                 timeout=1800,
             )
@@ -97,19 +103,110 @@ class EnvironmentContext:
             self._up_flink_operator()
         if "flink-paimon-runner" in self.components:
             self._build_runner_image()
-        host_endpoint = self._forward_minio() if "minio" in self.components else ""
-        return {
+        if "superset-postgres" in self.components:
+            self._up_superset_postgres()
+        if "grafana-prometheus" in self.components:
+            self._up_grafana_prometheus()
+
+        variables = {
             "RUN_ID": self.run_id,
             "NAMESPACE": self.namespace,
             "KUBECONFIG": str(self.kubeconfig),
             "KUBE_CONTEXT": self.profile,
             "MINIO_ENDPOINT": "http://minio.datus-e2e-infra.svc.cluster.local:9000",
-            "MINIO_HOST_ENDPOINT": host_endpoint,
+            "MINIO_HOST_ENDPOINT": "",
             "MINIO_ACCESS_KEY": str(self.lock.get("minioAccessKey", "minioadmin")),
             "MINIO_SECRET_KEY": str(self.lock.get("minioSecretKey", "minioadmin")),
             "PAIMON_WAREHOUSE": f"s3://warehouse/{self.run_id}",
             "FLINK_RUNNER_IMAGE": f"datus-e2e/flink-paimon-runner:{self.suite_id}",
         }
+        if "minio" in self.components:
+            variables["MINIO_HOST_ENDPOINT"] = self._forward_service(
+                namespace="datus-e2e-infra", service="minio", remote_port=9000, name="minio"
+            )
+        if "superset-postgres" in self.components:
+            endpoint = self._forward_service(
+                namespace=self.namespace, service="superset", remote_port=8088, name="superset"
+            )
+            self._register_superset_database(endpoint)
+            variables.update(
+                {
+                    "SUPERSET_HOST_ENDPOINT": endpoint,
+                    "SUPERSET_USERNAME": str(self.lock.get("supersetUsername", "admin")),
+                    "SUPERSET_PASSWORD": str(self.lock.get("supersetPassword", "admin")),
+                    "POSTGRES_DATABASE": str(self.lock.get("postgresDatabase", "superset_examples")),
+                    "POSTGRES_USERNAME": str(self.lock.get("postgresUsername", "superset")),
+                    "POSTGRES_PASSWORD": str(self.lock.get("postgresPassword", "superset")),
+                }
+            )
+        if "grafana-prometheus" in self.components:
+            variables.update(
+                {
+                    "GRAFANA_HOST_ENDPOINT": self._forward_service(
+                        namespace=self.namespace, service="grafana", remote_port=3000, name="grafana"
+                    ),
+                    "PROMETHEUS_HOST_ENDPOINT": self._forward_service(
+                        namespace=self.namespace, service="prometheus", remote_port=9090, name="prometheus"
+                    ),
+                    "GRAFANA_USERNAME": str(self.lock.get("grafanaUsername", "admin")),
+                    "GRAFANA_PASSWORD": str(self.lock.get("grafanaPassword", "admin")),
+                }
+            )
+            self._wait_prometheus_targets(variables["PROMETHEUS_HOST_ENDPOINT"])
+        return variables
+
+    def _register_superset_database(self, endpoint: str) -> None:
+        from http.cookiejar import CookieJar
+        from urllib.error import HTTPError
+        from urllib.request import HTTPCookieProcessor, Request, build_opener
+
+        opener = build_opener(HTTPCookieProcessor(CookieJar()))
+
+        def request(path: str, *, method: str = "GET", body: Any = None, headers: dict[str, str] | None = None) -> Any:
+            data = json.dumps(body).encode() if body is not None else None
+            request_headers = {"Accept": "application/json", **(headers or {})}
+            if data is not None:
+                request_headers["Content-Type"] = "application/json"
+            try:
+                with opener.open(  # noqa: S310 - fixed loopback endpoint owned by this fixture
+                    Request(endpoint + path, data=data, headers=request_headers, method=method), timeout=30
+                ) as response:
+                    return json.load(response)
+            except HTTPError as exc:
+                detail = exc.read().decode(errors="replace")[:2000]
+                raise RuntimeError(f"Superset fixture HTTP {exc.code} for {method} {path}: {detail}") from exc
+
+        login = request(
+            "/api/v1/security/login",
+            method="POST",
+            body={
+                "username": str(self.lock.get("supersetUsername", "admin")),
+                "password": str(self.lock.get("supersetPassword", "admin")),
+                "provider": "db",
+                "refresh": True,
+            },
+        )
+        token = login.get("access_token")
+        if not token:
+            raise RuntimeError("Superset fixture login did not return an access token")
+        auth = {"Authorization": f"Bearer {token}"}
+        csrf = request("/api/v1/security/csrf_token/", headers=auth).get("result")
+        request(
+            "/api/v1/database/",
+            method="POST",
+            headers={**auth, "X-CSRFToken": str(csrf or ""), "Referer": endpoint + "/"},
+            body={
+                "database_name": "E2E PostgreSQL",
+                "sqlalchemy_uri": (
+                    f"postgresql+psycopg2://{self.lock.get('postgresUsername', 'superset')}:"
+                    f"{self.lock.get('postgresPassword', 'superset')}@postgres:5432/"
+                    f"{self.lock.get('postgresDatabase', 'superset_examples')}"
+                ),
+                "expose_in_sqllab": True,
+                "allow_ctas": True,
+                "allow_cvas": True,
+            },
+        )
 
     def _up_flink_service_account(self) -> None:
         self.kubectl(
@@ -194,36 +291,227 @@ class EnvironmentContext:
             timeout=1800,
         )
 
-    def _forward_minio(self) -> str:
+    def _render_environment_manifest(self, source_name: str, replacements: dict[str, str]) -> Path:
+        source = self.repo_root / "tests/e2e/environments" / source_name
+        raw = source.read_text(encoding="utf-8")
+        for key, value in replacements.items():
+            raw = raw.replace("{{" + key + "}}", value)
+        unresolved = sorted(set(re.findall(r"{{([A-Z0-9_]+)}}", raw)))
+        if unresolved:
+            raise ValueError(f"environment manifest {source_name} has unresolved values: {unresolved}")
+        rendered = self.run_dir / f"rendered-{source_name}"
+        rendered.write_text(raw, encoding="utf-8")
+        return rendered
+
+    def _up_superset_postgres(self) -> None:
+        image = f"datus-e2e/superset:{self.suite_id}"
+        source = self.repo_root / "tests/e2e/environments/superset"
+        self.command(
+            [
+                "minikube", "-p", self.profile, "image", "build", "-t", image,
+                "--build-opt", f"build-arg=SUPERSET_IMAGE={self.lock['supersetImage']}",
+                "--build-opt", f"build-arg=PSYCOPG2_VERSION={self.lock['psycopg2Version']}",
+                str(source),
+            ],
+            "superset-image",
+            timeout=1800,
+        )
+        manifest = self._render_environment_manifest(
+            "superset-postgres.yaml",
+            {
+                "NAMESPACE": self.namespace,
+                "POSTGRES_IMAGE": str(self.lock["postgresImage"]),
+                "SUPERSET_IMAGE": image,
+                "POSTGRES_USERNAME": str(self.lock.get("postgresUsername", "superset")),
+                "POSTGRES_PASSWORD": str(self.lock.get("postgresPassword", "superset")),
+                "POSTGRES_DATABASE": str(self.lock.get("postgresDatabase", "superset_examples")),
+                "SUPERSET_USERNAME": str(self.lock.get("supersetUsername", "admin")),
+                "SUPERSET_PASSWORD": str(self.lock.get("supersetPassword", "admin")),
+                "SUPERSET_SECRET_KEY": str(self.lock.get("supersetSecretKey", "datus-e2e-only-secret-key")),
+            },
+        )
+        self.kubectl(["apply", "-f", str(manifest)], "superset-postgres-apply")
+        self.kubectl(
+            ["-n", self.namespace, "rollout", "status", "deployment/postgres", "--timeout=300s"],
+            "postgres-ready",
+            timeout=360,
+        )
+        self._wait_job("postgres-seed", timeout=300)
+        self._wait_job("superset-init", timeout=600)
+        self.kubectl(
+            ["-n", self.namespace, "scale", "deployment/superset", "--replicas=1"],
+            "superset-scale",
+        )
+        self.kubectl(
+            ["-n", self.namespace, "rollout", "status", "deployment/superset", "--timeout=600s"],
+            "superset-ready",
+            timeout=660,
+        )
+
+    def _wait_job(self, job: str, *, timeout: int) -> None:
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            result = self.kubectl(
+                ["-n", self.namespace, "get", "job", job, "-o", "json"],
+                f"{job}-status",
+                timeout=30,
+                check=False,
+            )
+            if result.returncode == 0:
+                try:
+                    status = (json.loads(result.stdout) or {}).get("status") or {}
+                except json.JSONDecodeError:
+                    status = {}
+                if int(status.get("succeeded") or 0) >= 1:
+                    return
+                terminal_failure = any(
+                    item.get("type") == "Failed" and item.get("status") == "True"
+                    for item in status.get("conditions") or []
+                    if isinstance(item, dict)
+                )
+                if terminal_failure:
+                    pods = self.kubectl(
+                        ["-n", self.namespace, "get", "pods", "-l", f"job-name={job}", "-o", "json"],
+                        f"{job}-failure-pods",
+                        timeout=30,
+                        check=False,
+                    )
+                    pod_items: list[dict[str, Any]] = []
+                    try:
+                        pod_items = (json.loads(pods.stdout) or {}).get("items") or []
+                    except json.JSONDecodeError:
+                        pass
+                    evidence: list[str] = []
+                    for index, pod in enumerate(pod_items):
+                        name = str((pod.get("metadata") or {}).get("name") or "")
+                        statuses = (pod.get("status") or {}).get("containerStatuses") or []
+                        evidence.append(json.dumps({"pod": name, "containerStatuses": statuses}, default=str))
+                        if name:
+                            logs = self.kubectl(
+                                ["-n", self.namespace, "logs", name, "--all-containers=true", "--tail=-1"],
+                                f"{job}-failure-logs-{index}",
+                                timeout=30,
+                                check=False,
+                            )
+                            evidence.append((logs.stdout or logs.stderr).strip())
+                    detail = "\n".join(evidence).strip()[-8000:] or "no failed Pod evidence was available"
+                    raise RuntimeError(f"job/{job} failed: {detail}")
+            time.sleep(3)
+        raise RuntimeError(f"job/{job} did not complete within {timeout}s")
+
+    def _up_grafana_prometheus(self) -> None:
+        manifest = self._render_environment_manifest(
+            "grafana-prometheus.yaml",
+            {
+                "NAMESPACE": self.namespace,
+                "GRAFANA_IMAGE": str(self.lock["grafanaImage"]),
+                "PROMETHEUS_IMAGE": str(self.lock["prometheusImage"]),
+                "NODE_EXPORTER_IMAGE": str(self.lock["nodeExporterImage"]),
+                "GRAFANA_USERNAME": str(self.lock.get("grafanaUsername", "admin")),
+                "GRAFANA_PASSWORD": str(self.lock.get("grafanaPassword", "admin")),
+            },
+        )
+        self.kubectl(["apply", "-f", str(manifest)], "grafana-prometheus-apply")
+        ready_timeout = int(self.lock.get("deploymentReadyTimeoutSeconds", 300))
+        for deployment in ("prometheus", "node-exporter", "grafana"):
+            self._wait_deployment(deployment, timeout=ready_timeout)
+
+    def _wait_deployment(self, deployment: str, *, timeout: int) -> None:
+        result = self.kubectl(
+            [
+                "-n", self.namespace, "rollout", "status", f"deployment/{deployment}",
+                f"--timeout={timeout}s",
+            ],
+            f"{deployment}-ready",
+            timeout=timeout + 60,
+            check=False,
+        )
+        if result.returncode == 0:
+            return
+        pods = self.kubectl(
+            ["-n", self.namespace, "get", "pods", "-l", f"app={deployment}", "-o", "wide"],
+            f"{deployment}-failure-pods",
+            timeout=30,
+            check=False,
+        )
+        describe = self.kubectl(
+            ["-n", self.namespace, "describe", f"deployment/{deployment}"],
+            f"{deployment}-failure-describe",
+            timeout=30,
+            check=False,
+        )
+        events = self.kubectl(
+            ["-n", self.namespace, "get", "events", "--sort-by=.metadata.creationTimestamp"],
+            f"{deployment}-failure-events",
+            timeout=30,
+            check=False,
+        )
+        detail = "\n".join(
+            part.strip()
+            for part in (result.stderr or result.stdout, pods.stdout, describe.stdout, events.stdout)
+            if part.strip()
+        )[-12000:]
+        raise RuntimeError(f"deployment/{deployment} did not become ready:\n{detail}")
+
+    def _wait_prometheus_targets(self, endpoint: str) -> None:
+        from urllib.parse import urlencode
+        from urllib.request import urlopen
+
+        deadline = time.monotonic() + int(self.lock.get("prometheusReadyTimeoutSeconds", 180))
+        ready_since: float | None = None
+        while time.monotonic() < deadline:
+            try:
+                url = endpoint + "/api/v1/query?" + urlencode({"query": "up"})
+                with urlopen(url, timeout=5) as response:  # noqa: S310 - fixed loopback endpoint
+                    payload = json.load(response)
+                values = {
+                    item.get("metric", {}).get("job"): item.get("value", [None, None])[1]
+                    for item in payload.get("data", {}).get("result", [])
+                }
+                if values.get("prometheus") == "1" and values.get("node-exporter") == "1":
+                    if ready_since is None:
+                        ready_since = time.monotonic()
+                    if time.monotonic() - ready_since >= int(self.lock.get("prometheusPreheatSeconds", 70)):
+                        return
+                else:
+                    ready_since = None
+            except (OSError, ValueError, json.JSONDecodeError):
+                ready_since = None
+            time.sleep(2)
+        raise RuntimeError("Prometheus targets did not remain ready for the required preheat period")
+
+    def _forward_service(self, *, namespace: str, service: str, remote_port: int, name: str) -> str:
         with socket.socket() as probe:
             probe.bind(("127.0.0.1", 0))
             port = probe.getsockname()[1]
         self.logs.mkdir(parents=True, exist_ok=True)
-        self.port_forward_stdout = (self.logs / "minio-port-forward.stdout.log").open("w", encoding="utf-8")
-        self.port_forward_stderr = (self.logs / "minio-port-forward.stderr.log").open("w", encoding="utf-8")
+        stdout = (self.logs / f"{name}-port-forward.stdout.log").open("w", encoding="utf-8")
+        stderr = (self.logs / f"{name}-port-forward.stderr.log").open("w", encoding="utf-8")
         env = os.environ.copy()
         env.update(self.env)
-        self.port_forward = subprocess.Popen(
+        process = subprocess.Popen(
             [
-                "kubectl", "--kubeconfig", str(self.kubeconfig), "-n", "datus-e2e-infra",
-                "port-forward", "service/minio", f"{port}:9000", "--address=127.0.0.1",
+                "kubectl", "--kubeconfig", str(self.kubeconfig), "-n", namespace,
+                "port-forward", f"service/{service}", f"{port}:{remote_port}", "--address=127.0.0.1",
             ],
             cwd=self.repo_root,
             env=env,
             text=True,
-            stdout=self.port_forward_stdout,
-            stderr=self.port_forward_stderr,
+            stdout=stdout,
+            stderr=stderr,
         )
+        self.port_forwards.append(process)
+        self.port_forward_handles.extend((stdout, stderr))
         deadline = time.monotonic() + 20
         while time.monotonic() < deadline:
-            if self.port_forward.poll() is not None:
-                raise RuntimeError("MinIO port-forward exited before becoming ready")
+            if process.poll() is not None:
+                raise RuntimeError(f"{name} port-forward exited before becoming ready")
             with socket.socket() as client:
                 client.settimeout(0.2)
                 if client.connect_ex(("127.0.0.1", port)) == 0:
                     return f"http://127.0.0.1:{port}"
             time.sleep(0.2)
-        raise RuntimeError("MinIO port-forward did not become ready")
+        raise RuntimeError(f"{name} port-forward did not become ready")
 
     def _cleanup_bucket(self) -> None:
         job_name = f"cleanup-{self.run_id}"[:63]
@@ -275,14 +563,15 @@ class EnvironmentContext:
         )
 
     def _stop_port_forward(self) -> None:
-        if self.port_forward is not None and self.port_forward.poll() is None:
-            self.port_forward.terminate()
-            try:
-                self.port_forward.wait(timeout=5)
-            except subprocess.TimeoutExpired:
-                self.port_forward.kill()
-                self.port_forward.wait(timeout=5)
-        for handle in (self.port_forward_stdout, self.port_forward_stderr):
+        for process in reversed(self.port_forwards):
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+        for handle in self.port_forward_handles:
             if handle is not None and not handle.closed:
                 handle.close()
 
@@ -320,6 +609,8 @@ def load_environment_lock(workflow_dir: Path, environment: dict[str, Any]) -> di
             "flinkOperatorRepository",
         },
         "flink-paimon-runner": {"flink", "hadoop", "paimon"},
+        "superset-postgres": {"supersetImage", "postgresImage", "psycopg2Version"},
+        "grafana-prometheus": {"grafanaImage", "prometheusImage", "nodeExporterImage"},
     }
     for component in environment.get("components") or []:
         missing = required_by_component.get(component, set()) - set(value)

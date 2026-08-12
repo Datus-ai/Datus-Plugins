@@ -1,0 +1,100 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: grafana-prometheus-dashboard-query-export
+  description: Build a deterministic Grafana Prometheus dashboard and export all PromQL as project context.
+  tags: [smoke, grafana, prometheus, dashboard, query-export]
+spec:
+  target:
+    distribution: datus-grafana-plugin
+    path: datus-grafana-plugin
+    name: grafana
+    profile:
+      api_base_url: "{{GRAFANA_HOST_ENDPOINT}}"
+      auth_mode: basic
+      username: "{{GRAFANA_USERNAME}}"
+      password: "{{GRAFANA_PASSWORD}}"
+      api_mode: new
+      namespace: default
+      verify_ssl: "false"
+      timeout: "60"
+      default_datasource_uid: prometheus-e2e
+  supportPlugins: []
+  agent:
+    prompt: prompt.md
+    timeoutSeconds: 1200
+  environment:
+    components: [minikube, grafana-prometheus]
+    lock: environment.lock.yml
+  workspace:
+    seed: seed
+    outputs:
+      - results/grafana-build.json
+      - reference_sql/grafana/prometheus-e2e-overview/manifest.json
+      - reference_sql/grafana/prometheus-e2e-overview/*.promql
+      - reference_sql/grafana/prometheus-e2e-overview/_source/*.json
+  permissions:
+    bashAllow:
+      - "datus grafana status health:*"
+      - "datus grafana datasources health:*"
+      - "datus grafana datasources get:*"
+      - "datus grafana dashboards create:*"
+      - "datus grafana panels create:*"
+      - "datus grafana queries run-panel:*"
+      - "datus grafana context export-dashboard:*"
+  oracles:
+    - type: grafana_dashboard
+      config:
+        uid: prometheus-e2e-overview
+        namespace: default
+        title: Prometheus E2E Overview
+        panels:
+          Targets Up:
+            - 'sum by (job) (up{job=~"$job"})'
+          Max Scrape Duration:
+            - 'max by (job) (scrape_duration_seconds{job=~"$job"})'
+          Samples Appended Rate:
+            - 'rate(prometheus_tsdb_head_samples_appended_total[$__rate_interval])'
+          Resident Memory:
+            - 'process_resident_memory_bytes{job=~"$job"}'
+    - type: prometheus_query
+      config:
+        queries:
+          - 'up{job="prometheus"}'
+          - 'up{job="node-exporter"}'
+          - 'sum by (job) (up{job=~"$job"})'
+          - 'max by (job) (scrape_duration_seconds{job=~"$job"})'
+          - 'rate(prometheus_tsdb_head_samples_appended_total[$__rate_interval])'
+          - 'process_resident_memory_bytes{job=~"$job"}'
+    - type: query_export_manifest
+      config:
+        manifest: reference_sql/grafana/prometheus-e2e-overview/manifest.json
+        platform: grafana
+        count: 4
+        language: promql
+        suffix: .promql
+        forbidSuffix: .sql
+        requiredTextAny: ['$job', '$__rate_interval']
+    - type: files
+      config:
+        patterns: [results/grafana-build.json]
+  efficiency:
+    maxToolCalls: 25
+    maxLlmTurns: 10
+    maxTokens: 70000
+    maxUnexpectedFailures: 0
+    forbiddenCommands:
+      - "(^|\\s)(curl|wget|kubectl|docker)(\\s|$)"
+      - "^python(3)?\\s"
+      - "^datus grafana api call"
+      - "^datus grafana .*delete"
+    expectedCommands:
+      - "^datus grafana status health"
+      - "^datus grafana datasources health"
+      - "^datus grafana dashboards create"
+      - "^datus grafana panels create"
+      - "^datus grafana queries run-panel"
+      - "^datus grafana context export-dashboard"
+  cleanup:
+    deleteNamespace: true
+    deleteBucketPrefix: false

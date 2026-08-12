@@ -1,0 +1,9 @@
+{
+  "slice_name": "Population 2014",
+  "viz_type": "big_number_total",
+  "datasource_id": 1,
+  "datasource_type": "table",
+  "dashboards": [1],
+  "params": "{\"datasource\":\"1__table\",\"viz_type\":\"big_number_total\",\"metric\":{\"aggregate\":\"SUM\",\"column\":{\"column_name\":\"population_millions\"},\"expressionType\":\"SIMPLE\",\"label\":\"SUM(population_millions)\"},\"adhoc_filters\":[{\"clause\":\"WHERE\",\"comparator\":2014,\"expressionType\":\"SIMPLE\",\"operator\":\"==\",\"sqlExpression\":null,\"subject\":\"year\"}],\"time_range\":\"No filter\"}",
+  "query_context": "{\"datasource\":{\"id\":1,\"type\":\"table\"},\"force\":false,\"queries\":[{\"filters\":[{\"col\":\"year\",\"op\":\"==\",\"val\":2014}],\"extras\":{\"having\":\"\",\"where\":\"\"},\"applied_time_extras\":{},\"columns\":[],\"metrics\":[{\"aggregate\":\"SUM\",\"column\":{\"column_name\":\"population_millions\"},\"expressionType\":\"SIMPLE\",\"label\":\"SUM(population_millions)\"}],\"orderby\":[],\"annotation_layers\":[],\"row_limit\":10000,\"series_limit\":0,\"order_desc\":true,\"url_params\":{},\"custom_params\":{},\"custom_form_data\":{}}],\"form_data\":{\"viz_type\":\"big_number_total\",\"datasource\":\"1__table\"},\"result_format\":\"json\",\"result_type\":\"full\"}"
+}

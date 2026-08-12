@@ -1,0 +1,11 @@
+kubernetes: v1.34.0
+minikubeMemory: 4096
+minikubeCpus: 4
+grafanaImage: grafana/grafana:12.1.0@sha256:6ac590e7cabc2fbe8d7b8fc1ce9c9f0582177b334e0df9c927ebd9670469440f
+prometheusImage: prom/prometheus:v3.5.0@sha256:63805ebb8d2b3920190daf1cb14a60871b16fd38bed42b857a3182bc621f4996
+nodeExporterImage: prom/node-exporter:v1.9.1@sha256:d00a542e409ee618a4edc67da14dd48c5da66726bbd5537ab2af9c1dfc442c8a
+grafanaUsername: admin
+grafanaPassword: admin
+prometheusPreheatSeconds: 70
+prometheusReadyTimeoutSeconds: 240
+deploymentReadyTimeoutSeconds: 600

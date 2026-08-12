@@ -1,0 +1,9 @@
+{
+  "slice_name": "Population Trend",
+  "viz_type": "echarts_timeseries_line",
+  "datasource_id": 1,
+  "datasource_type": "table",
+  "dashboards": [1],
+  "params": "{\"datasource\":\"1__table\",\"viz_type\":\"echarts_timeseries_line\",\"x_axis\":\"year\",\"metrics\":[{\"aggregate\":\"SUM\",\"column\":{\"column_name\":\"population_millions\"},\"expressionType\":\"SIMPLE\",\"label\":\"SUM(population_millions)\"}],\"adhoc_filters\":[],\"time_range\":\"No filter\",\"order_desc\":false}",
+  "query_context": "{\"datasource\":{\"id\":1,\"type\":\"table\"},\"force\":false,\"queries\":[{\"filters\":[],\"extras\":{\"having\":\"\",\"where\":\"\"},\"applied_time_extras\":{},\"columns\":[\"year\"],\"metrics\":[{\"aggregate\":\"SUM\",\"column\":{\"column_name\":\"population_millions\"},\"expressionType\":\"SIMPLE\",\"label\":\"SUM(population_millions)\"}],\"orderby\":[[\"year\",true]],\"annotation_layers\":[],\"row_limit\":10000,\"series_limit\":0,\"order_desc\":false,\"url_params\":{},\"custom_params\":{},\"custom_form_data\":{}}],\"form_data\":{\"viz_type\":\"echarts_timeseries_line\",\"datasource\":\"1__table\"},\"result_format\":\"json\",\"result_type\":\"full\"}"
+}

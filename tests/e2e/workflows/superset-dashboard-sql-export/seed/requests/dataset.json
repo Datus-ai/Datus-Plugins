@@ -1,0 +1,5 @@
+{
+  "database": 1,
+  "schema": "public",
+  "table_name": "world_population_e2e"
+}
