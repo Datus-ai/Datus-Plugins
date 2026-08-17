@@ -356,7 +356,9 @@ def _cmd_explain(ctx: Context, ns: argparse.Namespace) -> int:
                 for name, field in sorted(values.items()):
                     path = f"{prefix}.{name}".strip(".")
                     kind = field.get("type") or "<unknown>"
-                    description = str(field.get("description") or "").splitlines()[0]
+                    description = next(
+                        iter(str(field.get("description") or "").splitlines()), ""
+                    )
                     print(f"  {path}\t<{kind}>\t{description}")
                     children = field.get("properties") or {}
                     if children:
@@ -366,7 +368,9 @@ def _cmd_explain(ctx: Context, ns: argparse.Namespace) -> int:
         else:
             for name, field in sorted(properties.items()):
                 kind = field.get("type") or "<unknown>"
-                description = str(field.get("description") or "").splitlines()[0]
+                description = next(
+                    iter(str(field.get("description") or "").splitlines()), ""
+                )
                 print(f"  {name}\t<{kind}>\t{description}")
     return 0
 
