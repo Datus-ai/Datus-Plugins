@@ -13,4 +13,4 @@ description: Operate Grafana dashboards, panels, datasources, queries, annotatio
 
 Grafana 12+ dashboard operations prefer the Kubernetes-style `/apis` API. In `api_mode: auto`, only a 404/405 capability failure falls back to legacy `/api`; authorization failures never fall back. Writes, query execution, exports, and raw API calls require confirmation.
 
-Use `grafana-dashboard-authoring` for layout work and `grafana-query-export` for project context.
+Use `grafana-dashboard-authoring` for layout work and `grafana-query-export` for project context. Resolve datasource identity per panel target because one Grafana instance and one dashboard can span multiple datasources.

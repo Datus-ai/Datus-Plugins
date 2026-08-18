@@ -4,7 +4,7 @@ Use `datus superset` for dashboard, chart, dataset, SQL Lab, governance, and mig
 {% if profiles %}
 Configured environments:
 {% for name, cfg in profiles.items() %}
-- {{ name }}: {{ cfg.get("api_base_url", "?") }}; auth={{ cfg.get("auth_mode", "?") }}{% if cfg.get("serving_datasource") %}; datasource={{ cfg.get("serving_datasource") }}{% endif %}
+- {{ name }}: {{ cfg.get("api_base_url", "?") }}; auth={{ cfg.get("auth_mode", "?") }}
 {% endfor %}
 {% else %}
 Installed but not configured.

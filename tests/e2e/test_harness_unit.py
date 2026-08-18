@@ -245,14 +245,27 @@ def test_query_export_manifest_checks_count_language_hash_and_sources(tmp_path: 
     (root / "1-up-a.promql").write_text(query, encoding="utf-8")
     (source / "dashboard.json").write_text('{"title":"safe"}\n', encoding="utf-8")
     manifest = {
+        "contract": "dashboard-sql-export/v1",
+        "plugin": "grafana",
         "platform": "grafana",
+        "selection": {"mode": "selective"},
         "summary": {"total": 1, "succeeded": 1, "failed": 0},
         "queries": [
             {
+                "id": "panel-1-query-a",
+                "candidate_id": "panel-1",
+                "name": "Up",
                 "language": "promql",
                 "status": "ok",
                 "file": "1-up-a.promql",
+                "sql_file": "1-up-a.promql",
                 "sha256": sha256(root / "1-up-a.promql"),
+                "checksum": f"sha256:{sha256(root / '1-up-a.promql')}",
+                "source_identity": {
+                    "provider": "grafana",
+                    "status": "resolved",
+                    "datasource": {"uid": "prom", "type": "prometheus"},
+                },
             }
         ],
     }
@@ -260,6 +273,10 @@ def test_query_export_manifest_checks_count_language_hash_and_sources(tmp_path: 
     config = {
         "manifest": "reference_sql/grafana/prometheus-e2e-overview/manifest.json",
         "platform": "grafana",
+        "contract": "dashboard-sql-export/v1",
+        "plugin": "grafana",
+        "sourceIdentityStatus": "resolved",
+        "selectionMode": "selective",
         "count": 1,
         "language": "promql",
         "suffix": ".promql",

@@ -31,8 +31,6 @@ class Settings:
     provider: str
     verify_ssl: bool
     timeout: float
-    serving_datasource: str | None
-    serving_database_name: str | None
     profile_name: str | None
 
     @classmethod
@@ -67,8 +65,6 @@ class Settings:
             provider=str(profile.get("provider") or "db"),
             verify_ssl=_bool(profile.get("verify_ssl"), True),
             timeout=timeout,
-            serving_datasource=_text(profile.get("serving_datasource")),
-            serving_database_name=_text(profile.get("serving_database_name")),
             profile_name=_text(profile.get("name")),
         )
 

@@ -43,3 +43,21 @@ def test_flink2paimon_datagen_uses_flink2_builtin_sql_driver():
     assert any("standalone" in expression for expression in required)
     assert any("jarURI" in expression for expression in forbidden)
     assert any("pipeline" in expression for expression in forbidden)
+
+
+def test_superset_query_export_exercises_generic_selective_handoff_contract():
+    workflow_dir = Path(__file__).parent / "workflows/superset-dashboard-sql-export"
+    prompt = (workflow_dir / "prompt.md").read_text(encoding="utf-8")
+    workflow = yaml.safe_load((workflow_dir / "workflow.yml").read_text(encoding="utf-8"))
+
+    assert prompt.count("--chart-id") == 3
+    assert "context candidates <DISCOVERED_DASHBOARD_ID>" in prompt
+    assert "serving_datasource" not in workflow["spec"]["target"]["profile"]
+    assert "serving_database_name" not in workflow["spec"]["target"]["profile"]
+    export_oracle = next(
+        item for item in workflow["spec"]["oracles"] if item["type"] == "query_export_manifest"
+    )["config"]
+    assert export_oracle["contract"] == "dashboard-sql-export/v1"
+    assert export_oracle["plugin"] == "superset"
+    assert export_oracle["selectionMode"] == "selective"
+    assert export_oracle["sourceIdentityStatus"] == "resolved"

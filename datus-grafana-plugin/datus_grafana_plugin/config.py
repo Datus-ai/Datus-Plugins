@@ -37,8 +37,6 @@ class Settings:
     verify_ssl: bool
     timeout: float
     default_datasource_uid: str | None
-    serving_datasource: str | None
-    serving_database_name: str | None
     profile_name: str | None
 
     @classmethod
@@ -72,7 +70,5 @@ class Settings:
             namespace=str(profile.get("namespace") or "default"),
             verify_ssl=_bool(profile.get("verify_ssl"), True), timeout=timeout,
             default_datasource_uid=_text(profile.get("default_datasource_uid")),
-            serving_datasource=_text(profile.get("serving_datasource")),
-            serving_database_name=_text(profile.get("serving_database_name")),
             profile_name=_text(profile.get("name")),
         )

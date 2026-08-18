@@ -361,6 +361,16 @@ def _query_export_manifest(config: dict[str, Any], *, workspace: Path, **_: Any)
     language = str(config["language"])
     if manifest.get("platform") != platform:
         failures.append(f"platform was {manifest.get('platform')!r}")
+    if config.get("contract") and manifest.get("contract") != config["contract"]:
+        failures.append(f"contract was {manifest.get('contract')!r}")
+    if config.get("plugin") and manifest.get("plugin") != config["plugin"]:
+        failures.append(f"plugin was {manifest.get('plugin')!r}")
+    legacy_serving_keys = {"serving_datasource", "serving_database_name"}.intersection(manifest)
+    if legacy_serving_keys:
+        failures.append(f"manifest retained profile-level serving mapping: {sorted(legacy_serving_keys)}")
+    selection = manifest.get("selection") or {}
+    if config.get("selectionMode") and selection.get("mode") != config["selectionMode"]:
+        failures.append(f"selection mode was {selection.get('mode')!r}")
     summary = manifest.get("summary") or {}
     if summary != {"total": expected_count, "succeeded": expected_count, "failed": 0}:
         failures.append(f"summary was {summary!r}")
@@ -394,6 +404,44 @@ def _query_export_manifest(config: dict[str, Any], *, workspace: Path, **_: Any)
         checksum = hashlib.sha256(content.encode()).hexdigest()
         if entry.get("sha256") != checksum:
             failures.append(f"checksum mismatch for {relative}")
+        if config.get("contract"):
+            if not isinstance(entry.get("id"), str) or not entry["id"]:
+                failures.append(f"query entry omitted stable id: {entry!r}")
+            if not isinstance(entry.get("candidate_id"), str) or not entry["candidate_id"]:
+                failures.append(f"query entry omitted candidate id: {entry!r}")
+            if entry.get("sql_file") != relative:
+                failures.append(f"canonical SQL file mismatch for {relative}")
+            if entry.get("checksum") != f"sha256:{checksum}":
+                failures.append(f"canonical checksum mismatch for {relative}")
+            if not isinstance(entry.get("name"), str) or not entry["name"]:
+                failures.append(f"query entry omitted display name: {entry!r}")
+        expected_source_status = config.get("sourceIdentityStatus")
+        if expected_source_status:
+            source_identity = entry.get("source_identity")
+            if not isinstance(source_identity, dict):
+                failures.append(f"query entry omitted source identity: {entry!r}")
+            elif source_identity.get("status") != expected_source_status:
+                failures.append(
+                    f"source identity status was {source_identity.get('status')!r} for {relative}"
+                )
+            elif source_identity.get("provider") != platform:
+                failures.append(f"source identity provider was {source_identity.get('provider')!r} for {relative}")
+            else:
+                forbidden = {
+                    "authorization", "connection_uri", "password", "secret",
+                    "sqlalchemy_uri", "token", "username",
+                }
+                stack = [source_identity]
+                exposed: set[str] = set()
+                while stack:
+                    node = stack.pop()
+                    if isinstance(node, dict):
+                        exposed.update(str(key).lower() for key in node if str(key).lower() in forbidden)
+                        stack.extend(node.values())
+                    elif isinstance(node, list):
+                        stack.extend(node)
+                if exposed:
+                    failures.append(f"source identity exposed secret fields {sorted(exposed)} for {relative}")
         for expected in required_text:
             if expected not in content:
                 failures.append(f"{relative} omitted {expected!r}")
@@ -415,6 +463,7 @@ def _query_export_manifest(config: dict[str, Any], *, workspace: Path, **_: Any)
         "summary": summary,
         "files": [path.name for path in files],
         "sourceFiles": [path.name for path in source_files],
+        "sourceIdentities": [entry.get("source_identity") for entry in entries if isinstance(entry, dict)],
         "failures": failures,
     }
     return OracleResult("query_export_manifest", not failures, evidence, "; ".join(failures) or None)

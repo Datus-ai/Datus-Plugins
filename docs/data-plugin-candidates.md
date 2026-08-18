@@ -186,12 +186,12 @@ Jupyter / Deepnote 之类 notebook 托管；通用协作工具（Jira / Slack / 
 ## 7. BI / 可视化 / 语义层
 
 > **bi adapter 废弃后**，BI plugin 不再是"补运维面"，而是**唯一的 BI 能力来源**：dashboard/chart/dataset
-> 的增删改查、`get_chart_data`、serving target 解析全部要落在命令面上，并且要能支撑
+> 的增删改查、`get_chart_data`、逐 query source identity 解析全部要落在命令面上，并且要能支撑
 > `gen_dashboard_agentic_node` 那条"自动搭 dashboard"链路。逐条映射见 §13.1。
 
 | 产品 | 插件 | 命令组 | 专项 skill | 轴 | 接入 | 优先级 | 量 |
 |---|---|---|---|---|---|:--:|:--:|
-| **Apache Superset** | `datus-superset-plugin`（**全量承接 adapter**） | `dashboards`(ls/get/create/update/delete) `charts`(ls/get/create/update/delete/add-to-dashboard/data) `datasets`(ls/get/create/delete/sync/refresh) `databases` `serving-target` `sql-lab`(execute/results) `export` `import` `cache-warm` `roles` | `superset-dashboard-authoring`（替代 `dashboard_assembler`）、`superset-dashboard-migration`、`superset-broken-chart-triage` | A B C E F | REST API v1；从 `datus-bi-superset` 搬业务逻辑 | **P0（迁移）** | L |
+| **Apache Superset** | `datus-superset-plugin`（**全量承接 adapter**） | `dashboards`(ls/get/create/update/delete) `charts`(ls/get/create/update/delete/add-to-dashboard/data) `datasets`(ls/get/create/delete/sync/refresh) `databases` `sql-lab`(execute/results) `context export-dashboard`（逐 query source identity） `export` `import` `cache-warm` `roles` | `superset-dashboard-authoring`（替代 `dashboard_assembler`）、`superset-dashboard-migration`、`superset-broken-chart-triage` | A B C E F | REST API v1；从 `datus-bi-superset` 搬业务逻辑 | **P0（迁移）** | L |
 | **Grafana** | `datus-grafana-plugin`（**全量承接 adapter**） | 同上 BI 命令面 + `datasources` `alert-rules` `silences` `annotations` `query`(promql/loki) | `grafana-dashboard-authoring`、`grafana-alert-noise-review` | A B C E | HTTP API；从 `datus-bi-grafana` 搬（含 datasource UID 解析逻辑） | **P0（迁移）** | M |
 | **Metabase** | `datus-metabase-plugin` | `cards` `dashboards` `collections` `databases`(sync/rescan) `query` `permissions` `serialization`(export/import) | `metabase-permission-audit` | A B C E F | REST API | P1 | M |
 | **Tableau** | `datus-tableau-plugin` | `sites` `workbooks` `datasources` `extracts refresh` `jobs` `permissions` `lineage`(Metadata GraphQL) `publish` | `tableau-extract-failure-triage`、`tableau-downstream-impact` | A B C E F | REST API + Metadata API；PAT 认证 | P1 | L |
@@ -329,7 +329,7 @@ AWS 已有 9 个插件 + `datus-aws-common`。GCP / Azure / 阿里云按同样�
 | `create_dataset` | `datus superset datasets create --name --database-id --sql` | ask |
 | `delete_dataset` | `datus superset datasets delete <id>` | ask |
 | `list_bi_databases` | `datus superset databases ls` | allow |
-| `get_bi_serving_target` | `datus superset serving-target` | allow |
+| `get_bi_serving_target` | 删除；由 `context export-dashboard` 为每条 query 输出脱敏 `source_identity` | — |
 
 ### 13.2 Scheduler：`datus/tools/func_tool/scheduler_tools.py` 的 13 个 tool → plugin 命令
 

@@ -8,6 +8,7 @@ import yaml
 from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from datus_superset_plugin.operations import OPERATIONS, READ_METHODS
+from datus_superset_plugin.cli import build_parser
 
 ROOT = Path(__file__).parents[1]
 PKG = ROOT / "datus_superset_plugin"
@@ -74,3 +75,28 @@ def test_command_catalogue_matches_operation_registry():
     catalogue = {item["name"]: item for item in _manifest()["commands"]}
     for group, operations in OPERATIONS.items():
         assert {item["name"] for item in catalogue[group]["subcommands"]} == set(operations)
+
+
+def test_dashboard_export_catalogue_and_parser_support_selective_charts():
+    context = next(item for item in _manifest()["commands"] if item["name"] == "context")
+    assert "context candidates:*" in _manifest()["permissions"]["normal"]["allow"]
+    assert "candidates" in {item["name"] for item in context["subcommands"]}
+    export = next(item for item in context["subcommands"] if item["name"] == "export-dashboard")
+    assert "--chart-id" in {item["name"] for item in export["args"]}
+
+    parsed = build_parser().parse_args(
+        ["context", "export-dashboard", "42", "--chart-id", "11", "--chart-id", "12"]
+    )
+    assert parsed.chart_id == ["11", "12"]
+
+    candidates = build_parser().parse_args(["context", "candidates", "42"])
+    assert candidates.dashboard_id == "42"
+
+
+def test_profile_and_cli_have_no_instance_level_serving_mapping():
+    data = _manifest()
+    properties = data["config_schema"]["properties"]
+    commands = {item["name"] for item in data["commands"]}
+    assert "serving_datasource" not in properties
+    assert "serving_database_name" not in properties
+    assert "serving-target" not in commands

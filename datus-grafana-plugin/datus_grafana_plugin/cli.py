@@ -97,10 +97,6 @@ def build_parser() -> argparse.ArgumentParser:
     _add_output(move_panel)
     move_panel.set_defaults(func=_panel_command)
 
-    serving = groups.add_parser("serving-target", help="show the datasource bound to this BI instance")
-    _add_output(serving)
-    serving.set_defaults(func=_serving_target)
-
     context = groups.add_parser("context", help="export dashboard queries into project context files")
     context_sub = context.add_subparsers(dest="subcommand", required=True)
     export = context_sub.add_parser("export-dashboard")
@@ -280,10 +276,6 @@ def _next_panel_id(dashboard: dict[str, Any]) -> int:
     ids = [panel.get("id") for panel, _ in _walk_panels(dashboard.get("panels") or [])]
     numeric = [value for value in ids if isinstance(value, int)]
     return max(numeric, default=0) + 1
-
-
-def _serving_target(client: GrafanaClient, settings: Settings, ns: argparse.Namespace) -> dict[str, Any]:
-    return {"platform": "grafana", "serving_datasource": settings.serving_datasource, "serving_database_name": settings.serving_database_name}
 
 
 def _export_context(client: GrafanaClient, settings: Settings, ns: argparse.Namespace) -> dict[str, Any]:

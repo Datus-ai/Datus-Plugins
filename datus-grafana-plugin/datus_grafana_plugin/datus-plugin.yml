@@ -63,7 +63,6 @@ permissions:
       - "silences get:*"
       - "panels list:*"
       - "panels get:*"
-      - "serving-target:*"
     ask: &grafana_ask
       - "dashboards create:*"
       - "dashboards update:*"
@@ -160,8 +159,6 @@ config_schema:
     verify_ssl: {type: string, enum: ["true", "false"], default: "true", description: "Verify TLS certificates"}
     timeout: {type: string, default: "30", description: "HTTP timeout in seconds"}
     default_datasource_uid: {type: string, description: "Fallback datasource UID for inherited targets"}
-    serving_datasource: {type: string, description: "Optional Datus datasource name represented by Grafana"}
-    serving_database_name: {type: string, description: "Optional warehouse database name"}
 
 commands:
   - {name: status, description: "Health, version, and active user", subcommands: [{name: health}, {name: version}, {name: whoami}]}
@@ -182,7 +179,6 @@ commands:
   - {name: alert-templates, description: "Alert template CRUD", subcommands: [{name: list}, {name: get}, {name: put}, {name: delete}]}
   - {name: recording-rules, description: "Recording rules, testing, and writer configuration", subcommands: [{name: list}, {name: create}, {name: update}, {name: delete}, {name: test}, {name: writer-get}, {name: writer-set}, {name: writer-delete}]}
   - {name: silences, description: "Grafana Alertmanager silence CRUD", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}]}
-  - {name: serving-target, description: "Show the configured serving datasource"}
   - name: context
     description: "Build project context from all dashboard query languages"
     subcommands:

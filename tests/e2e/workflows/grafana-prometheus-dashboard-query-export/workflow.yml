@@ -72,6 +72,7 @@ spec:
         platform: grafana
         count: 4
         language: promql
+        sourceIdentityStatus: resolved
         suffix: .promql
         forbidSuffix: .sql
         requiredTextAny: ['$job', '$__rate_interval']
