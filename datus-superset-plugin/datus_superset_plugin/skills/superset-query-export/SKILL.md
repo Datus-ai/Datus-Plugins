@@ -18,7 +18,7 @@ datus superset --profile <profile> context candidates <dashboard-id>
 
 Use the dashboard ID as the stable dashboard identity. `context candidates` is read-only and returns normalized candidate IDs (`chart-<id>`), names, descriptions, hidden/exportable state, and a credential-free `source_identity` resolved through the chart's real Dataset and Database connection. Present these normalized fields before the Generation Manifest. Treat `plugin_metadata` as opaque. Selecting one chart exports every compiled query produced by that chart.
 
-Match each returned `source_identity` to Datus datasources using the generic dashboard-to-metrics rules. Do not infer identity from Dataset table/schema, Database display name, SQL text, or username. One dashboard may return candidates backed by several physical databases.
+Match each returned `source_identity` to Datus datasources using the generic dashboard-bootstrap rules. Do not infer identity from Dataset table/schema, Database display name, SQL text, or username. One dashboard may return candidates backed by several physical databases.
 
 ## Export
 
