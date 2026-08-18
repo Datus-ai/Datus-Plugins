@@ -190,18 +190,6 @@ def test_multiple_prefixes_accept_either(run_cli, fake_session, scoped):
         run_cli(["dags", "details", "other_etl"], scoped)
 
 
-def test_deploy_verify_enforces_the_prefix(run_cli, fake_session, scoped, tmp_path):
-    source = tmp_path / "dag.py"
-    source.write_text("# airflow dag\n", encoding="utf-8")
-    target = tmp_path / "dags"
-    with pytest.raises(UsageError):
-        run_cli(
-            ["dags", "deploy", str(source), "--dest", str(target), "--verify", "other_etl"],
-            scoped,
-        )
-    assert not target.exists(), "nothing may be uploaded when --verify is out of scope"
-
-
 def test_unscoped_profile_touches_nothing(run_cli, fake_session, settings, capsys):
     fake_session.add(
         "GET", "/api/v2/dags/anything/details", FakeResponse(json_data={"dag_id": "anything"})

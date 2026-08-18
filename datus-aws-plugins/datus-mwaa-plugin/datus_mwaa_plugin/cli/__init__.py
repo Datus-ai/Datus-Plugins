@@ -13,18 +13,19 @@ PROG = "datus mwaa"
 
 
 def build_parser() -> argparse.ArgumentParser:
-    from . import cli_cmd, environments_cmd, token_cmd
+    from . import cli_cmd, dags_cmd, environments_cmd, token_cmd
 
     parser = argparse.ArgumentParser(
         prog=PROG,
-        description="Inspect Amazon MWAA environments, mint tokens, and run the Airflow CLI over REST.",
+        description="Inspect Amazon MWAA and read its current DAGs through the Airflow REST API.",
         epilog="Examples: `datus mwaa environments list`, "
-        "`datus mwaa cli run 'dags list' --env prod`",
+        "`datus mwaa dags list --env prod`, `datus mwaa dags source my_dag --env prod`",
     )
     sub = parser.add_subparsers(dest="group", required=True, metavar="<command>")
 
     environments_cmd.register(sub)
     token_cmd.register(sub)
+    dags_cmd.register(sub)
     cli_cmd.register(sub)
 
     return parser

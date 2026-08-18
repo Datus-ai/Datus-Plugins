@@ -1,1 +1,1 @@
-"""datus-mwaa-plugin: inspect MWAA environments and run the Airflow CLI over REST."""
+"""datus-mwaa-plugin: inspect MWAA and read its current DAGs through Airflow REST."""

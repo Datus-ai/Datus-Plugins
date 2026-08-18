@@ -1,6 +1,6 @@
 ---
 name: airflow-setup
-description: Configure an environment profile for the `datus airflow` plugin (API endpoint, credentials, optional S3/dags-folder deployment target)
+description: Configure an environment profile for the `datus airflow` plugin (API endpoint, credentials, optional DAG deployment URI)
 requires_mutable_config: true
 ---
 
@@ -32,22 +32,13 @@ agent:
         # optional:
         verify_ssl: true                     # false or a CA bundle path for self-signed TLS
         timeout: 30                          # request timeout in seconds
-        dags_folder: s3://my-bucket/dags/    # default target for `dags deploy`
-                                             # (or a mounted path like /opt/airflow/dags)
+        dags_folder: s3://my-bucket/dags/    # optional deployment URI used by
+                                             # the airflow-dag-export skill
 
         # optional scope guardrails (see "Scoping a profile" below):
         dag_id_prefix: team_a_               # only team_a_* DAGs; comma-separate several
         allow_commands: dags,tasks,version   # only these top-level groups
 
-        s3:                                  # only for s3:// dags_folder, all optional
-          region: us-east-1
-          profile: my-aws-profile            # named AWS profile
-          endpoint_url: http://minio:9000    # for MinIO/custom endpoints
-          access_key_id: ${AWS_ACCESS_KEY_ID}         # secret — env var reference
-          secret_access_key: ${AWS_SECRET_ACCESS_KEY} # secret — env var reference
-          role_arn: arn:aws:iam::123456789012:role/dags-deployer  # assume this IAM role
-          role_session_name: datus-deploy    # optional, default datus-airflow-plugin
-          external_id: team-a                # optional, if the role trust policy requires it
 ```
 
 ## Steps
@@ -60,16 +51,16 @@ agent:
      secret, have the user export an environment variable (e.g.
      `export AIRFLOW_PASSWORD=...`) and write `${VAR}` into the YAML — never a
      literal secret.
-   - Whether they deploy DAGs through this plugin; if yes, the `dags_folder`
-     target (`s3://bucket/prefix/` or a local/mounted path) and any S3
-     specifics (region, named profile, custom endpoint). boto3 ships with the
-     plugin, so S3 deployment works out of the box.
+   - Optional `dags_folder` deployment URI. Configure credentials separately
+     in the matching storage plugin (`s3`, `gcs`, or `adls`); the Airflow
+     plugin never receives or uses object-storage credentials.
 2. Write the profile into the config file named in the `## Plugins` preamble;
    mark the first profile `default: true`.
 3. Verify with a cheap read-only call: `datus airflow version` (checks
    connectivity + auth), then `datus airflow dags list --limit 5`.
-4. If deployment is configured, optionally verify with
-   `datus airflow dags deploy <some-dag>.py --dry-run`.
+4. If deployment is configured, load the `airflow-dag-export` skill and verify
+   that it resolves the URI scheme to the expected storage plugin. Do not
+   upload a file merely to test configuration.
 
 If this environment cannot edit the config file (API / web deployment), tell
 the user to edit `agent.yml` on the server instead.

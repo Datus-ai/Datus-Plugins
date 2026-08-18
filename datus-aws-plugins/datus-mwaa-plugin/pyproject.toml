@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "datus-mwaa-plugin"
 version = "0.2.0"
-description = "Datus plugin: inspect Amazon MWAA environments, mint web-login/CLI tokens, and run the Airflow CLI over REST from `datus mwaa`"
+description = "Datus plugin: inspect Amazon MWAA and read current DAG metadata/source through Airflow REST"
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"

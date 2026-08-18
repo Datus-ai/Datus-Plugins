@@ -929,7 +929,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-flink-plugin"
-version = "0.1.0"
+version = "0.1.1"
 source = { editable = "datus-flink-plugin" }
 
 [package.optional-dependencies]
@@ -1167,7 +1167,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-s3-plugin"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "datus-aws-plugins/datus-s3-plugin" }
 dependencies = [
     { name = "datus-aws-common" },

@@ -18,7 +18,7 @@
 {% if profiles %}
 ## MWAA
 Inspect Amazon MWAA (Managed Workflows for Apache Airflow) environments and reach their Airflow through `datus mwaa <group> <subcommand>` (`--profile <env>` before the group).
-Groups: `environments` (list, get), `token` (web-login, cli — mint short-lived tokens), `cli run` (run an Airflow CLI command over REST). For fine-grained, permission-classified DAG operations prefer the dedicated `datus airflow` plugin pointed at this environment; `cli run` is an opaque passthrough and always confirmed. Environment create/update/delete is out of scope. Add `-o json` for machine-readable output.
+Groups: `environments` (list, get), `dags` (list current active DAGs, source), `token` (web-login, cli — mint short-lived tokens), `cli run` (run an Airflow CLI command over REST). `dags list/source` use a short-lived MWAA web session and the Airflow `/api/v1`; use the `mwaa-dag-export` skill for confirmed source export or upload. `cli run` is an opaque passthrough and always confirmed. Environment create/update/delete is out of scope. Add `-o json` for machine-readable output.
 Environments ({{ profiles | length }}):
 {% for name, cfg in profiles.items() -%}
 - {{ name }}: {{ aws_summary(cfg, ["environment"]) }}

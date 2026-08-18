@@ -28,6 +28,38 @@ def test_dags_list_table_and_filters(run_cli, fake_session, capsys):
     params = fake_session.calls[0]["params"]
     assert params["dag_id_pattern"] == "etl%"
     assert params["paused"] == "true"
+    assert params["exclude_stale"] == "true"
+
+
+def test_dags_list_v1_explicitly_requests_only_active(run_cli, fake_session, settings, capsys):
+    settings.api_version = "v1"
+    fake_session.add(
+        "GET",
+        "/api/v1/dags",
+        FakeResponse(json_data=paged("dags", [{"dag_id": "etl", "is_active": True}])),
+    )
+    assert run_cli(["dags", "list", "-o", "json"], settings) == 0
+    assert fake_session.calls[0]["params"]["only_active"] == "true"
+
+
+def test_dags_source_v2_reads_python_from_api(run_cli, fake_session, capsys):
+    fake_session.add(
+        "GET", "/api/v2/dagSources/etl", FakeResponse(text="from airflow import DAG")
+    )
+    assert run_cli(["dags", "source", "etl"]) == 0
+    assert capsys.readouterr().out == "from airflow import DAG\n"
+
+
+def test_dags_source_v1_resolves_file_token(run_cli, fake_session, settings, capsys):
+    settings.api_version = "v1"
+    fake_session.add(
+        "GET", "/api/v1/dags/etl", FakeResponse(json_data={"dag_id": "etl", "file_token": "tok/1"})
+    )
+    fake_session.add(
+        "GET", "/api/v1/dagSources/tok%2F1", FakeResponse(text="# current source")
+    )
+    assert run_cli(["dags", "source", "etl"], settings) == 0
+    assert capsys.readouterr().out == "# current source\n"
 
 
 def test_dags_trigger_sends_nullable_logical_date_and_conf(run_cli, fake_session, capsys):

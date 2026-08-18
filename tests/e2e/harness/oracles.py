@@ -469,6 +469,98 @@ def _query_export_manifest(config: dict[str, Any], *, workspace: Path, **_: Any)
     return OracleResult("query_export_manifest", not failures, evidence, "; ".join(failures) or None)
 
 
+def _dag_export_manifest(config: dict[str, Any], *, workspace: Path, **_: Any) -> OracleResult:
+    """Validate an API-derived DAG export without invoking the tested plugin."""
+    manifest_path = workspace / str(config["manifest"])
+    if not manifest_path.is_file() or manifest_path.is_symlink():
+        return OracleResult("dag_export_manifest", False, {}, f"manifest is missing: {manifest_path}")
+    try:
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as exc:
+        return OracleResult("dag_export_manifest", False, {}, f"invalid manifest: {exc}")
+
+    failures: list[str] = []
+    if manifest.get("contract") != "airflow-dag-export/v1":
+        failures.append(f"contract was {manifest.get('contract')!r}")
+    if config.get("plugin") and manifest.get("plugin") != config["plugin"]:
+        failures.append(f"plugin was {manifest.get('plugin')!r}")
+    selection = manifest.get("selection") or {}
+    if config.get("selectionMode") and selection.get("mode") != config["selectionMode"]:
+        failures.append(f"selection mode was {selection.get('mode')!r}")
+
+    dags = manifest.get("dags") or []
+    files = manifest.get("files") or []
+    dag_ids = [item.get("dag_id") for item in dags if isinstance(item, dict)]
+    expected_dags = sorted(str(item) for item in config.get("dagIds") or [])
+    if expected_dags and sorted(dag_ids) != expected_dags:
+        failures.append(f"DAG ids were {dag_ids!r}")
+    forbidden = set(str(item) for item in config.get("forbiddenDagIds") or [])
+    present_forbidden = sorted(forbidden.intersection(str(item) for item in dag_ids))
+    if present_forbidden:
+        failures.append(f"forbidden DAG ids were exported: {present_forbidden}")
+    inactive = [item.get("dag_id") for item in dags if isinstance(item, dict) and item.get("is_active") is not True]
+    if inactive:
+        failures.append(f"DAG entries were not active: {inactive}")
+
+    root = manifest_path.parent
+    observed_files: list[dict[str, Any]] = []
+    declared_paths: set[str] = set()
+    covered_dags: set[str] = set()
+    for item in files:
+        if not isinstance(item, dict):
+            failures.append(f"invalid file entry: {item!r}")
+            continue
+        relative = str(item.get("path") or "")
+        candidate = Path(relative)
+        if not relative or candidate.is_absolute() or ".." in candidate.parts or candidate.suffix != ".py":
+            failures.append(f"unsafe DAG source path: {relative!r}")
+            continue
+        if relative in declared_paths:
+            failures.append(f"duplicate DAG source path: {relative}")
+        declared_paths.add(relative)
+        path = root / candidate
+        if not path.is_file() or path.is_symlink():
+            failures.append(f"DAG source is missing: {relative}")
+            continue
+        checksum = "sha256:" + hashlib.sha256(path.read_bytes()).hexdigest()
+        if item.get("checksum") != checksum:
+            failures.append(f"checksum mismatch for {relative}")
+        file_dags = [str(dag_id) for dag_id in item.get("dag_ids") or []]
+        covered_dags.update(file_dags)
+        observed_files.append({"path": relative, "dagIds": file_dags, "checksum": checksum})
+
+    expected_file_count = config.get("fileCount")
+    if expected_file_count is not None and len(files) != int(expected_file_count):
+        failures.append(f"manifest contained {len(files)} files")
+    if set(str(item) for item in dag_ids) != covered_dags:
+        failures.append(
+            f"file/DAG mapping covered {sorted(covered_dags)!r}, expected {sorted(str(item) for item in dag_ids)!r}"
+        )
+    for dag in dags:
+        if isinstance(dag, dict) and dag.get("file") not in declared_paths:
+            failures.append(f"DAG {dag.get('dag_id')!r} references unknown file {dag.get('file')!r}")
+
+    summary = manifest.get("summary") or {}
+    expected_summary = {
+        "total_dags": len(dags),
+        "total_files": len(files),
+        "succeeded": len(files),
+        "failed": 0,
+    }
+    if summary != expected_summary:
+        failures.append(f"summary was {summary!r}")
+
+    evidence = {
+        "manifest": manifest_path.relative_to(workspace).as_posix(),
+        "dagIds": dag_ids,
+        "files": observed_files,
+        "selection": selection,
+        "summary": summary,
+        "failures": failures,
+    }
+    return OracleResult("dag_export_manifest", not failures, evidence, "; ".join(failures) or None)
+
+
 def _kubernetes_resource(config: dict[str, Any], *, environment: EnvironmentContext, **_: Any) -> OracleResult:
     namespace = config.get("namespace", environment.namespace)
     resource = str(config["resource"])
@@ -623,6 +715,7 @@ REGISTRY: dict[str, Callable[..., OracleResult]] = {
     "grafana_dashboard": _grafana_dashboard,
     "prometheus_query": _prometheus_query,
     "query_export_manifest": _query_export_manifest,
+    "dag_export_manifest": _dag_export_manifest,
 }
 
 

@@ -12,7 +12,12 @@ from tests.e2e.harness.agent import _write_configs, prepare_agent_source, resolv
 from tests.e2e.harness.artifacts import capture_generated, export_session, redact, sha256, snapshot_text
 from tests.e2e.harness.process import check_efficiency, diagnose, load_payloads
 from tests.e2e.harness.environment import EnvironmentContext, load_environment_lock
-from tests.e2e.harness.oracles import _files, _query_export_manifest, _superset_chart_datasource_id
+from tests.e2e.harness.oracles import (
+    _dag_export_manifest,
+    _files,
+    _query_export_manifest,
+    _superset_chart_datasource_id,
+)
 from tests.e2e.harness.schema import ContractError, RunConfig, Workflow
 
 
@@ -290,6 +295,49 @@ def test_query_export_manifest_checks_count_language_hash_and_sources(tmp_path: 
     result = _query_export_manifest(config, workspace=tmp_path)
     assert not result.passed
     assert "secret fields" in (result.error or "")
+
+
+def test_dag_export_manifest_checks_active_dags_files_and_checksums(tmp_path: Path):
+    root = tmp_path / "dag-export"
+    source = root / "team/dags.py"
+    source.parent.mkdir(parents=True)
+    source.write_text("from airflow import DAG\n", encoding="utf-8")
+    digest = sha256(source)
+    manifest = {
+        "contract": "airflow-dag-export/v1",
+        "plugin": "airflow",
+        "environment": "prod",
+        "exported_at": "2026-08-19T00:00:00Z",
+        "selection": {"mode": "full", "rules": []},
+        "summary": {"total_dags": 2, "total_files": 1, "succeeded": 1, "failed": 0},
+        "dags": [
+            {"dag_id": "customers", "is_active": True, "is_paused": True, "file": "team/dags.py"},
+            {"dag_id": "orders", "is_active": True, "is_paused": False, "file": "team/dags.py"},
+        ],
+        "files": [
+            {
+                "path": "team/dags.py",
+                "dag_ids": ["customers", "orders"],
+                "checksum": f"sha256:{digest}",
+            }
+        ],
+    }
+    (root / "dag-export-manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+    config = {
+        "manifest": "dag-export/dag-export-manifest.json",
+        "plugin": "airflow",
+        "selectionMode": "full",
+        "dagIds": ["customers", "orders"],
+        "forbiddenDagIds": ["orphan"],
+        "fileCount": 1,
+    }
+
+    assert _dag_export_manifest(config, workspace=tmp_path).passed
+
+    source.write_text("changed\n", encoding="utf-8")
+    result = _dag_export_manifest(config, workspace=tmp_path)
+    assert not result.passed
+    assert "checksum mismatch" in (result.error or "")
 
 
 @pytest.mark.parametrize(

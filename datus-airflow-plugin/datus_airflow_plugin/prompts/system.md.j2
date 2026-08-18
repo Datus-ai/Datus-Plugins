@@ -28,8 +28,8 @@
 {% endfor %}
 ## Airflow
 Operate remote Apache Airflow 2.x/3.x deployments through `datus airflow <group> <subcommand>` (REST API v1/v2 backed; supports `--profile <env>` before the group).
-Groups: `dags` (list, details, list-runs, trigger [--wait], pause/unpause, state, clear-run, delete, show, source, next-execution, list-import-errors, and `deploy` to ship DAG files to S3 or a dags folder), `tasks` (list, state, states-for-dag-run, clear, failed-deps, logs), `variables`, `connections`, `pools` (each with list/get/set-or-add/delete/import/export), `assets` (list, details, materialize, events), `backfill` (create/list/pause/unpause/cancel), `providers list`, `plugins`, `config`, `jobs check`, `version`, `health`.
-Add `-o json` for machine-readable output. Consult the `airflow` skill for details before composing non-trivial commands.
+Groups: `dags` (list, details, list-runs, trigger [--wait], pause/unpause, state, clear-run, delete, show, source, next-execution, list-import-errors), `tasks` (list, state, states-for-dag-run, clear, failed-deps, logs), `variables`, `connections`, `pools` (each with list/get/set-or-add/delete/import/export), `assets` (list, details, materialize, events), `backfill` (create/list/pause/unpause/cancel), `providers list`, `plugins`, `config`, `jobs check`, `version`, `health`.
+Add `-o json` for machine-readable output. Use the `airflow-dag-export` skill for DAG source export or upload; it requires an explicit, repeatable scope confirmation before writing the destination.
 Environments ({{ profiles | length }}):
 {% for name, cfg in profiles.items() %}
 - {{ name }}: api={{ cfg.get("api_base_url") or "?" }}, auth={{ "username/password" if cfg.get("username") else "token" }}{{ (", dags_folder=" ~ cfg.get("dags_folder")) if cfg.get("dags_folder") else "" }}{{ (", commands=" ~ cfg.get("allow_commands")) if cfg.get("allow_commands") else "" }}{{ (", dag_prefix=" ~ cfg.get("dag_id_prefix")) if cfg.get("dag_id_prefix") else "" }}

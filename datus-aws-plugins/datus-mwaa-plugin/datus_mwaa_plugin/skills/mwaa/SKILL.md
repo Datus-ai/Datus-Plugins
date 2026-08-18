@@ -1,6 +1,6 @@
 ---
 name: mwaa
-description: Inspect Amazon MWAA (Managed Airflow) environments, mint web-login/CLI tokens, and run the Airflow CLI over the MWAA REST endpoint via the `datus mwaa` CLI
+description: Inspect Amazon MWAA, read current DAG metadata/source, mint tokens, and run the Airflow CLI via `datus mwaa`
 ---
 
 # MWAA
@@ -29,6 +29,22 @@ datus mwaa token cli [<name>]         # CLI token + web server hostname
 ```
 
 `<name>` defaults to the profile's `environment`.
+
+## Current DAGs and source
+
+```
+datus mwaa dags list [--env NAME] [-o json]
+datus mwaa dags source <dag_id> [--env NAME]
+```
+
+These commands establish a short-lived MWAA web session and call Airflow's
+stable `/api/v1`. `dags list` explicitly requests active, non-stale DAGs;
+paused DAGs remain active and are included unless `--unpaused` is requested.
+`dags source` resolves the DAG's `file_token` and reads `/dagSources` — it does
+not read the MWAA S3 bucket.
+
+For full/selective export or deployment, use `mwaa-dag-export`. It requires
+explicit confirmation of the current scope before any destination write.
 
 ## Airflow CLI over REST
 

@@ -2,7 +2,7 @@ apiVersion: datus.ai/v1alpha1
 kind: PluginE2EWorkflow
 metadata:
   name: airflow-dag-to-minio
-  description: Reference workflow for generating, deploying, and triggering a deterministic Airflow DAG.
+  description: Reference workflow for agent-driven DAG upload through the S3 plugin, followed by Airflow verification.
   tags: [reference, nightly, airflow, minio]
 spec:
   target: {distribution: datus-airflow-plugin, path: datus-airflow-plugin, name: airflow}
@@ -13,7 +13,7 @@ spec:
   workspace:
     outputs: [dags/*.py, results/airflow-run.json]
   permissions:
-    bashAllow: ["datus airflow dags deploy:*", "datus airflow dags trigger:*", "datus airflow dags wait:*", "datus airflow dags get:*", "datus airflow tasks logs:*"]
+    bashAllow: ["datus s3 sync:*", "datus s3 stat:*", "datus airflow dags list:*", "datus airflow dags trigger:*", "datus airflow tasks logs:*"]
   oracles:
     - {type: files, config: {patterns: [dags/*.py, results/airflow-run.json]}}
     - {type: airflow_run, config: {dagId: "e2e_{{RUN_ID}}", state: success, outputRows: 10}}

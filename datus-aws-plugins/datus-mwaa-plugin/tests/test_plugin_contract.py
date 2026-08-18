@@ -14,7 +14,7 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 PLUGIN_NAME = "mwaa"
 PKG_DIR = Path(__file__).resolve().parents[1] / "datus_mwaa_plugin"
-GROUPS = ("environments", "token", "cli")
+GROUPS = ("environments", "token", "dags", "cli")
 
 
 def load_manifest() -> dict:
@@ -84,7 +84,17 @@ def test_cli_unknown_profile_key_is_config_error(capsys):
 def test_skills_dir_bundles_main_and_setup_skills():
     skills = PKG_DIR / load_manifest()["skills"]
     assert (skills / "mwaa" / "SKILL.md").is_file()
+    assert (skills / "mwaa-dag-export" / "SKILL.md").is_file()
     assert (skills / "mwaa-setup" / "SKILL.md").is_file()
+
+
+def test_export_skill_uses_airflow_api_and_reconfirms_adjustments():
+    text = (PKG_DIR / "skills" / "mwaa-dag-export" / "SKILL.md").read_text(encoding="utf-8")
+    assert "mwaa dags list" in text
+    assert "mwaa dags source" in text
+    assert "Every scope adjustment invalidates confirmation" in text
+    assert "never use S3 `GetObject`" in text
+    assert '"contract": "airflow-dag-export/v1"' in text
 
 
 # ------------------------------------------------------------- system prompt
@@ -203,6 +213,16 @@ def test_cli_permissions_cli_run_never_auto_run():
         assert not any(_matches("cli run", h) for h in allow_heads), f"cli run must never auto-run ({profile})"
 
 
+def test_cli_permissions_allow_typed_dag_reads():
+    perms = load_manifest()["permissions"]
+    for profile, rules in perms.items():
+        allow_heads = [_pattern_head(p) for p in rules.get("allow", [])]
+        for command in ("dags list", "dags source"):
+            assert any(_matches(command, head) for head in allow_heads), (
+                f"{command} should be read-only in {profile}"
+            )
+
+
 def test_package_never_imports_datus():
     result = subprocess.run(
         [
@@ -216,6 +236,16 @@ def test_package_never_imports_datus():
         text=True,
     )
     assert result.returncode == 0, result.stderr
+
+
+def test_package_contains_no_s3_file_transfer():
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in PKG_DIR.rglob("*.py")
+    )
+    assert 'client("s3")' not in source
+    assert "get_object(" not in source
+    assert "upload_file(" not in source
 
 
 # ------------------------------------------------------------ command catalogue

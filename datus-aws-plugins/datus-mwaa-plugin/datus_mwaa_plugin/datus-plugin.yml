@@ -1,6 +1,6 @@
 # The whole plugin contract for `datus mwaa` — see the Datus plugin docs.
 manifest_version: 1
-description: "Inspect Amazon MWAA environments, mint web-login/CLI tokens, and run the Airflow CLI over REST."
+description: "Inspect Amazon MWAA and read its current DAG metadata and source through the Airflow REST API."
 
 cli: datus_mwaa_plugin.cli:main
 skills: skills
@@ -16,6 +16,8 @@ permissions:
       - "environments get:*"
       - "token web-login:*"
       - "token cli:*"
+      - "dags list:*"
+      - "dags source:*"
     ask:
       - "cli run:*"
   auto:
@@ -24,6 +26,8 @@ permissions:
       - "environments get:*"
       - "token web-login:*"
       - "token cli:*"
+      - "dags list:*"
+      - "dags source:*"
     ask:
       - "cli run:*"
 
@@ -95,6 +99,22 @@ commands:
         description: "Create a CLI token and web server hostname"
         args:
           - {name: name, description: "Environment name (default: profile's environment)"}
+  - name: dags
+    description: "Read current DAGs through the MWAA Airflow REST API"
+    subcommands:
+      - name: list
+        description: "List current active, non-stale DAGs"
+        args:
+          - {name: --env, description: "Environment name (default: profile's environment)"}
+          - {name: --pattern, description: "Filter DAG ids"}
+          - {name: --paused, description: "Only paused DAGs"}
+          - {name: --unpaused, description: "Only unpaused DAGs"}
+          - {name: --limit, description: "Maximum DAGs to return"}
+      - name: source
+        description: "Print the current Python source of a DAG"
+        args:
+          - {name: dag_id, required: true, description: "DAG id"}
+          - {name: --env, description: "Environment name (default: profile's environment)"}
   - name: cli
     description: "Run the Airflow CLI over MWAA's REST endpoint"
     subcommands:

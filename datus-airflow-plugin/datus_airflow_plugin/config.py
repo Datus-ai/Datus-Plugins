@@ -8,7 +8,7 @@ interprets those keys.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
@@ -98,31 +98,6 @@ def _parse_allow_commands(raw: Any) -> Tuple[str, ...]:
 
 
 @dataclass
-class S3Settings:
-    """Optional overrides for the boto3 session used by `dags deploy`."""
-
-    endpoint_url: Optional[str] = None
-    region: Optional[str] = None
-    profile: Optional[str] = None
-    access_key_id: Optional[str] = None
-    secret_access_key: Optional[str] = None
-    session_token: Optional[str] = None
-    role_arn: Optional[str] = None
-    role_session_name: Optional[str] = None
-    external_id: Optional[str] = None
-
-    @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "S3Settings":
-        known = {f for f in cls.__dataclass_fields__}
-        unknown = set(data) - known
-        if unknown:
-            raise ConfigError(
-                f"unknown key(s) under plugins.airflow.<profile>.s3: {', '.join(sorted(unknown))}"
-            )
-        return cls(**{k: data.get(k) for k in known})
-
-
-@dataclass
 class Settings:
     profile_name: str = ""
     base_url: Optional[str] = None
@@ -139,13 +114,18 @@ class Settings:
     # can edit agent.yml or call the REST API directly).
     dag_id_prefix: Tuple[str, ...] = ()
     allow_commands: Tuple[str, ...] = ()
-    s3: S3Settings = field(default_factory=S3Settings)
     cache_token: bool = True
     cache_dir: str = DEFAULT_CACHE_DIR
 
     @classmethod
     def from_profile(cls, profile: Optional[Dict[str, Any]]) -> "Settings":
         data = dict(profile or {})
+        if "s3" in data:
+            raise ConfigError(
+                "plugins.airflow.<profile>.s3 is no longer supported: configure "
+                "agent.plugins.s3 separately and let the airflow-dag-export skill "
+                "route uploads from the dags_folder URI"
+            )
         settings = cls()
         settings.profile_name = str(data.get("name", "") or "")
 
@@ -178,12 +158,6 @@ class Settings:
             settings.cache_token = bool(data["cache_token"])
         if data.get("cache_dir"):
             settings.cache_dir = str(data["cache_dir"])
-
-        s3_conf = data.get("s3")
-        if s3_conf is not None:
-            if not isinstance(s3_conf, dict):
-                raise ConfigError("plugins.airflow.<profile>.s3 must be a mapping")
-            settings.s3 = S3Settings.from_dict(s3_conf)
 
         return settings
 

@@ -1,0 +1,31 @@
+apiVersion: datus.ai/v1alpha1
+kind: PluginE2EWorkflow
+metadata:
+  name: airflow-active-dag-export
+  description: Reference multi-turn workflow for API-derived DAG source export with repeated scope confirmation.
+  tags: [reference, nightly, airflow, export, multi-turn]
+spec:
+  target: {distribution: datus-airflow-plugin, path: datus-airflow-plugin, name: airflow}
+  agent: {prompt: prompt.md, timeoutSeconds: 1800}
+  environment: {components: [airflow], lock: environment.lock.yml}
+  workspace:
+    outputs: [dag-export/**/*.py, dag-export/dag-export-manifest.json]
+  permissions:
+    bashAllow: ["datus airflow dags list:*", "datus airflow dags source:*"]
+  oracles:
+    - type: dag_export_manifest
+      config:
+        manifest: dag-export/dag-export-manifest.json
+        plugin: airflow
+        selectionMode: selective
+        dagIds: ["e2e_orders_{{RUN_ID}}"]
+        forbiddenDagIds: ["e2e_marketing_{{RUN_ID}}", "e2e_orphan_{{RUN_ID}}"]
+        fileCount: 1
+  efficiency:
+    maxToolCalls: 12
+    maxLlmTurns: 8
+    maxTokens: 80000
+    maxUnexpectedFailures: 0
+    expectedCommands: ["^datus airflow .*dags list", "^datus airflow .*dags source"]
+    forbiddenCommands: ["datus (s3|gcs|adls) (ls|cat|cp)", "datus airflow dags deploy"]
+  cleanup: {deleteNamespace: true, deleteBucketPrefix: true}
