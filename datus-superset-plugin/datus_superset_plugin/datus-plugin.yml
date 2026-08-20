@@ -29,7 +29,6 @@ permissions:
       - "datasets list:*"
       - "datasets get:*"
       - "datasets related:*"
-      - "datasets drill-info:*"
       - "datasets distinct:*"
       - "databases list:*"
       - "databases get:*"
@@ -46,7 +45,6 @@ permissions:
       - "databases related:*"
       - "sql-lab results:*"
       - "sql-lab export:*"
-      - "sql-lab permalink-get:*"
       - "queries list:*"
       - "queries get:*"
       - "queries updated-since:*"
@@ -58,6 +56,7 @@ permissions:
       - "explore permalink-get:*"
       - "datasources column-values:*"
       - "advanced-types list:*"
+      - "advanced-types convert:*"
       - "tags list:*"
       - "tags get:*"
       - "tags objects:*"
@@ -74,7 +73,7 @@ permissions:
       - "rls list:*"
       - "rls get:*"
       - "audit:*"
-      - "serving-target:*"
+      - "context candidates:*"
     ask: &superset_ask
       - "dashboards create:*"
       - "dashboards copy:*"
@@ -88,9 +87,6 @@ permissions:
       - "dashboards embedded-set:*"
       - "dashboards embedded-update:*"
       - "dashboards embedded-delete:*"
-      - "dashboards filters-update:*"
-      - "dashboards colors-update:*"
-      - "dashboards chart-customizations-update:*"
       - "dashboards cache-screenshot:*"
       - "dashboards permalink-create:*"
       - "dashboards filter-state-create:*"
@@ -125,16 +121,11 @@ permissions:
       - "databases test:*"
       - "databases validate-parameters:*"
       - "databases validate-sql:*"
-      - "databases sync-permissions:*"
       - "databases export:*"
       - "databases import:*"
-      - "databases upload:*"
-      - "databases upload-metadata:*"
       - "sql-lab execute:*"
       - "sql-lab estimate:*"
-      - "sql-lab export-stream:*"
       - "sql-lab format:*"
-      - "sql-lab permalink-create:*"
       - "queries stop:*"
       - "saved-queries create:*"
       - "saved-queries update:*"
@@ -145,8 +136,6 @@ permissions:
       - "explore form-data-create:*"
       - "explore form-data-delete:*"
       - "explore permalink-create:*"
-      - "datasources validate-expression:*"
-      - "advanced-types convert:*"
       - "tags bulk-create:*"
       - "tags attach:*"
       - "tags detach:*"
@@ -184,20 +173,18 @@ config_schema:
     provider: {type: string, default: db, description: "Superset security provider"}
     verify_ssl: {type: string, enum: ["true", "false"], default: "true", description: "Verify TLS certificates"}
     timeout: {type: string, default: "30", description: "HTTP timeout in seconds"}
-    serving_datasource: {type: string, description: "Optional Datus datasource name served by Superset"}
-    serving_database_name: {type: string, description: "Optional warehouse database name"}
 
 commands:
-  - {name: status, description: "Health, identity, roles, and OpenAPI", subcommands: [{name: health}, {name: whoami}, {name: roles}, {name: openapi}]}
-  - {name: dashboards, description: "Dashboard CRUD, embedding, import/export, state, and images", subcommands: [{name: list}, {name: get}, {name: charts}, {name: datasets}, {name: tabs}, {name: create}, {name: copy}, {name: update}, {name: delete}, {name: bulk-delete}, {name: export}, {name: import}, {name: favorite-status}, {name: favorite-add}, {name: favorite-remove}, {name: embedded-get}, {name: embedded-set}, {name: embedded-update}, {name: embedded-delete}, {name: filters-update}, {name: colors-update}, {name: chart-customizations-update}, {name: thumbnail}, {name: screenshot}, {name: cache-screenshot}, {name: permalink-create}, {name: permalink-get}, {name: filter-state-create}, {name: filter-state-get}, {name: filter-state-delete}]}
+  - {name: status, description: "Health and OpenAPI", subcommands: [{name: health}, {name: openapi}]}
+  - {name: dashboards, description: "Dashboard CRUD, embedding, import/export, state, and images", subcommands: [{name: list}, {name: get}, {name: charts}, {name: datasets}, {name: tabs}, {name: create}, {name: copy}, {name: update}, {name: delete}, {name: bulk-delete}, {name: export}, {name: import}, {name: favorite-status}, {name: favorite-add}, {name: favorite-remove}, {name: embedded-get}, {name: embedded-set}, {name: embedded-update}, {name: embedded-delete}, {name: thumbnail}, {name: screenshot}, {name: cache-screenshot}, {name: permalink-create}, {name: permalink-get}, {name: filter-state-create}, {name: filter-state-get}, {name: filter-state-delete}]}
   - {name: charts, description: "Chart CRUD, data queries, cache, dashboard attachment, and import/export", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: bulk-delete}, {name: data}, {name: query}, {name: query-cache}, {name: export}, {name: import}, {name: warm-cache}, {name: favorite-status}, {name: favorite-add}, {name: favorite-remove}, {name: thumbnail}, {name: screenshot}, {name: cache-screenshot}, {name: add-to-dashboard}]}
-  - {name: datasets, description: "Dataset CRUD, metadata, metrics, columns, cache, and import/export", subcommands: [{name: list}, {name: get}, {name: related}, {name: drill-info}, {name: distinct}, {name: create}, {name: get-or-create}, {name: duplicate}, {name: update}, {name: delete}, {name: bulk-delete}, {name: refresh}, {name: column-delete}, {name: metric-delete}, {name: warm-cache}, {name: export}, {name: import}]}
-  - {name: databases, description: "Database connections, catalog metadata, validation, upload, and import/export", subcommands: [{name: list}, {name: get}, {name: available}, {name: connection}, {name: catalogs}, {name: schemas}, {name: tables}, {name: table}, {name: table-metadata}, {name: table-extra}, {name: select-star}, {name: functions}, {name: related}, {name: create}, {name: update}, {name: delete}, {name: test}, {name: validate-parameters}, {name: validate-sql}, {name: sync-permissions}, {name: export}, {name: import}, {name: upload-metadata}, {name: upload}]}
-  - {name: sql-lab, description: "Execute, estimate, format, fetch, and export SQL Lab queries", subcommands: [{name: execute}, {name: estimate}, {name: results}, {name: export}, {name: export-stream}, {name: format}, {name: permalink-create}, {name: permalink-get}]}
+  - {name: datasets, description: "Dataset CRUD, metadata, metrics, columns, cache, and import/export", subcommands: [{name: list}, {name: get}, {name: related}, {name: distinct}, {name: create}, {name: get-or-create}, {name: duplicate}, {name: update}, {name: delete}, {name: bulk-delete}, {name: refresh}, {name: column-delete}, {name: metric-delete}, {name: warm-cache}, {name: export}, {name: import}]}
+  - {name: databases, description: "Database connections, catalog metadata, validation, and import/export", subcommands: [{name: list}, {name: get}, {name: available}, {name: connection}, {name: catalogs}, {name: schemas}, {name: tables}, {name: table}, {name: table-metadata}, {name: table-extra}, {name: select-star}, {name: functions}, {name: related}, {name: create}, {name: update}, {name: delete}, {name: test}, {name: validate-parameters}, {name: validate-sql}, {name: export}, {name: import}]}
+  - {name: sql-lab, description: "Execute, estimate, format, fetch, and export SQL Lab queries", subcommands: [{name: execute}, {name: estimate}, {name: results}, {name: export}, {name: format}]}
   - {name: queries, description: "Query history and cancellation", subcommands: [{name: list}, {name: get}, {name: updated-since}, {name: stop}, {name: distinct}]}
   - {name: saved-queries, description: "Saved query CRUD and migration", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: bulk-delete}, {name: export}, {name: import}]}
   - {name: explore, description: "Explore form data and permalinks", subcommands: [{name: get}, {name: form-data-create}, {name: form-data-get}, {name: form-data-delete}, {name: permalink-create}, {name: permalink-get}]}
-  - {name: datasources, description: "Datasource values and expression validation", subcommands: [{name: column-values}, {name: validate-expression}]}
+  - {name: datasources, description: "Datasource column values", subcommands: [{name: column-values}]}
   - {name: advanced-types, description: "Advanced data-type discovery and conversion", subcommands: [{name: list}, {name: convert}]}
   - {name: tags, description: "Tag discovery and attachment", subcommands: [{name: list}, {name: get}, {name: bulk-create}, {name: objects}, {name: attach}, {name: detach}, {name: favorite-status}]}
   - {name: reports, description: "Scheduled report CRUD and logs", subcommands: [{name: list}, {name: get}, {name: create}, {name: update}, {name: delete}, {name: logs}, {name: log-get}, {name: slack-channels}]}
@@ -206,12 +193,12 @@ commands:
   - {name: assets, description: "Bulk asset import and export", subcommands: [{name: export}, {name: import}]}
   - {name: cache, description: "Cache invalidation", subcommands: [{name: invalidate}]}
   - {name: audit, description: "Audit log and recent activity", subcommands: [{name: list}, {name: get}, {name: recent}]}
-  - {name: serving-target, description: "Show the configured serving datasource"}
   - name: context
-    description: "Build project context from dashboard SQL"
+    description: "Discover dashboard query sources and build project context from SQL"
     subcommands:
+      - {name: candidates, args: [{name: dashboard_id, required: true}]}
       - name: export-dashboard
-        args: [{name: dashboard_id, required: true}, {name: --output-root}, {name: --include-hidden}, {name: --overwrite}]
+        args: [{name: dashboard_id, required: true}, {name: --output-root}, {name: --chart-id}, {name: --include-hidden}, {name: --overwrite}]
   - name: api
     description: "Guarded access to additional official API endpoints"
     subcommands:

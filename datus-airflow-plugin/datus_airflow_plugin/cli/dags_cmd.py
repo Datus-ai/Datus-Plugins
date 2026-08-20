@@ -18,8 +18,6 @@ from . import (
     parse_json_arg,
     quote_path_part,
 )
-from .deploy_cmd import register_deploy, register_undeploy
-
 RUN_STATES = ("queued", "running", "success", "failed")
 TERMINAL_RUN_STATES = {"success", "failed"}
 
@@ -111,10 +109,6 @@ def register(sub: argparse._SubParsersAction) -> None:
     p.add_argument("dag_id")
     p.set_defaults(func=cmd_next_execution)
 
-    register_deploy(group)
-    register_undeploy(group)
-
-
 # ---------------------------------------------------------------- handlers
 
 
@@ -134,7 +128,12 @@ def cmd_list(ctx: Context, ns) -> int:
     elif ns.unpaused:
         params["paused"] = "false"
     if ns.include_stale:
-        params["exclude_stale"] = "false"
+        params["only_active" if ctx.client.is_v1 else "exclude_stale"] = "false"
+    else:
+        # The export skill treats the live Airflow API as the source of truth.
+        # Be explicit instead of depending on server-version-specific defaults:
+        # paused DAGs remain active and are therefore included.
+        params["only_active" if ctx.client.is_v1 else "exclude_stale"] = "true"
     rows = ctx.filter_dag_rows(ctx.client.paginate("/dags", "dags", params=params, limit=ns.limit))
     print(render_rows(rows, ["dag_id", "fileloc", "owners", "is_paused"], ns.output))
     return 0

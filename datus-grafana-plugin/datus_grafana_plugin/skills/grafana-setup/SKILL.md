@@ -28,8 +28,6 @@ agent:
         verify_ssl: "true"
         timeout: "30"
         default_datasource_uid: metrics-prod  # optional
-        serving_datasource: warehouse_prod   # optional
-        serving_database_name: analytics     # optional
 ```
 
 Ask for the endpoint, auth mode, optional organization, and the environment-variable name holding the token/password. Have the user export it and write only `${VAR}`, never a literal secret. Prefer a least-privilege service-account token. Verify with `datus grafana status health` and `datus grafana status whoami`.

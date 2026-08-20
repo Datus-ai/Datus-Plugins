@@ -1,9 +1,8 @@
 # datus-mwaa-plugin
 
-A [Datus](https://datus.ai) plugin to inspect **Amazon MWAA** (Managed Workflows
-for Apache Airflow) environments, mint web-login/CLI tokens, and run the Airflow
-CLI over MWAA's REST endpoint from `datus mwaa ...`. Complements the dedicated
-`datus airflow` plugin (which drives Airflow itself).
+A [Datus](https://datus.ai) plugin to inspect **Amazon MWAA**, read current DAG
+metadata and Python source through its Airflow REST API, mint tokens, and run
+the Airflow CLI over MWAA's REST endpoint.
 
 ```bash
 pip install datus-aws-plugins
@@ -31,11 +30,14 @@ agent:
 | Group | Subcommands |
 |---|---|
 | `environments` | `list`, `get` |
+| `dags` | `list`, `source` |
 | `token` | `web-login`, `cli` |
 | `cli` | `run '<airflow cli command>'` |
 
 ```bash
 datus mwaa environments list
+datus mwaa dags list --env prod -o json
+datus mwaa dags source sales_daily --env prod
 datus mwaa token web-login prod       # one-time Airflow UI login URL
 datus mwaa cli run 'dags list' --env prod
 ```
@@ -44,6 +46,13 @@ datus mwaa cli run 'dags list' --env prod
 destructive) and is always confirmed by the agent — prefer `datus airflow` for
 fine-grained, permission-classified DAG operations. Environment
 create/update/delete is out of scope.
+
+`dags list/source` use a short-lived MWAA web-login session and Airflow
+`/api/v1`. They do not access the environment's S3 bucket. For full or filtered
+export, the bundled `mwaa-dag-export` skill proposes an API-derived scope and
+allows repeated adjustment; it requires explicit confirmation before writing
+or uploading. Destination uploads are performed by the agent through the
+matching S3/GCS/ADLS plugin or local filesystem.
 
 ## Exit codes
 
@@ -57,5 +66,6 @@ uv run --package datus-mwaa-plugin pytest datus-mwaa-plugin
 ```
 
 Never imports `datus`; registers the `mwaa` entry point in `datus.plugins`.
-Shared boto3 plumbing lives in `datus-aws-common` (plus `requests` for the CLI
-REST call). Bundled skills: `mwaa` and `mwaa-setup`.
+Shared AWS API plumbing lives in `datus-aws-common` (plus `requests` for MWAA
+and Airflow REST calls). There is no S3 transfer implementation. Bundled
+skills: `mwaa`, `mwaa-dag-export`, and `mwaa-setup`.

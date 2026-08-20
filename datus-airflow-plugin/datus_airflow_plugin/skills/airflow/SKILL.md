@@ -1,6 +1,6 @@
 ---
 name: airflow
-description: Operate a remote Apache Airflow 2.x or 3.x deployment (list/trigger/monitor DAGs, tasks, variables, connections, pools, backfills) and deploy DAG files to S3 or a dags folder via the `datus airflow` CLI
+description: Operate a remote Apache Airflow 2.x or 3.x deployment through the `datus airflow` REST CLI
 ---
 
 # Airflow
@@ -38,8 +38,7 @@ Not covered by `dag_prefix`: `variables`, `connections` and `pools` are
 instance-wide objects in Airflow, so their list/get/export output is never
 filtered — treat what you see there as shared with other teams. `dags
 list-import-errors` is also unfiltered (errors are keyed by filename, which
-does not map to a dag_id). `dags deploy` / `undeploy` target *file paths*, which
-the prefix does not constrain — only the `--verify <dag_id>` argument is checked.
+does not map to a dag_id).
 
 These limits are guardrails for you, not a security boundary; never work around
 one by, say, deploying a file that defines an out-of-scope DAG. If a task
@@ -69,32 +68,14 @@ would leave that run `queued` forever; `dags unpause <dag_id>` first (and ask
 the user before unpausing something they did not mention).
 Omit `<dag_id>` in `list-runs` to list runs across all DAGs.
 
-## Deploying DAG files
+## DAG source export and upload
 
-```
-datus airflow dags deploy <file-or-dir>... [--dest s3://bucket/dags/ | /path/to/dags]
-    [--prefix team_a] [--prune -y] [--all-files] [--dry-run]
-    [--verify <dag_id> [--verify-timeout 120]]
-```
-
-- `--dest` defaults to the profile's `dags_folder`. S3 targets work out of
-  the box (boto3 ships with the plugin).
-- Directories are scanned recursively for `*.py` / `*.zip`.
-- `--verify <dag_id>` waits until the scheduler re-parsed that DAG and fails
-  fast when the deployed file causes an import error — prefer it, it turns a
-  blind upload into a checked deployment.
-- `--prune` deletes target files not in this deployment — destructive, needs
-  `-y`; use `--dry-run` first.
-
-To delete individual files from the target (paths relative to the target
-root, as printed by deploy):
-
-```
-datus airflow dags undeploy team_a/old_dag.py [--dest ...] [--dry-run] [-y]
-```
-
-The DAG goes stale on the next parse; follow with
-`datus airflow dags delete <dag_id> -y` to also drop its metadata.
+Use the `airflow-dag-export` skill. The Airflow API is the source of truth for
+the current active, non-stale DAG set and for Python source. The skill proposes
+the full scope by default, supports repeated natural-language filtering, and
+must receive explicit confirmation before writing an export destination or
+uploading through a storage plugin. This plugin contains no object-storage
+client and has no `dags deploy`/`undeploy` command.
 
 ## Tasks
 
@@ -134,7 +115,7 @@ datus airflow version | health | providers list | plugins | config list | config
 
 0 success · 1 runtime/API error (also: failed run with `--wait`, failed
 connection test, unhealthy `health`) · 2 usage error · 3 profile/config
-error · 8 missing dependency (boto3, if the environment stripped it).
+error.
 
 `assets` and the top-level `backfill` API are Airflow 3/API v2 features. The
 Airflow 2/API v1 compatibility path covers DAG, run, task, log, variable,

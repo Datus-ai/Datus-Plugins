@@ -33,7 +33,13 @@ class Client:
     def request(self, method, path, **kwargs):
         uid = path.rsplit("/", 1)[-1]
         types = {"prom": "prometheus", "loki": "loki"}
-        return {"uid": uid, "type": types.get(uid, "unknown"), "secureJsonData": {"token": "bad"}}
+        return {
+            "uid": uid,
+            "name": uid.title(),
+            "type": types.get(uid, "unknown"),
+            "url": f"http://{uid}:9090",
+            "secureJsonData": {"token": "bad"},
+        }
 
 
 def test_classification_handles_string_expression_datasource():
@@ -47,9 +53,18 @@ def test_all_targets_export_with_macros_manifest_and_redaction(tmp_path, monkeyp
     assert result["total"] == 6
     manifest = json.loads((directory / "manifest.json").read_text())
     assert {q["language"] for q in manifest["queries"]} == {"sql", "promql", "logql", "flux", "grafana-expression", "unknown"}
+    source = manifest["queries"][0]["source_identity"]
+    assert source == {
+        "provider": "grafana",
+        "status": "resolved",
+        "datasource": {"uid": "prom", "name": "Prom", "type": "prometheus"},
+        "connection": {"backend": "prometheus", "host": "prom", "port": 9090},
+    }
     sql = next(directory.glob("*.sql")).read_text()
     assert "$__timeFrom()" in sql and "$cluster" in sql
     assert "bad" not in (directory / "_source/dashboard.json").read_text()
+    assert "serving_datasource" not in manifest
+    assert "serving_database_name" not in manifest
     assert len([p for p in directory.iterdir() if p.is_file() and p.name != "manifest.json"]) == 6
     with pytest.raises(UsageError):
         export_dashboard(Client(), "dash", instance_url="https://grafana.test")

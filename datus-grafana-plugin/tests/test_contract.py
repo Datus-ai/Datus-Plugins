@@ -37,6 +37,9 @@ def test_manifest_prompt_and_skills():
     assert "requires_mutable_config: true" in (PKG / "skills/grafana-setup/SKILL.md").read_text()
     assert data["config_schema"]["properties"]["token"]["x-secret"] is True
     assert data["config_schema"]["properties"]["password"]["x-secret"] is True
+    assert "serving_datasource" not in data["config_schema"]["properties"]
+    assert "serving_database_name" not in data["config_schema"]["properties"]
+    assert "serving-target" not in {item["name"] for item in data["commands"]}
     env = Environment(loader=FileSystemLoader(PKG), undefined=StrictUndefined)
     template = env.get_template(data["system_prompt"])
     assert "https://g" in template.render(plugin_name="grafana", profiles={"prod": {"api_base_url": "https://g", "auth_mode": "token"}}, config_path=None, config_mutable=True)

@@ -27,9 +27,10 @@ def op(
 # live in cli.py rather than this table.
 OPERATIONS: dict[str, dict[str, Operation]] = {
     "status": {
+        # /api/v1/me/ and /api/v1/me/roles/ are deliberately absent: they carry no
+        # @protect(), so they read identity from the Flask-Login session instead of the
+        # bearer token and always answer 401 to an API client like this one.
         "health": op("GET", "/health"),
-        "whoami": op("GET", "/api/v1/me/"),
-        "roles": op("GET", "/api/v1/me/roles/"),
         "openapi": op("GET", "/api/v1/_openapi"),
     },
     "dashboards": {
@@ -52,9 +53,6 @@ OPERATIONS: dict[str, dict[str, Operation]] = {
         "embedded-set": op("POST", "/api/v1/dashboard/{id}/embedded", "id", body=True),
         "embedded-update": op("PUT", "/api/v1/dashboard/{id}/embedded", "id", body=True),
         "embedded-delete": op("DELETE", "/api/v1/dashboard/{id}/embedded", "id"),
-        "filters-update": op("PUT", "/api/v1/dashboard/{id}/filters", "id", body=True),
-        "colors-update": op("PUT", "/api/v1/dashboard/{id}/colors", "id", body=True),
-        "chart-customizations-update": op("PUT", "/api/v1/dashboard/{id}/chart_customizations", "id", body=True),
         "thumbnail": op("GET", "/api/v1/dashboard/{id}/thumbnail/{digest}/", "id", "digest", binary=True),
         "screenshot": op("GET", "/api/v1/dashboard/{id}/screenshot/{digest}/", "id", "digest", binary=True),
         "cache-screenshot": op("POST", "/api/v1/dashboard/{id}/cache_dashboard_screenshot/", "id"),
@@ -89,7 +87,6 @@ OPERATIONS: dict[str, dict[str, Operation]] = {
         "list": op("GET", "/api/v1/dataset/"),
         "get": op("GET", "/api/v1/dataset/{id}", "id"),
         "related": op("GET", "/api/v1/dataset/{id}/related_objects", "id"),
-        "drill-info": op("GET", "/api/v1/dataset/{id}/drill_info/", "id"),
         "distinct": op("GET", "/api/v1/dataset/distinct/{column}", "column"),
         "create": op("POST", "/api/v1/dataset/", body=True),
         "get-or-create": op("POST", "/api/v1/dataset/get_or_create/", body=True),
@@ -123,22 +120,19 @@ OPERATIONS: dict[str, dict[str, Operation]] = {
         "delete": op("DELETE", "/api/v1/database/{id}", "id"),
         "test": op("POST", "/api/v1/database/test_connection/", body=True),
         "validate-parameters": op("POST", "/api/v1/database/validate_parameters/", body=True),
+        # Syntax-only, and only where SQL_VALIDATORS_BY_ENGINE has an entry (PostgreSQL
+        # and Presto upstream); every other engine answers 422. It does not check that
+        # tables or columns exist, so it cannot stand in for executing the query.
         "validate-sql": op("POST", "/api/v1/database/{id}/validate_sql/", "id", body=True),
-        "sync-permissions": op("POST", "/api/v1/database/{id}/sync_permissions/", "id"),
         "export": op("GET", "/api/v1/database/export/", binary=True),
         "import": op("POST", "/api/v1/database/import/", upload=True),
-        "upload-metadata": op("POST", "/api/v1/database/upload_metadata/", body=True),
-        "upload": op("POST", "/api/v1/database/{id}/upload/", "id", body=True),
     },
     "sql-lab": {
         "execute": op("POST", "/api/v1/sqllab/execute/", body=True),
         "estimate": op("POST", "/api/v1/sqllab/estimate/", body=True),
         "results": op("GET", "/api/v1/sqllab/results/"),
         "export": op("GET", "/api/v1/sqllab/export/{client_id}/", "client_id", binary=True),
-        "export-stream": op("POST", "/api/v1/sqllab/export_streaming/", body=True, binary=True),
         "format": op("POST", "/api/v1/sqllab/format_sql/", body=True),
-        "permalink-create": op("POST", "/api/v1/sqllab/permalink", body=True),
-        "permalink-get": op("GET", "/api/v1/sqllab/permalink/{key}", "key"),
     },
     "queries": {
         "list": op("GET", "/api/v1/query/"),
@@ -167,17 +161,21 @@ OPERATIONS: dict[str, dict[str, Operation]] = {
     },
     "datasources": {
         "column-values": op("GET", "/api/v1/datasource/{type}/{id}/column/{column}/values/", "type", "id", "column"),
-        "validate-expression": op("POST", "/api/v1/datasource/{type}/{id}/validate_expression/", "type", "id", body=True),
     },
     "advanced-types": {
         "list": op("GET", "/api/v1/advanced_data_type/types"),
-        "convert": op("POST", "/api/v1/advanced_data_type/convert", body=True),
+        # Conversion is a GET with rison arguments, e.g. --param "q=(type:port,values:!(http))".
+        "convert": op("GET", "/api/v1/advanced_data_type/convert"),
     },
     "tags": {
         "list": op("GET", "/api/v1/tag/"), "get": op("GET", "/api/v1/tag/{id}", "id"),
         "bulk-create": op("POST", "/api/v1/tag/bulk_create", body=True),
         "objects": op("GET", "/api/v1/tag/get_objects/"),
-        "attach": op("POST", "/api/v1/tag/{type}/{id}/{tag}/", "type", "id", "tag"),
+        # {type} is the numeric ObjectType: 1 query, 2 chart, 3 dashboard, 4 dataset.
+        # Attach reads {"properties": {"tags": [...]}} — Superset's own OpenAPI documents a
+        # bare {"tags": [...]} but the handler only looks under "properties".
+        # Detach names the single tag in the path instead.
+        "attach": op("POST", "/api/v1/tag/{type}/{id}/", "type", "id", body=True),
         "detach": op("DELETE", "/api/v1/tag/{type}/{id}/{tag}/", "type", "id", "tag"),
         "favorite-status": op("GET", "/api/v1/tag/favorite_status/"),
     },
@@ -196,11 +194,12 @@ OPERATIONS: dict[str, dict[str, Operation]] = {
         "layers-create": op("POST", "/api/v1/annotation_layer/", body=True),
         "layers-update": op("PUT", "/api/v1/annotation_layer/{id}", "id", body=True),
         "layers-delete": op("DELETE", "/api/v1/annotation_layer/{id}", "id"),
-        "list": op("GET", "/api/v1/annotation/"),
-        "get": op("GET", "/api/v1/annotation/{id}", "id"),
-        "create": op("POST", "/api/v1/annotation/", body=True),
-        "update": op("PUT", "/api/v1/annotation/{id}", "id", body=True),
-        "delete": op("DELETE", "/api/v1/annotation/{id}", "id"),
+        # Annotations are nested under their layer; there is no top-level /annotation/ resource.
+        "list": op("GET", "/api/v1/annotation_layer/{layer_id}/annotation/", "layer_id"),
+        "get": op("GET", "/api/v1/annotation_layer/{layer_id}/annotation/{id}", "layer_id", "id"),
+        "create": op("POST", "/api/v1/annotation_layer/{layer_id}/annotation/", "layer_id", body=True),
+        "update": op("PUT", "/api/v1/annotation_layer/{layer_id}/annotation/{id}", "layer_id", "id", body=True),
+        "delete": op("DELETE", "/api/v1/annotation_layer/{layer_id}/annotation/{id}", "layer_id", "id"),
     },
     "rls": {
         "list": op("GET", "/api/v1/rowlevelsecurity/"), "get": op("GET", "/api/v1/rowlevelsecurity/{id}", "id"),

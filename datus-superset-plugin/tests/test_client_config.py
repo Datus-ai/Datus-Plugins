@@ -13,6 +13,8 @@ def test_config_auth_modes():
     assert token.base_url == "https://superset.test"
     login = Settings.from_profile({"api_base_url": "https://superset.test", "username": "u", "password": "p"})
     assert login.provider == "db"
+    assert not hasattr(login, "serving_datasource")
+    assert not hasattr(login, "serving_database_name")
     with pytest.raises(ConfigError):
         Settings.from_profile({"api_base_url": "https://superset.test", "auth_mode": "token"})
 

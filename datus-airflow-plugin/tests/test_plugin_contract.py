@@ -46,8 +46,18 @@ def test_manifest_declares_the_new_contract():
 def test_manifest_paths_exist_in_the_package():
     skills = PKG_DIR / MANIFEST["skills"]
     assert (skills / "airflow" / "SKILL.md").is_file()
+    assert (skills / "airflow-dag-export" / "SKILL.md").is_file()
     assert (skills / "airflow-setup" / "SKILL.md").is_file()
     assert (PKG_DIR / MANIFEST["system_prompt"]).is_file()
+
+
+def test_export_skill_enforces_api_source_and_repeatable_confirmation():
+    text = (PKG_DIR / "skills" / "airflow-dag-export" / "SKILL.md").read_text(encoding="utf-8")
+    assert "dags list -o json" in text
+    assert "dags source DAG_ID" in text
+    assert "Scope adjustments are never confirmation" in text
+    assert "Never list or scan `dags_folder`" in text
+    assert '"contract": "airflow-dag-export/v1"' in text
 
 
 # ----------------------------------------------------------------- cli entry
@@ -104,12 +114,8 @@ def test_config_schema_marks_credentials_secret():
         spec = properties.get(secret_field)
         if spec is not None:
             assert spec["x-secret"] is True, f"{secret_field} must never reach the prompt"
-    s3_properties = properties["s3"]["properties"]
-    for secret_field in ("secret_access_key", "session_token"):
-        assert s3_properties[secret_field]["x-secret"] is True, f"s3.{secret_field} must never reach the prompt"
-    # The s3 block itself stays non-secret so its non-credential leaves are
-    # TUI-editable (they surface as dotted fields: s3.region, ...).
-    assert {"api_base_url", "username", "dags_folder", "s3"} <= _non_secret_fields()
+    assert {"api_base_url", "username", "dags_folder"} <= _non_secret_fields()
+    assert "s3" not in properties, "storage credentials belong to the storage plugin"
 
 
 def test_config_schema_exposes_the_scope_fields_to_the_prompt():
@@ -128,17 +134,6 @@ def test_command_groups_constant_matches_the_parser():
     assert set(_subparser_choices(build_parser())) == set(COMMAND_GROUPS)
 
 
-def test_config_schema_s3_matches_the_runtime_keys():
-    """S3Settings.from_dict rejects unknown keys; the schema must declare
-    exactly that key set (and additionalProperties: false) so TUI validation
-    mirrors the runtime."""
-    from datus_airflow_plugin.config import S3Settings
-
-    s3_schema = _schema()["properties"]["s3"]
-    assert s3_schema["additionalProperties"] is False
-    assert set(s3_schema["properties"]) == set(S3Settings.__dataclass_fields__)
-
-
 def test_config_schema_accepts_a_real_profile_and_requires_api_base_url():
     from jsonschema import Draft202012Validator
 
@@ -153,20 +148,21 @@ def test_config_schema_accepts_a_real_profile_and_requires_api_base_url():
         "dags_folder": "s3://bucket/dags/",
         "dag_id_prefix": "team_a_",
         "allow_commands": "dags,tasks,version",
-        "s3": {"region": "us-east-1", "secret_access_key": "${AWS_SECRET_ACCESS_KEY}"},
     }
     assert list(validator.iter_errors(profile)) == []
     errors = [e.message for e in validator.iter_errors({"username": "admin"})]
     assert any("api_base_url" in message for message in errors)
 
 
-def test_config_schema_rejects_unknown_s3_keys():
-    from jsonschema import Draft202012Validator
-
-    validator = Draft202012Validator(_schema())
-    profile = {"api_base_url": "https://airflow.example.com", "s3": {"regoin": "us-east-1"}}
-    errors = [e.message for e in validator.iter_errors(profile)]
-    assert any("regoin" in message for message in errors)
+def test_legacy_s3_profile_fails_with_storage_plugin_migration_hint(capsys):
+    rc = main(
+        ["dags", "list"],
+        {"api_base_url": "https://airflow.example.com", "s3": {"region": "us-east-1"}},
+    )
+    assert rc == 3
+    error = capsys.readouterr().err
+    assert "no longer supported" in error
+    assert "agent.plugins.s3" in error
 
 
 # -------------------------------------------------------------- prompt
@@ -227,7 +223,6 @@ def test_prompt_lists_environments_without_secrets():
             "username": "admin",
             "password": "s3cr3t-password",
             "dags_folder": "s3://bucket/dags/",
-            "s3": {"access_key_id": "AKIAXXX", "secret_access_key": "aws-secret-key"},
         },
         "staging": {
             "name": "staging",
@@ -242,7 +237,7 @@ def test_prompt_lists_environments_without_secrets():
     assert "s3://bucket/dags/" in text
     assert "username/password" in text  # auth mode, not the values
     assert "auth=token" in text  # staging has no username
-    for secret in ("s3cr3t-password", "very-secret-jwt", "AKIAXXX", "aws-secret-key", "admin"):
+    for secret in ("s3cr3t-password", "very-secret-jwt", "admin"):
         assert secret not in text
     assert "- prod: " in text and "- staging: " in text  # one line per environment
 
@@ -345,7 +340,7 @@ def test_permissions_cover_every_command():
 
 def test_permissions_dangerous_commands_never_auto_run():
     risky = [
-        "dags delete", "dags deploy", "dags undeploy", "dags trigger", "assets materialize",
+        "dags delete", "dags trigger", "assets materialize",
         "backfill create", "variables delete", "pools delete",
         "variables import", "connections import", "pools import",
         "connections add", "connections delete", "connections export",
@@ -396,6 +391,18 @@ def test_package_never_imports_datus():
         if "datus_airflow_plugin" not in line.split(":", 2)[2]
     ]
     assert not offending, offending
+
+
+def test_package_has_no_embedded_object_storage_dependency():
+    pyproject = tomllib.loads((PKG_DIR.parent / "pyproject.toml").read_text(encoding="utf-8"))
+    dependencies = " ".join(pyproject["project"]["dependencies"]).lower()
+    assert "boto3" not in dependencies
+    assert not (PKG_DIR / "deploy.py").exists()
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in PKG_DIR.rglob("*.py")
+    )
+    assert "import boto3" not in source
 
 
 # ------------------------------------------------------------ command catalogue

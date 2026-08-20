@@ -11,6 +11,7 @@ import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Iterator
+from urllib.parse import unquote, urlsplit
 
 from .errors import PluginError, UsageError
 
@@ -72,6 +73,7 @@ def export_dashboard(
                         "asset_title": panel.get("title"), "ref_id": ref_id,
                         "query_index": index, "language": language,
                         "datasource": ds_ref or ds, "file": filename,
+                        "source_identity": _source_identity(ds_ref, ds),
                         "hidden": bool(query.get("hide") or hidden),
                         "variables": sorted(set(_variables(text))),
                         "sha256": hashlib.sha256(text.encode()).hexdigest(),
@@ -192,6 +194,63 @@ def _datasource(client: Any, ref: dict[str, Any] | None, cache: dict[str, dict[s
         except Exception:
             cache[uid] = ref
     return cache[uid]
+
+
+def _source_identity(ref: dict[str, Any] | None, datasource: dict[str, Any] | None) -> dict[str, Any]:
+    """Return one target's credential-free Grafana datasource identity."""
+    value = datasource or ref or {}
+    datasource_summary = {
+        key: value.get(key) or (ref or {}).get(key)
+        for key in ("uid", "name", "type")
+    }
+    connection = _connection_fingerprint(value)
+    has_physical_location = bool(
+        connection.get("host") or connection.get("database") or connection.get("path")
+    )
+    status = (
+        "resolved"
+        if datasource_summary.get("uid") and connection.get("backend") and has_physical_location
+        else "partial"
+    )
+    identity = {
+        "provider": "grafana",
+        "status": status,
+        "datasource": _compact(datasource_summary),
+    }
+    if connection:
+        identity["connection"] = connection
+    if status != "resolved":
+        identity["reason"] = "Grafana datasource metadata is incomplete"
+    return identity
+
+
+def _connection_fingerprint(datasource: dict[str, Any]) -> dict[str, Any]:
+    raw_url = datasource.get("url")
+    parsed: dict[str, Any] = {}
+    if isinstance(raw_url, str) and "://" in raw_url:
+        try:
+            value = urlsplit(raw_url)
+            parsed = {
+                "host": value.hostname,
+                "port": value.port,
+                "path": unquote(value.path) or None,
+            }
+        except (TypeError, ValueError):
+            parsed = {}
+    json_data = datasource.get("jsonData") if isinstance(datasource.get("jsonData"), dict) else {}
+    return _compact(
+        {
+            "backend": str(datasource.get("type") or "").strip().lower() or None,
+            "host": parsed.get("host"),
+            "port": parsed.get("port"),
+            "database": datasource.get("database") or json_data.get("database"),
+            "path": parsed.get("path"),
+        }
+    )
+
+
+def _compact(value: dict[str, Any]) -> dict[str, Any]:
+    return {key: child for key, child in value.items() if child not in (None, "")}
 
 
 def _dashboard_variables(dashboard: dict[str, Any]) -> list[dict[str, Any]]:

@@ -55,3 +55,44 @@ def test_cli_run_invokes_rest_and_decodes(run_cli, clients, monkeypatch, capsys)
     assert run_cli(["cli", "run", "dags list", "--env", "prod"]) == 0
     assert "dag_a" in capsys.readouterr().out
     assert captured == {"hostname": "host", "token": "tok", "command": "dags list"}
+
+
+def test_dags_list_uses_current_active_api(run_cli, monkeypatch, capsys):
+    import datus_mwaa_plugin.cli.dags_cmd as dags_cmd
+
+    class FakeAirflow:
+        def __init__(self):
+            self.params = None
+
+        def paginate(self, path, key, *, params, limit):
+            assert (path, key, limit) == ("/dags", "dags", None)
+            self.params = params
+            return [{"dag_id": "etl", "fileloc": "/dags/etl.py", "is_paused": False}]
+
+    fake = FakeAirflow()
+    monkeypatch.setattr(dags_cmd, "_client", lambda ctx, environment: fake)
+    assert run_cli(["dags", "list", "--env", "prod", "-o", "json"]) == 0
+    assert fake.params["only_active"] == "true"
+    assert '"dag_id": "etl"' in capsys.readouterr().out
+
+
+def test_dags_source_resolves_file_token_and_prints_source(run_cli, monkeypatch, capsys):
+    import datus_mwaa_plugin.cli.dags_cmd as dags_cmd
+
+    class FakeAirflow:
+        def __init__(self):
+            self.calls = []
+
+        def request(self, method, path, **kwargs):
+            self.calls.append((method, path, kwargs))
+            if path == "/dags/team%2Fetl":
+                return {"dag_id": "team/etl", "file_token": "file/token"}
+            if path == "/dagSources/file%2Ftoken":
+                return "from airflow import DAG"
+            raise AssertionError(path)
+
+    fake = FakeAirflow()
+    monkeypatch.setattr(dags_cmd, "_client", lambda ctx, environment: fake)
+    assert run_cli(["dags", "source", "team/etl", "--env", "prod"]) == 0
+    assert capsys.readouterr().out == "from airflow import DAG\n"
+    assert fake.calls[-1][2]["accept"] == "text/plain"

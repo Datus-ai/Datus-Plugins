@@ -2,8 +2,7 @@
 
 Command groups mirror the Airflow CLI (dags / tasks / variables / connections
 / pools / providers / plugins / config / jobs / assets / backfill / version /
-health), backed by REST API v1 or v2 instead of local Airflow internals, plus
-``dags deploy`` for shipping DAG files to S3 or a mounted dags folder.
+health), backed by REST API v1 or v2 instead of local Airflow internals.
 """
 
 from __future__ import annotations
@@ -178,11 +177,11 @@ def build_parser(allowed: Optional[Set[str]] = None) -> argparse.ArgumentParser:
         prog=PROG,
         description=(
             "Remote Apache Airflow CLI over REST API v1/v2 (Airflow 2.x/3.x). "
-            "Command groups mirror the Airflow CLI; `dags deploy` additionally "
-            "ships DAG files to S3 or a local dags folder."
+            "Command groups mirror the Airflow CLI."
         ),
-        epilog="Examples: `datus airflow dags list`, `datus airflow dags trigger my_dag --wait`, "
-        "`datus airflow dags deploy ./dags --dest s3://bucket/dags/`",
+        epilog="Examples: `datus airflow dags list`, "
+        "`datus airflow dags source my_dag`, "
+        "`datus airflow dags trigger my_dag --wait`",
     )
     sub = parser.add_subparsers(dest="group", required=True, metavar="<command>")
 

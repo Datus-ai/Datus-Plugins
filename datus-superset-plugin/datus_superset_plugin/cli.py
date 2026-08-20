@@ -14,8 +14,8 @@ import httpx
 
 from .client import SupersetClient
 from .config import Settings
-from .errors import EXIT_USAGE, PluginError, UsageError
-from .exporter import export_dashboard
+from .errors import PluginError, UsageError
+from .exporter import discover_dashboard_candidates, export_dashboard
 from .operations import OPERATIONS, Operation
 from .output import FORMATS, render
 
@@ -43,15 +43,21 @@ def build_parser() -> argparse.ArgumentParser:
                 _add_output(command)
             command.set_defaults(func=_run_operation, operation=operation)
 
-    serving = groups.add_parser("serving-target", help="show the Datus datasource bound to this BI instance")
-    _add_output(serving)
-    serving.set_defaults(func=_serving_target)
-
     context = groups.add_parser("context", help="export dashboard queries into project context files")
     context_sub = context.add_subparsers(dest="subcommand", required=True)
+    candidates = context_sub.add_parser("candidates")
+    candidates.add_argument("dashboard_id")
+    _add_output(candidates)
+    candidates.set_defaults(func=_discover_context)
     export = context_sub.add_parser("export-dashboard")
     export.add_argument("dashboard_id")
     export.add_argument("--output-root", default="reference_sql")
+    export.add_argument(
+        "--chart-id",
+        action="append",
+        default=[],
+        help="export only this dashboard chart; repeat for multiple charts",
+    )
     export.add_argument("--include-hidden", action="store_true")
     export.add_argument("--overwrite", action="store_true")
     _add_output(export)
@@ -137,24 +143,21 @@ def _run_operation(client: SupersetClient, settings: Settings, ns: argparse.Name
     return data
 
 
-def _serving_target(client: SupersetClient, settings: Settings, ns: argparse.Namespace) -> dict[str, Any]:
-    return {
-        "platform": "superset",
-        "serving_datasource": settings.serving_datasource,
-        "serving_database_name": settings.serving_database_name,
-    }
-
-
 def _export_context(client: SupersetClient, settings: Settings, ns: argparse.Namespace) -> dict[str, Any]:
     return export_dashboard(
         client,
         ns.dashboard_id,
         output_root=ns.output_root,
+        chart_ids=ns.chart_id,
         include_hidden=ns.include_hidden,
         overwrite=ns.overwrite,
         instance_url=settings.base_url,
         profile_name=settings.profile_name,
     )
+
+
+def _discover_context(client: SupersetClient, settings: Settings, ns: argparse.Namespace) -> dict[str, Any]:
+    return discover_dashboard_candidates(client, ns.dashboard_id)
 
 
 def _api_call(client: SupersetClient, settings: Settings, ns: argparse.Namespace) -> Any:

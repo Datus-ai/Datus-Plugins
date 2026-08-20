@@ -93,9 +93,19 @@ validates their complete stored state. Run
 `datus superset charts data <POPULATION_2014_CHART_ID>`; it must return data and
 compiled SQL.
 
-Then run:
+Then run one selective export containing the three confirmed chart IDs:
 
-`datus superset context export-dashboard <DISCOVERED_DASHBOARD_ID>`
+First run the read-only candidate discovery command:
+
+`datus superset context candidates <DISCOVERED_DASHBOARD_ID>`
+
+It must return exactly the three `chart-<id>` candidates and a resolved,
+credential-free `source_identity` for each one. Do not infer source identity
+from the table or schema name.
+
+Then export the same three candidates:
+
+`datus superset context export-dashboard <DISCOVERED_DASHBOARD_ID> --chart-id <POPULATION_2014_CHART_ID> --chart-id <POPULATION_BY_REGION_2014_CHART_ID> --chart-id <POPULATION_TREND_CHART_ID>`
 
 The export must be written under the default `reference_sql` root and must
 contain exactly three successful `.sql` files.

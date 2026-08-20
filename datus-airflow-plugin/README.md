@@ -3,12 +3,11 @@
 A [Datus](https://datus.ai) plugin that drives **remote Apache Airflow 2.x or
 3.x** deployments from `datus airflow ...`, backed entirely by the stable REST
 API (`/api/v1` for Airflow 2, `/api/v2` for Airflow 3)
-— no Airflow installation needed on the client. Command groups mirror the
-Airflow CLI, plus a `dags deploy` command that ships DAG files to **S3** or a
-local/mounted dags folder and verifies the scheduler picked them up.
+— no Airflow installation needed on the client. DAG export is driven by the
+bundled `airflow-dag-export` skill from the API's current active DAG set.
 
 ```bash
-pip install datus-airflow-plugin            # requests + PyYAML + boto3 (S3 deploy included)
+pip install datus-airflow-plugin            # requests + PyYAML
 ```
 
 > Requires datus-agent >= 0.3.8 — the system-prompt template uses the `config_mutable` render-context variable (older versions skip the whole prompt section).
@@ -28,11 +27,8 @@ agent:
         api_version: auto                          # URL suffix selects v1; no suffix defaults to v2
         username: admin
         password: ${AIRFLOW_PASSWORD}               # or a static JWT: token: ${AIRFLOW_API_TOKEN}
-        dags_folder: s3://my-bucket/dags/           # default `dags deploy` target
-        s3:                                         # optional S3 overrides
-          region: us-east-1
-          # profile: my-aws-profile / endpoint_url: http://minio:9000
-          # access_key_id: ${AWS_ACCESS_KEY_ID} / secret_access_key: ${AWS_SECRET_ACCESS_KEY}
+        dags_folder: s3://my-bucket/dags/           # optional deployment URI;
+                                                     # storage credentials belong to the s3 plugin
       staging:
         api_base_url: http://localhost:8080
         username: admin
@@ -87,7 +83,7 @@ Everything accepts `-o table|json|yaml|plain` where output is structured
 
 | Group | Subcommands |
 |---|---|
-| `dags` | `list`, `details`, `list-runs`, `list-import-errors`, `show` (ASCII task tree), `source`, `pause`, `unpause`, `trigger [--wait]`, `state`, `clear-run`, `delete`, `next-execution`, **`deploy`**, **`undeploy`** |
+| `dags` | `list`, `details`, `list-runs`, `list-import-errors`, `show` (ASCII task tree), `source`, `pause`, `unpause`, `trigger [--wait]`, `state`, `clear-run`, `delete`, `next-execution` |
 | `tasks` | `list`, `state`, `states-for-dag-run`, `clear`, `failed-deps`, `logs` |
 | `variables` | `list`, `get`, `set`, `delete`, `import`, `export` |
 | `connections` | `list`, `get`, `add`, `delete`, `test`, `import`, `export` (json/yaml/env) |
@@ -104,43 +100,24 @@ datus airflow variables set ENV prod
 datus airflow connections add pg --conn-uri 'postgres://user:pass@db:5432/warehouse'
 ```
 
-## Deploying DAGs
+## Exporting and uploading DAG source
 
-```bash
-# single file to the profile's dags_folder, then wait until the scheduler parsed it
-datus airflow dags deploy ./dags/sales_daily.py --verify sales_daily
+Load the bundled `airflow-dag-export` skill. It lists active, non-stale DAGs
+through the API, fetches each Python source through `/dagSources`, proposes a
+full export by default, and supports repeated filtering by DAG id, tag, owner,
+connection id, keyword, or include/exclude rules. It writes nothing to the
+requested destination until the user explicitly confirms the current scope.
 
-# a whole directory to S3, removing remote files that no longer exist locally
-datus airflow dags deploy ./dags --dest s3://my-bucket/dags/ --prune -y
-
-# see what would happen first
-datus airflow dags deploy ./dags --dry-run
-
-# delete individual files from the target (then drop metadata with `dags delete`)
-datus airflow dags undeploy old_dag.py -y
-```
-
-- Directories are scanned recursively for `*.py` and `*.zip` (`--all-files`
-  to include everything); `__pycache__`, hidden files and `*.pyc` are skipped.
-- `--verify <dag_id>` polls the API until that DAG has been re-parsed after
-  the upload, and fails fast with the stack trace if the file causes an
-  import error. Detection is based on `last_parsed_time` *changing*, so it is
-  immune to client/server clock skew.
-- `--prune` compares the target against the deployed set and deletes stale
-  files — always try `--dry-run` first.
-- S3 credentials resolve through the standard boto3 chain (env, shared
-  config, instance profile / IRSA) unless overridden in the profile's `s3:`
-  block; MinIO and other S3-compatible stores work via `endpoint_url`.
-- IAM roles: either point `s3.profile` at an assume-role profile in
-  `~/.aws/config`, or set `s3.role_arn` (plus optional `role_session_name` /
-  `external_id`) and the plugin performs the STS AssumeRole itself, using the
-  chain/profile/keys credentials only to bootstrap it.
+Uploads are composed by the agent from `dags_folder` or the requested target:
+`s3://` uses the S3 plugin, `gs://` GCS, `abfs[s]://`/`adls://` ADLS, and local
+paths use filesystem operations. The Airflow distribution does not contain an
+object-storage SDK or import another plugin.
 
 ## Exit codes
 
 `0` success · `1` runtime/API error (also: run failed under `--wait`,
 connection test failed, unhealthy `health`) · `2` usage error · `3` config
-error · `8` missing dependency (boto3, if the environment stripped it).
+error.
 
 ## Development
 
@@ -153,8 +130,7 @@ The package never imports `datus`. The whole plugin contract is declared in
 `datus_airflow_plugin/datus-plugin.yml` (CLI entry function, bundled skills,
 system-prompt template, bash-permission rules, profile config schema); the
 entry point `airflow` in the `datus.plugins` group maps the plugin name to the
-package. Bundled skills: `airflow` (usage reference for the agent) and
-`airflow-setup` (guided configuration).
+package. Bundled skills: `airflow`, `airflow-dag-export`, and `airflow-setup`.
 
 ## Agent bash permissions
 
@@ -169,8 +145,7 @@ CLI through its bash tool (humans in a terminal are never affected):
   pause/unpause/cancel`, `variables set`, `pools set`, `variables/pools
   export`.
 - **ask under both profiles** — anything that starts runs (`dags trigger`,
-  `assets materialize`, `backfill create`), ships or removes code
-  (`dags deploy`, `dags undeploy`), deletes (`... delete`), bulk-overwrites
+  `assets materialize`, `backfill create`), deletes (`... delete`), bulk-overwrites
   (`... import`), or handles connection secrets (`connections add/export`).
 
 User rules in `agent.yml` always win (deny > ask > allow).

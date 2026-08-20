@@ -45,6 +45,7 @@ spec:
       - "datus superset charts create:*"
       - "datus superset charts add-to-dashboard:*"
       - "datus superset charts data:*"
+      - "datus superset context candidates:*"
       - "datus superset context export-dashboard:*"
   oracles:
     - type: superset_dashboard
@@ -83,6 +84,10 @@ spec:
       config:
         manifest: reference_sql/superset/population-e2e-overview/manifest.json
         platform: superset
+        contract: dashboard-sql-export/v1
+        plugin: superset
+        sourceIdentityStatus: resolved
+        selectionMode: selective
         count: 3
         language: sql
         suffix: .sql
@@ -104,6 +109,7 @@ spec:
       - "^datus superset status health"
       - "^datus superset databases list"
       - "^datus superset datasets create"
+      - "^datus superset context candidates"
       - "^datus superset dashboards create"
       - "^datus superset charts create"
       - "^datus superset charts data"

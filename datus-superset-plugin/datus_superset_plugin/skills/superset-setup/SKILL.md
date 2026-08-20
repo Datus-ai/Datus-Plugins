@@ -24,10 +24,8 @@ agent:
         provider: db
         verify_ssl: "true"
         timeout: "30"
-        serving_datasource: warehouse_prod       # optional
-        serving_database_name: analytics         # optional
 ```
 
 Ask for the endpoint, auth mode, non-secret username/provider, and environment-variable name holding the password or token. Have the user export that variable. Write only `${VAR}` to YAML, never a literal secret. Mark only the first profile `default: true`.
 
-Verify with `datus superset status health` and `datus superset status whoami`.
+Verify with `datus superset status health`, then `datus superset dashboards list` to confirm the credentials themselves work.

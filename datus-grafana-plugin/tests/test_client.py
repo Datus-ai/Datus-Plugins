@@ -13,7 +13,10 @@ def settings(**values):
 
 
 def test_config_and_path_guard():
-    assert settings(api_mode="auto").namespace == "default"
+    configured = settings(api_mode="auto")
+    assert configured.namespace == "default"
+    assert not hasattr(configured, "serving_datasource")
+    assert not hasattr(configured, "serving_database_name")
     with pytest.raises(ConfigError):
         Settings.from_profile({"api_base_url": "https://grafana.test", "auth_mode": "basic", "username": "u"})
     for path in ("https://evil/api/health", "/api/../admin", "/public/build.js"):
