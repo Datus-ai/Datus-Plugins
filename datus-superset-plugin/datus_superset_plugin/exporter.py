@@ -10,9 +10,10 @@ import shutil
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 from .errors import PluginError, UsageError
+from .query_context import build_query_context
 
 _SECRET_KEYS = {
     "access_token", "refresh_token", "password", "authorization", "cookie",
@@ -61,7 +62,7 @@ def export_dashboard(
             try:
                 detail = _result(client.request("GET", f"/api/v1/chart/{chart_id}"))
                 _write_json(source_dir / f"chart-{chart_id}.json", _redact(detail))
-                sqls = _chart_sql(client, chart_id, detail)
+                sqls = _chart_sql(client, chart_id, detail, chart_summary)
                 if not sqls:
                     failures += 1
                     queries.append(_failed_entry(chart_id, detail, "no compiled SQL returned by Superset"))
@@ -78,10 +79,10 @@ def export_dashboard(
                             "asset_title": title_value,
                             "query_index": index,
                             "language": "sql",
-                            "datasource": _datasource(detail),
+                            "datasource": _datasource(detail, chart_summary),
                             "file": filename,
                             "hidden": hidden,
-                            "variables": _variables(detail),
+                            "variables": _variables({"detail": detail, "summary": chart_summary}),
                             "sha256": _sha256(text),
                             "status": "ok",
                             "error": None,
@@ -123,7 +124,13 @@ def export_dashboard(
         raise
 
 
-def _chart_sql(client: Any, chart_id: Any, detail: dict[str, Any]) -> list[str]:
+def _chart_sql(
+    client: Any,
+    chart_id: Any,
+    detail: dict[str, Any],
+    chart_summary: dict[str, Any] | None = None,
+) -> list[str]:
+    errors: list[str] = []
     contexts: list[dict[str, Any]] = []
     for key in ("query_context",):
         value = _jsonish(detail.get(key))
@@ -135,21 +142,76 @@ def _chart_sql(client: Any, chart_id: Any, detail: dict[str, Any]) -> list[str]:
         if isinstance(value, dict):
             contexts.append(value)
     for context in contexts:
-        payload = dict(context)
-        payload["result_format"] = "json"
-        payload["result_type"] = "query"
-        response = client.request("POST", "/api/v1/chart/data", json_body=payload)
-        found = _find_sql(response)
+        found = _query_context_sql(client, context, errors)
         if found:
             return found
+
+    for source in (chart_summary or {}, detail, result or {}):
+        if not isinstance(source, dict):
+            continue
+        for key in ("form_data", "params"):
+            found = _form_data_sql(client, source.get(key), errors)
+            if found:
+                return found
+
+    try:
+        explore = _result(
+            client.request(
+                "GET",
+                "/api/v1/explore/",
+                params={"slice_id": chart_id},
+            )
+        )
+        found = _form_data_sql(client, explore.get("form_data"), errors)
+        if found:
+            return found
+    except Exception as exc:
+        errors.append(f"explore metadata: {exc}")
+
     try:
         response = client.request("GET", f"/api/v1/chart/{chart_id}/data/")
         found = _find_sql(response)
         if found:
             return found
-    except Exception:
-        pass
-    return _find_sql(detail)
+    except Exception as exc:
+        errors.append(f"saved chart data: {exc}")
+
+    found = _find_sql(detail)
+    if found:
+        return found
+    if errors:
+        raise PluginError(
+            f"could not compile SQL for chart {chart_id}: " + "; ".join(errors)
+        )
+    return []
+
+
+def _form_data_sql(client: Any, value: Any, errors: list[str]) -> list[str]:
+    form_data = _jsonish(value)
+    if not isinstance(form_data, dict) or not form_data:
+        return []
+    try:
+        context = build_query_context(form_data)
+    except Exception as exc:
+        errors.append(f"form_data conversion: {exc}")
+        return []
+    return _query_context_sql(client, context, errors)
+
+
+def _query_context_sql(
+    client: Any,
+    context: dict[str, Any],
+    errors: list[str],
+) -> list[str]:
+    payload = dict(context)
+    payload["result_format"] = "json"
+    payload["result_type"] = "query"
+    try:
+        response = client.request("POST", "/api/v1/chart/data", json_body=payload)
+    except Exception as exc:
+        errors.append(f"chart data: {exc}")
+        return []
+    return _find_sql(response)
 
 
 def _find_sql(value: Any) -> list[str]:
@@ -182,11 +244,20 @@ def _failed_entry(chart_id: Any, chart: dict[str, Any], error: str) -> dict[str,
     }
 
 
-def _datasource(detail: dict[str, Any]) -> Any:
-    for source in (detail, detail.get("result") if isinstance(detail.get("result"), dict) else {}):
+def _datasource(*charts: dict[str, Any]) -> Any:
+    sources: list[dict[str, Any]] = []
+    for chart in charts:
+        sources.append(chart)
+        if isinstance(chart.get("result"), dict):
+            sources.append(chart["result"])
+    for source in sources:
         for key in ("datasource", "datasource_id"):
             if source.get(key) is not None:
                 return source[key]
+        for key in ("form_data", "params"):
+            form_data = _jsonish(source.get(key))
+            if isinstance(form_data, dict) and form_data.get("datasource") is not None:
+                return form_data["datasource"]
     return None
 
 
