@@ -179,7 +179,7 @@ def test_s3_target_upload_list_delete(tmp_path):
 
 def make_client(fake_session, tmp_path):
     settings = Settings.from_profile(
-        {"api_base_url": BASE_URL, "token": "t", "cache_dir": str(tmp_path / "cache")}
+        {"api_base_url": BASE_URL, "api_version": "v2", "token": "t", "cache_dir": str(tmp_path / "cache")}
     )
     return AirflowClient(settings, session=fake_session)
 

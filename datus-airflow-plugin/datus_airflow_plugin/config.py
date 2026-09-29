@@ -38,6 +38,10 @@ COMMAND_GROUPS = (
     "jobs",
 )
 
+# Groups whose endpoints exist only in the Airflow 3 REST API (v2); the 2.x API
+# has no /assets, /backfills or /jobs.
+V2_ONLY_GROUPS = ("assets", "backfill", "jobs")
+
 
 def _normalize_base_url(raw: str) -> str:
     url = raw.strip().rstrip("/")
@@ -54,14 +58,17 @@ def _normalize_base_url(raw: str) -> str:
 
 
 def _resolve_api_version(raw_url: str, raw_version: Any) -> str:
-    """Resolve the REST API generation, preserving URL suffix compatibility."""
+    """Resolve the REST API generation from the URL suffix or an explicit value.
+
+    Returns "auto" when neither decides; the client then probes the server.
+    """
     if raw_version is None or str(raw_version).strip().lower() == "auto":
         normalized_url = raw_url.strip().rstrip("/").lower()
         if normalized_url.endswith("/api/v1"):
             return "v1"
         if normalized_url.endswith("/api/v2"):
             return "v2"
-        return "v2"
+        return "auto"
     value = str(raw_version).strip().lower()
     value = {"1": "v1", "2": "v2"}.get(value, value)
     if value not in API_VERSIONS:
@@ -97,6 +104,24 @@ def _parse_allow_commands(raw: Any) -> Tuple[str, ...]:
     return groups
 
 
+def _parse_connections(raw: Any) -> Dict[str, str]:
+    """Validate the host-managed datasource name -> Airflow conn_id mapping."""
+    if raw is None:
+        return {}
+    if not isinstance(raw, dict):
+        raise ConfigError("connections must be a mapping of datasource name -> conn_id")
+    parsed: Dict[str, str] = {}
+    for name, conn_id in raw.items():
+        if not isinstance(name, str) or not name.strip():
+            raise ConfigError(f"connections keys must be non-empty strings (got {name!r})")
+        if not isinstance(conn_id, str) or not conn_id.strip():
+            raise ConfigError(
+                f"connections[{name!r}] must be a non-empty conn_id string (got {conn_id!r})"
+            )
+        parsed[name.strip()] = conn_id.strip()
+    return parsed
+
+
 @dataclass
 class S3Settings:
     """Optional overrides for the boto3 session used by `dags deploy`."""
@@ -126,7 +151,7 @@ class S3Settings:
 class Settings:
     profile_name: str = ""
     base_url: Optional[str] = None
-    api_version: str = "v2"
+    api_version: str = "auto"  # "auto" until the client probes the server
     token: Optional[str] = None
     username: Optional[str] = None
     password: Optional[str] = None
@@ -139,6 +164,8 @@ class Settings:
     # can edit agent.yml or call the REST API directly).
     dag_id_prefix: Tuple[str, ...] = ()
     allow_commands: Tuple[str, ...] = ()
+    # Datasource name -> conn_id; the host keeps these connections in sync.
+    connections: Dict[str, str] = field(default_factory=dict)
     s3: S3Settings = field(default_factory=S3Settings)
     cache_token: bool = True
     cache_dir: str = DEFAULT_CACHE_DIR
@@ -164,6 +191,7 @@ class Settings:
 
         settings.dag_id_prefix = _parse_csv(data.get("dag_id_prefix"))
         settings.allow_commands = _parse_allow_commands(data.get("allow_commands"))
+        settings.connections = _parse_connections(data.get("connections"))
 
         if "verify_ssl" in data and data["verify_ssl"] is not None:
             settings.verify_ssl = data["verify_ssl"]

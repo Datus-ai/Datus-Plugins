@@ -17,7 +17,7 @@ from typing import Any, Dict, Iterable, List, Optional, Set
 import requests
 
 from ..client import AirflowClient
-from ..config import COMMAND_GROUPS, Settings
+from ..config import COMMAND_GROUPS, V2_ONLY_GROUPS, Settings
 from ..errors import EXIT_USAGE, PluginError, UsageError
 from ..output import DEFAULT_FORMAT, FORMATS
 
@@ -80,6 +80,14 @@ class Context:
                 file=sys.stderr,
             )
         return kept
+
+    def check_group_supported(self, group: str) -> None:
+        """Refuse Airflow-3-only groups on a v1 server (probes first under auto)."""
+        if group in V2_ONLY_GROUPS and self.client.is_v1:
+            profile = self.settings.profile_name or "<default>"
+            raise UsageError(
+                f"`{group}` requires Airflow 3 (REST API v2); profile {profile} targets v1"
+            )
 
     def reject_when_scoped(self, command: str, alternative: str) -> None:
         """Refuse commands whose arguments carry no dag_id to check the prefix against."""
@@ -234,6 +242,7 @@ def main(argv: List[str], profile: Dict[str, Any]) -> int:
 
     try:
         ctx = Context(settings)
+        ctx.check_group_supported(ns.group)
         rc = ns.func(ctx, ns)
         return 0 if rc is None else int(rc)
     except PluginError as exc:

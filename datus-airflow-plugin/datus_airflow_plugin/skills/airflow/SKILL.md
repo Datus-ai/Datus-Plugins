@@ -122,6 +122,17 @@ datus airflow pools list|get NAME|set NAME SLOTS DESCRIPTION|delete NAME|import 
 Connection passwords are masked in output unless `--show-secrets`; exports
 contain clear-text secrets — never paste an export back into chat.
 
+## Connections (conn_id)
+
+When an environment lists "Airflow connections for this project's
+datasources" in the `## Airflow` prompt section, reference exactly those
+conn_ids in DAG code (`PostgresHook(postgres_conn_id="...")`,
+`SQLExecuteQueryOperator(conn_id="...")`). The host creates them and keeps them
+in sync with the datasources: never create or modify these connections, and
+never ask the user for database credentials. If a datasource the user needs is
+not listed, say its type isn't supported for scheduling or it isn't bound to
+the project.
+
 ## Assets, backfills, server info
 
 ```
@@ -136,6 +147,7 @@ datus airflow version | health | providers list | plugins | config list | config
 connection test, unhealthy `health`) · 2 usage error · 3 profile/config
 error · 8 missing dependency (boto3, if the environment stripped it).
 
-`assets` and the top-level `backfill` API are Airflow 3/API v2 features. The
-Airflow 2/API v1 compatibility path covers DAG, run, task, log, variable,
-connection, pool, server-info, and DAG deployment operations.
+`assets`, `backfill` and `jobs` are Airflow 3/API v2 features; on a v1
+profile they exit 2 before any request. The Airflow 2/API v1 compatibility path
+covers DAG, run, task, log, variable, connection, pool, server-info, and DAG
+deployment operations.

@@ -171,7 +171,7 @@ config_schema:
     api_version:
       type: string
       enum: [auto, v1, v2]
-      description: "REST API generation; auto infers a URL suffix and otherwise defaults to v2"
+      description: "REST API generation (v1 = Airflow 2, v2 = Airflow 3); auto uses a URL suffix, otherwise probes /api/v2/version then /api/v1/version"
       default: auto
     username:
       type: string
@@ -200,6 +200,14 @@ config_schema:
     allow_commands:
       type: string
       description: "Comma-separated allowlist of top-level command groups (dags, tasks, variables, connections, pools, assets, backfill, version, health, providers, plugins, config, jobs); empty means all"
+    # No `properties` on purpose: datus then hands the whole mapping to the
+    # system prompt, which lists the conn_ids per environment.
+    connections:
+      type: object
+      readOnly: true
+      additionalProperties:
+        type: string
+      description: "Datasource name -> Airflow conn_id for the project's datasources; managed by the host, which syncs each datasource into an Airflow connection"
     s3:
       # boto3 overrides for `dags deploy` to an s3:// target. Nested fields
       # surface in the /plugins TUI as dotted names (s3.region, ...); the

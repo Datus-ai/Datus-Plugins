@@ -118,6 +118,16 @@ def test_config_schema_exposes_the_scope_fields_to_the_prompt():
     assert {"dag_id_prefix", "allow_commands"} <= _non_secret_fields()
 
 
+def test_config_schema_connections_reach_the_prompt_whole():
+    """A host-managed, read-only mapping; without a nested `properties` key
+    datus passes it to the template unchanged, so it must stay that way."""
+    spec = _schema()["properties"]["connections"]
+    assert spec["type"] == "object" and spec["readOnly"] is True
+    assert spec["additionalProperties"] == {"type": "string"}
+    assert "properties" not in spec
+    assert "connections" in _non_secret_fields()
+
+
 def test_command_groups_constant_matches_the_parser():
     """`allow_commands` is validated against config.COMMAND_GROUPS, and the
     manifest's commands catalogue / permission patterns are validated against
@@ -153,9 +163,12 @@ def test_config_schema_accepts_a_real_profile_and_requires_api_base_url():
         "dags_folder": "s3://bucket/dags/",
         "dag_id_prefix": "team_a_",
         "allow_commands": "dags,tasks,version",
+        "connections": {"aviation": "datus__abc__def"},
         "s3": {"region": "us-east-1", "secret_access_key": "${AWS_SECRET_ACCESS_KEY}"},
     }
     assert list(validator.iter_errors(profile)) == []
+    bad = {"api_base_url": "https://airflow.example.com", "connections": {"aviation": 1}}
+    assert list(validator.iter_errors(bad))
     errors = [e.message for e in validator.iter_errors({"username": "admin"})]
     assert any("api_base_url" in message for message in errors)
 
@@ -267,6 +280,36 @@ def test_prompt_surfaces_scope_limits_per_environment():
 def test_prompt_omits_the_scope_note_when_nothing_is_limited():
     text = _render_prompt({"prod": {"name": "prod", "api_base_url": "https://airflow.example.com"}})
     assert "Scope limits" not in text
+
+
+def test_prompt_lists_host_managed_connections_per_environment():
+    text = _render_prompt({
+        "dev": {
+            "name": "dev",
+            "api_base_url": "https://airflow.example.com",
+            "connections": {"aviation": "datus__abc__def", "sales": "datus__abc__xyz"},
+        },
+        "ops": {"name": "ops", "api_base_url": "https://airflow.example.com"},
+    })
+    assert (
+        "Airflow connections for this project's datasources (env `dev`): "
+        "`aviation` → conn_id `datus__abc__def`, `sales` → conn_id `datus__abc__xyz`.\n"
+    ) in text
+    assert "env `ops`" not in text
+    assert "Use exactly these conn_ids in DAGs" in text
+    assert "never ask the user for database credentials" in text
+
+
+def test_prompt_omits_connections_when_none_are_bound():
+    text = _render_prompt({
+        "dev": {"name": "dev", "api_base_url": "https://airflow.example.com", "connections": {}},
+    })
+    assert "conn_id" not in text
+
+
+def test_prompt_marks_airflow3_only_groups():
+    text = _render_prompt({"prod": {"name": "prod", "api_base_url": "https://airflow.example.com"}})
+    assert "`assets`, `backfill` and `jobs` need Airflow 3" in text
 
 
 def test_prompt_handles_a_profile_missing_optional_fields():
