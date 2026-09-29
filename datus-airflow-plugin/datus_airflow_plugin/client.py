@@ -84,7 +84,7 @@ class AirflowClient:
         raise ConfigError(
             f"cannot detect the Airflow REST API version: neither "
             f"GET {self.base_url}/api/v2/version nor GET {self.base_url}/api/v1/version "
-            "answered — set `api_version: v1` (Airflow 2) or `v2` (Airflow 3) in the profile"
+            "answered as an Airflow REST API — set `api_version: v1` (Airflow 2) or `v2` (Airflow 3) in the profile"
         )
 
     # ------------------------------------------------------------------ auth
