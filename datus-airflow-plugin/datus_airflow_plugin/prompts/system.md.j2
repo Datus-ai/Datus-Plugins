@@ -25,7 +25,7 @@
 {% if cfg.get("allow_commands") or cfg.get("dag_id_prefix") %}
 {% set scope.limited = true %}
 {% endif %}
-{% if cfg.get("connections") %}
+{% if cfg.get("connections") is mapping %}
 {% set scope.conns = true %}
 {% endif %}
 {% endfor %}
@@ -39,8 +39,11 @@ Environments ({{ profiles | length }}):
 {% endfor %}
 {% if scope.conns %}
 {% for name, cfg in profiles.items() %}
-{% if cfg.get("connections") %}
-Airflow connections for this project's datasources (env `{{ name }}`): {% for ds, conn_id in cfg.get("connections").items() %}`{{ ds }}` → conn_id `{{ conn_id }}`{{ ", " if not loop.last else "" }}{% endfor %}.
+{% set conns = cfg.get("connections") %}
+{% if conns is mapping and conns %}
+Airflow connections for this project's datasources (env `{{ name }}`): {% for ds, conn_id in conns.items() %}`{{ ds }}` → conn_id `{{ conn_id }}`{{ ", " if not loop.last else "" }}{% endfor %}.
+{% elif conns is mapping %}
+Airflow connections for this project's datasources (env `{{ name }}`): none — no datasource bound to this project is synced to Airflow.
 {% endif %}
 {% endfor %}
 Use exactly these conn_ids in DAGs (e.g. `PostgresHook(postgres_conn_id=...)`, `SQLExecuteQueryOperator(conn_id=...)`). The host creates and syncs them: never create or modify connections and never ask the user for database credentials. If a needed datasource is not listed, say its type isn't supported for scheduling or it isn't bound to the project.

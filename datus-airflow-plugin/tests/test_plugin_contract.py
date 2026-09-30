@@ -300,10 +300,26 @@ def test_prompt_lists_host_managed_connections_per_environment():
     assert "never ask the user for database credentials" in text
 
 
-def test_prompt_omits_connections_when_none_are_bound():
+def test_prompt_keeps_the_credentials_rule_when_nothing_is_synced():
+    # The host writes an empty map when no bound datasource can be synced; the
+    # agent must still not fall back to asking for database passwords.
     text = _render_prompt({
         "dev": {"name": "dev", "api_base_url": "https://airflow.example.com", "connections": {}},
     })
+    assert "(env `dev`): none" in text
+    assert "never ask the user for database credentials" in text
+
+
+def test_prompt_omits_connections_when_the_host_manages_none():
+    text = _render_prompt({"dev": {"name": "dev", "api_base_url": "https://airflow.example.com"}})
+    assert "conn_id" not in text
+
+
+def test_prompt_survives_a_non_mapping_connections_value():
+    text = _render_prompt({
+        "dev": {"name": "dev", "api_base_url": "https://airflow.example.com", "connections": "oops"},
+    })
+    assert "- dev: api=https://airflow.example.com" in text
     assert "conn_id" not in text
 
 

@@ -75,8 +75,10 @@ should not reach them.
 (Airflow 3). With `auto` (the default) an `/api/v1` or `/api/v2` URL suffix
 decides; otherwise the first command probes `GET /api/v2/version`, then
 `GET /api/v1/version`, and fails with a hint to set `api_version` if neither
-answers. `assets`, `backfill` and `jobs` exist only in the Airflow 3 API — on a
-v1 profile they exit 2 before any request.
+answers. A 401/403 counts as "this version exists", so an Airflow 2 behind an
+auth proxy that rejects every path is detected as v2 — set `api_version: v1`
+explicitly there. `assets`, `backfill` and `jobs` exist only in the Airflow 3
+API — on a v1 profile they exit 2 before any request.
 
 For Airflow 2 API v1, username/password use HTTP Basic Auth. Authentication
 for Airflow 3 follows its JWT model: username/password are exchanged
