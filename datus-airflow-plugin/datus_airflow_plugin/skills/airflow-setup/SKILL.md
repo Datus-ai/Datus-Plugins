@@ -55,7 +55,8 @@ agent:
 1. Ask the user for:
    - `api_base_url` — the Airflow web server root. An `/api/v1` suffix selects
      Airflow 2 with Basic Auth; `/api/v2` selects Airflow 3 with JWT. Without a
-     suffix, `api_version` defaults to v2.
+     suffix, `api_version: auto` probes `/api/v2/version`, then
+     `/api/v1/version`, on first use.
    - Auth method: a ready-made API token, **or** username + password. For the
      secret, have the user export an environment variable (e.g.
      `export AIRFLOW_PASSWORD=...`) and write `${VAR}` into the YAML — never a
@@ -97,9 +98,14 @@ be prefix-scoped at all — leave them out of `allow_commands` if that matters.
 
 ## Troubleshooting
 
-- `login failed at .../auth/token` — username/password wrong, or the server's
-  auth manager does not expose `POST /auth/token` (set `auth_token_url` if it
-  lives elsewhere).
+- `login failed at .../auth/token (HTTP 404)` — the server has no token
+  endpoint, which usually means Airflow 2.x: set `api_version: v1`. If it is
+  Airflow 3 with the endpoint elsewhere, set `auth_token_url`. HTTP 401/403
+  there means wrong username/password.
+- `cannot detect the Airflow REST API version` — neither version endpoint
+  answered (proxy path prefix, wrong URL); fix `api_base_url` or set
+  `api_version` explicitly. An auth proxy that answers 401 on every path makes
+  `auto` pick v2 even for Airflow 2 — set `api_version: v1` there.
 - `TLS verification failed` — set `verify_ssl` to the CA bundle path, or
   `false` as a last resort.
 - 403 on `config` commands — server needs `AIRFLOW__API__EXPOSE_CONFIG=True`.

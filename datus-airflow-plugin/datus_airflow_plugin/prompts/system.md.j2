@@ -20,20 +20,34 @@
   under StrictUndefined.
 -#}
 {% if profiles %}
-{% set scope = namespace(limited=false) %}
+{% set scope = namespace(limited=false, conns=false) %}
 {% for cfg in profiles.values() %}
 {% if cfg.get("allow_commands") or cfg.get("dag_id_prefix") %}
 {% set scope.limited = true %}
 {% endif %}
+{% if cfg.get("connections") is mapping %}
+{% set scope.conns = true %}
+{% endif %}
 {% endfor %}
 ## Airflow
 Operate remote Apache Airflow 2.x/3.x deployments through `datus airflow <group> <subcommand>` (REST API v1/v2 backed; supports `--profile <env>` before the group).
-Groups: `dags` (list, details, list-runs, trigger [--wait], pause/unpause, state, clear-run, delete, show, source, next-execution, list-import-errors, and `deploy` to ship DAG files to S3 or a dags folder), `tasks` (list, state, states-for-dag-run, clear, failed-deps, logs), `variables`, `connections`, `pools` (each with list/get/set-or-add/delete/import/export), `assets` (list, details, materialize, events), `backfill` (create/list/pause/unpause/cancel), `providers list`, `plugins`, `config`, `jobs check`, `version`, `health`.
+Groups: `dags` (list, details, list-runs, trigger [--wait], pause/unpause, state, clear-run, delete, show, source, next-execution, list-import-errors, and `deploy` to ship DAG files to S3 or a dags folder), `tasks` (list, state, states-for-dag-run, clear, failed-deps, logs), `variables`, `connections`, `pools` (each with list/get/set-or-add/delete/import/export), `assets` (list, details, materialize, events), `backfill` (create/list/pause/unpause/cancel), `providers list`, `plugins`, `config`, `jobs check`, `version`, `health`. `assets`, `backfill` and `jobs` need Airflow 3 (API v2).
 Add `-o json` for machine-readable output. Consult the `airflow` skill for details before composing non-trivial commands.
 Environments ({{ profiles | length }}):
 {% for name, cfg in profiles.items() %}
 - {{ name }}: api={{ cfg.get("api_base_url") or "?" }}, auth={{ "username/password" if cfg.get("username") else "token" }}{{ (", dags_folder=" ~ cfg.get("dags_folder")) if cfg.get("dags_folder") else "" }}{{ (", commands=" ~ cfg.get("allow_commands")) if cfg.get("allow_commands") else "" }}{{ (", dag_prefix=" ~ cfg.get("dag_id_prefix")) if cfg.get("dag_id_prefix") else "" }}
 {% endfor %}
+{% if scope.conns %}
+{% for name, cfg in profiles.items() %}
+{% set conns = cfg.get("connections") %}
+{% if conns is mapping and conns %}
+Airflow connections for this project's datasources (env `{{ name }}`): {% for ds, conn_id in conns.items() %}`{{ ds }}` → conn_id `{{ conn_id }}`{{ ", " if not loop.last else "" }}{% endfor %}.
+{% elif conns is mapping %}
+Airflow connections for this project's datasources (env `{{ name }}`): none — no datasource bound to this project is synced to Airflow.
+{% endif %}
+{% endfor %}
+Use exactly these conn_ids in DAGs (e.g. `PostgresHook(postgres_conn_id=...)`, `SQLExecuteQueryOperator(conn_id=...)`). The host creates and syncs them: never create or modify connections and never ask the user for database credentials. If a needed datasource is not listed, say its type isn't supported for scheduling or it isn't bound to the project.
+{% endif %}
 {% if scope.limited %}
 Scope limits apply per environment. Where a `commands=` list is shown, only those groups exist — any other group exits 2 without calling the server. Where a `dag_prefix=` is shown, every dag_id argument must start with it (otherwise the command exits 2 before any request), DAG listings are filtered to it, and `assets materialize` / `backfill pause|unpause|cancel` are unavailable because they carry no dag_id to check. Variables, connections and pools are instance-wide and never prefix-filtered.
 {% endif %}

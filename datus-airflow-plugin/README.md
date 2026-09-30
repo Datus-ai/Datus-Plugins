@@ -25,7 +25,7 @@ agent:
       prod:
         default: true
         api_base_url: https://airflow.example.com/api/v1
-        api_version: auto                          # URL suffix selects v1; no suffix defaults to v2
+        api_version: auto                          # URL suffix decides; otherwise probes the server
         username: admin
         password: ${AIRFLOW_PASSWORD}               # or a static JWT: token: ${AIRFLOW_API_TOKEN}
         dags_folder: s3://my-bucket/dags/           # default `dags deploy` target
@@ -71,6 +71,15 @@ should not reach them.
 > confirm for *every* profile, these two limit *which* commands and DAGs a
 > single profile sees.
 
+`api_version` picks the REST API generation: `v1` (Airflow 2) or `v2`
+(Airflow 3). With `auto` (the default) an `/api/v1` or `/api/v2` URL suffix
+decides; otherwise the first command probes `GET /api/v2/version`, then
+`GET /api/v1/version`, and fails with a hint to set `api_version` if neither
+answers. A 401/403 counts as "this version exists", so an Airflow 2 behind an
+auth proxy that rejects every path is detected as v2 — set `api_version: v1`
+explicitly there. `assets`, `backfill` and `jobs` exist only in the Airflow 3
+API — on a v1 profile they exit 2 before any request.
+
 For Airflow 2 API v1, username/password use HTTP Basic Auth. Authentication
 for Airflow 3 follows its JWT model: username/password are exchanged
 for a JWT at `POST /auth/token` (SimpleAuthManager and FabAuthManager both
@@ -78,6 +87,20 @@ expose it; override the URL with `auth_token_url` if needed). Tokens are
 cached under `~/.cache/datus-airflow-plugin/` (0600) and refreshed on expiry;
 set `cache_token: false` to disable. Self-signed TLS: set `verify_ssl` to a CA
 bundle path (or `false`).
+
+### Host-managed connections
+
+`connections` is a read-only mapping of datasource name → Airflow `conn_id`,
+written by the host (e.g. Datus Studio), which also syncs each datasource into
+that Airflow connection. The system prompt lists it per environment and tells
+the agent to use exactly those conn_ids in DAGs and never to create
+connections or ask for database credentials. The CLI only validates it.
+
+```yaml
+      prod:
+        connections:                    # written by the host, not by hand
+          aviation: datus__abc__def
+```
 
 ## Commands
 

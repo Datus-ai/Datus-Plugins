@@ -95,6 +95,7 @@ def settings(tmp_path):
         {
             "name": "test",
             "api_base_url": BASE_URL,
+            "api_version": "v2",  # pinned: auto would add a probe request
             "token": "static-token",
             "cache_dir": str(tmp_path / "cache"),
         }

@@ -45,12 +45,47 @@ class AirflowClient:
         self._session = session or requests.Session()
         self._static_token = bool(settings.token)
         self._token: Optional[str] = settings.token
-        if self.is_v1 and not settings.token and settings.username:
-            self._session.auth = (settings.username, settings.password or "")
+        if settings.api_version != "auto":
+            self._apply_basic_auth()
+
+    @property
+    def api_version(self) -> str:
+        """The REST API generation, probing the server once when set to auto."""
+        if self.settings.api_version == "auto":
+            # write back so every settings reader sees the resolved value
+            self.settings.api_version = self._probe_api_version()
+            self._apply_basic_auth()
+        return self.settings.api_version
 
     @property
     def is_v1(self) -> bool:
-        return self.settings.api_version == "v1"
+        return self.api_version == "v1"
+
+    def _apply_basic_auth(self) -> None:
+        settings = self.settings
+        if settings.api_version == "v1" and not settings.token and settings.username:
+            self._session.auth = (settings.username, settings.password or "")
+
+    def _probe_api_version(self) -> str:
+        # /version is public on stock servers; 401/403 still proves the route exists.
+        for version in ("v2", "v1"):
+            resp = self._session.request(
+                "GET",
+                f"{self.base_url}/api/{version}/version",
+                headers={"Accept": "application/json"},
+                timeout=self.settings.timeout,
+                verify=self.settings.verify_ssl,
+            )
+            if resp.status_code in (401, 403):
+                return version
+            # a catch-all proxy may answer 200 with HTML for any path
+            if 200 <= resp.status_code < 300 and "json" in resp.headers.get("content-type", ""):
+                return version
+        raise ConfigError(
+            f"cannot detect the Airflow REST API version: neither "
+            f"GET {self.base_url}/api/v2/version nor GET {self.base_url}/api/v1/version "
+            "answered as an Airflow REST API — set `api_version: v1` (Airflow 2) or `v2` (Airflow 3) in the profile"
+        )
 
     # ------------------------------------------------------------------ auth
 
@@ -123,6 +158,13 @@ class AirflowClient:
             )
         except requests.RequestException as exc:
             raise ApiError(f"cannot reach auth endpoint {url}: {exc}") from exc
+        if resp.status_code == 404:
+            raise ApiError(
+                f"login failed at {url} (HTTP 404): the server has no token endpoint — "
+                "it is likely Airflow 2.x, so set `api_version: v1` in the profile "
+                "(or `auth_token_url` if the endpoint lives elsewhere)",
+                status_code=404,
+            )
         if resp.status_code >= 400:
             raise ApiError(
                 f"login failed at {url} (HTTP {resp.status_code}): "
@@ -155,7 +197,7 @@ class AirflowClient:
     def _api_url(self, path: str) -> str:
         if not path.startswith("/"):
             path = "/" + path
-        return f"{self.base_url}/api/{self.settings.api_version}{path}"
+        return f"{self.base_url}/api/{self.api_version}{path}"
 
     def request(
         self,

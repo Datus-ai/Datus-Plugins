@@ -16,7 +16,12 @@ from conftest import BASE_URL, FakeResponse, paged
 
 
 def make_settings(tmp_path, **extra) -> Settings:
-    profile = {"api_base_url": BASE_URL, "cache_dir": str(tmp_path / "cache"), **extra}
+    profile = {
+        "api_base_url": BASE_URL,
+        "api_version": "v2",  # pinned: auto would add a probe request
+        "cache_dir": str(tmp_path / "cache"),
+        **extra,
+    }
     return Settings.from_profile(profile)
 
 
