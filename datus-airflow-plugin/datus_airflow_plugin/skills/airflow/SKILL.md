@@ -69,6 +69,37 @@ would leave that run `queued` forever; `dags unpause <dag_id>` first (and ask
 the user before unpausing something they did not mention).
 Omit `<dag_id>` in `list-runs` to list runs across all DAGs.
 
+## Writing DAGs
+
+Check the server first (`datus airflow version`) and write for its major
+version. Airflow 3 refuses to parse several Airflow 2 idioms — the DAG then
+never appears, and `dags deploy --verify` reports the import error:
+
+| Airflow 2 idiom | On Airflow 3 | Write instead (works on 2.4+ too) |
+|---|---|---|
+| `schedule_interval="0 8 * * *"` | `TypeError`, DAG not loaded | `schedule="0 8 * * *"` |
+| `from airflow.utils.dates import days_ago` | `ImportError` | a fixed `start_date=pendulum.datetime(2026, 1, 1, tz="UTC")` |
+| `DummyOperator` / `airflow.operators.dummy` | removed | `EmptyOperator` |
+| `execution_date` / `{{ execution_date }}` in task code | removed | `logical_date` / `{{ logical_date }}` |
+| `SubDagOperator` | removed | task groups |
+| `settings.Session` / `@provide_session` inside a task | tasks cannot reach the metadata DB | the REST API or hooks |
+
+Query a database through the hook of the connection's provider —
+`MySqlHook(mysql_conn_id=...)` for MySQL-protocol engines (MySQL, StarRocks,
+Doris, TiDB), `PostgresHook(postgres_conn_id=...)` for PostgreSQL-compatible
+ones — or `SQLExecuteQueryOperator(conn_id=...)`. Never instantiate the base
+`DbApiHook` yourself: on Airflow 3 it fails at run time with
+`'DbApiHook' object has no attribute 'conn_name_attr'`.
+
+On Airflow 3 prefer `from airflow.sdk import DAG, dag, task`. The old
+`from airflow import DAG`, `airflow.operators.python` and `airflow.hooks.base`
+paths still load, with deprecation warnings.
+
+`catchup` defaults to off on Airflow 3, but unpausing a DAG still starts a run
+for the most recent schedule interval that has already passed. Say so when you
+unpause one whose `start_date` is in the past, so a run the user did not
+trigger is not a surprise.
+
 ## Deploying DAG files
 
 ```
