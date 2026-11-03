@@ -1,0 +1,161 @@
+manifest_version: 1
+description: Synchronize Tableau dashboards, datasets, SQL and ETL definitions for
+  DOSI-driven SaaS rebuilding
+cli: datus_tableau_plugin.cli:main
+system_prompt: prompts/system.md.j2
+skills: skills
+config_schema:
+  type: object
+  required:
+  - server_url
+  properties:
+    server_url:
+      type: string
+      description: Tableau Server origin, e.g. https://tableau.example.test
+    site_content_url:
+      type: string
+      default: ''
+      description: Site content URL; empty for the default site (not REST LUID)
+    auth_type:
+      type: string
+      enum:
+      - pat
+      - password
+      default: pat
+    token_name:
+      type: string
+      description: PAT name, required in pat mode
+    token_secret:
+      type: string
+      x-secret: true
+      description: ${TABLEAU_TOKEN_SECRET}
+    username:
+      type: string
+      description: Server account, required in password mode
+    password:
+      type: string
+      x-secret: true
+      description: ${TABLEAU_PASSWORD}
+    api_version:
+      type: string
+      default: auto
+      pattern: ^(auto|\d+\.\d+)$
+    verify_ssl:
+      type: boolean
+      default: true
+    ca_bundle:
+      type: string
+      description: Optional CA bundle certificate file path
+    timeout:
+      type: number
+      exclusiveMinimum: 0
+      default: 60
+  allOf:
+  - if:
+      properties:
+        auth_type:
+          const: password
+      required:
+      - auth_type
+    then:
+      required:
+      - username
+      - password
+    else:
+      required:
+      - token_name
+      - token_secret
+commands:
+- name: status
+  description: Check authentication, API version and Metadata availability
+- name: projects
+  subcommands:
+  - name: list
+    args: []
+- name: workbooks
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: dashboards
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: datasources
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: flows
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: sync
+  subcommands:
+  - name: run
+    description: Synchronize selected definitions and processing artifacts; does not
+      execute ETL
+    args:
+    - name: --dashboard-id
+    - name: --project-id
+    - name: --all
+    - name: --output-root
+    - name: --overwrite
+    - name: --external-source
+    - name: --dialect
+  - name: inspect
+    description: Verify source bundle checksums and schema offline
+    args:
+    - name: bundle_path
+      required: true
+permissions:
+  normal:
+    allow:
+    - status
+    - status:*
+    - projects list:*
+    - workbooks list:*
+    - workbooks get:*
+    - dashboards list:*
+    - dashboards get:*
+    - datasources list:*
+    - datasources get:*
+    - flows list:*
+    - flows get:*
+    - sync inspect:*
+    ask:
+    - sync run:*
+  auto:
+    allow:
+    - status
+    - status:*
+    - projects list:*
+    - workbooks list:*
+    - workbooks get:*
+    - dashboards list:*
+    - dashboards get:*
+    - datasources list:*
+    - datasources get:*
+    - flows list:*
+    - flows get:*
+    - sync inspect:*
+    ask:
+    - sync run:*

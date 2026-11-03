@@ -1,0 +1,15 @@
+{
+  "name": "Sales preparation",
+  "version": "2023.3",
+  "parameters": {"as_of": {"value": "2026-11-03"}},
+  "connections": {"warehouse": {"connectionAttributes": {"server": "warehouse.example.test", "dbname": "analytics", "username": "synthetic-user", "password": "synthetic-secret"}}},
+  "nodes": {
+    "input": {"id": "input", "name": "Orders", "nodeType": ".v1.LoadSql", "table": "public.orders", "connectionId": "warehouse", "nextNodes": [{"nextNodeId": "clean"}]},
+    "clean": {"id": "clean", "name": "Clean orders", "nodeType": ".v1.Container", "nextNodes": [{"nextNodeId": "aggregate"}], "loomContainer": {"nodes": {
+      "trim": {"id": "trim", "nodeType": ".v1.AddColumn", "columnName": "region_trimmed", "expression": "TRIM([Region])", "nextNodes": []}
+    }}},
+    "aggregate": {"id": "aggregate", "name": "Sales aggregation", "nodeType": ".v2018_2_3.SuperAggregate", "nextNodes": [{"nextNodeId": "output"}]},
+    "output": {"id": "output", "name": "Publish sales", "nodeType": ".v1.PublishExtract", "publishedDatasourceId": "sales-luid", "nextNodes": []},
+    "script": {"id": "script", "name": "Unknown script", "nodeType": ".v1.PythonScript", "nextNodes": []}
+  }
+}

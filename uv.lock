@@ -33,6 +33,7 @@ members = [
     "datus-s3-plugin",
     "datus-statsig-plugin",
     "datus-superset-plugin",
+    "datus-tableau-plugin",
 ]
 
 [manifest.dependency-groups]
@@ -715,7 +716,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-airflow-plugin"
-version = "0.4.0"
+version = "0.4.1"
 source = { editable = "datus-airflow-plugin" }
 dependencies = [
     { name = "boto3" },
@@ -1240,6 +1241,47 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
 ]
 provides-extras = ["dev"]
+
+[[package]]
+name = "datus-tableau-plugin"
+version = "0.1.0"
+source = { editable = "datus-tableau-plugin" }
+dependencies = [
+    { name = "defusedxml" },
+    { name = "jsonschema" },
+    { name = "sqlglot" },
+    { name = "tableauserverclient" },
+]
+
+[package.optional-dependencies]
+dev = [
+    { name = "build" },
+    { name = "jinja2" },
+    { name = "pytest" },
+    { name = "pyyaml" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "build", marker = "extra == 'dev'", specifier = ">=1.2" },
+    { name = "defusedxml", specifier = ">=0.7" },
+    { name = "jinja2", marker = "extra == 'dev'", specifier = ">=3.1" },
+    { name = "jsonschema", specifier = ">=4" },
+    { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6" },
+    { name = "sqlglot", specifier = ">=26,<31" },
+    { name = "tableauserverclient", specifier = ">=0.38,<1" },
+]
+provides-extras = ["dev"]
+
+[[package]]
+name = "defusedxml"
+version = "0.7.1"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/0f/d5/c66da9b79e5bdb124974bfe172b4daf3c984ebd9c2a06e2b8a4dc7331c72/defusedxml-0.7.1.tar.gz", hash = "sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69", size = 75520, upload-time = "2021-03-08T10:59:26.269Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/07/6c/aa3f2f849e01cb6a001cd8554a88d4c77c5c1a31c95bdf1cf9301e6d9ef4/defusedxml-0.7.1-py2.py3-none-any.whl", hash = "sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61", size = 25604, upload-time = "2021-03-08T10:59:24.45Z" },
+]
 
 [[package]]
 name = "durationpy"
@@ -2283,6 +2325,31 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/94/e7/b2c673351809dca68a0e064b6af791aa332cf192da575fd474ed7d6f16a2/six-1.17.0.tar.gz", hash = "sha256:ff70335d468e7eb6ec65b95b99d3a2836546063f63acc5171de367e834932a81", size = 34031, upload-time = "2024-12-04T17:35:28.174Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/b7/ce/149a00dd41f10bc29e5921b496af8b574d8413afcd5e30dfa0ed46c2cc5e/six-1.17.0-py2.py3-none-any.whl", hash = "sha256:4721f391ed90541fddacab5acf947aa0d3dc7d27b2e1e8eda2be8970586c3274", size = 11050, upload-time = "2024-12-04T17:35:26.475Z" },
+]
+
+[[package]]
+name = "sqlglot"
+version = "30.27.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/5b/d8/322dee46e3fd283a3b249a22e4f369693f9aad9fdc714df66b815882e99e/sqlglot-30.27.0.tar.gz", hash = "sha256:10617b2beee196e88a310c6a5348482248bf10ac01c6ade22128bf4a690ec0ee", size = 6172431, upload-time = "2026-10-30T18:18:59.13Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/8f/88/fb7ce53c23e171ad059fd3a5ff6889399da2804cf0cfda2a10c64f32fdf7/sqlglot-30.27.0-py3-none-any.whl", hash = "sha256:b630686fc167762e20960ad3d007ad03d81af0a804c9f7d117f1fe06433c839e", size = 801972, upload-time = "2026-10-30T18:18:57.65Z" },
+]
+
+[[package]]
+name = "tableauserverclient"
+version = "0.42"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "defusedxml" },
+    { name = "packaging" },
+    { name = "requests" },
+    { name = "typing-extensions" },
+    { name = "urllib3" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/58/ec/722516d0a6d461756f069fced79614c55b459b25acff909ab1c5e0e7d26d/tableauserverclient-0.42.tar.gz", hash = "sha256:3474de006b4b7a5df539e800bb512e79b1bc382ba63309222b8388821664a1c3", size = 676947, upload-time = "2026-10-15T21:11:43.196Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/0d/67/b7f0ebc9152d93db4d415358c3ce34e49004a7294c9427e3b1e7b958e702/tableauserverclient-0.42-py3-none-any.whl", hash = "sha256:ba7509091eebc83b58f4f49a34fd0c30adb9597e6f3a06109bed059b0a8ff993", size = 228860, upload-time = "2026-10-15T21:11:41.981Z" },
 ]
 
 [[package]]

@@ -1,0 +1,24 @@
+## Tableau
+Use `datus tableau` to discover Tableau Server dashboards and synchronize selected
+dashboards, datasets, SQL evidence, and preparation dependencies into a local BI
+source bundle. Use `tableau-sync` for synchronization and `tableau-rebuild` to
+rebuild a datus-saas dashboard using existing DOSI metrics. ETL work produces
+definitions and processing artifacts; it does not deploy or run pipelines.
+
+{% if profiles %}
+Configured environments:
+{% for name, cfg in profiles.items() %}
+- {{ name }}: {{ cfg.get("server_url", "?") }}; site={{ cfg.get("site_content_url", "") or "default" }}; auth={{ cfg.get("auth_type", "pat") }}; api={{ cfg.get("api_version", "auto") }}
+{% endfor %}
+Metadata and download permissions determine coverage. Inspect the bundle before
+using it; incomplete lineage, unsupported calculations, and missing upstream ETL
+must remain explicit. Never invent source SQL or silently reuse it as a DOSI query.
+{% else %}
+Installed but not configured.
+{% if config_mutable %}
+Run `tableau-setup` to configure a Tableau Server profile.
+{% else %}
+Configuration is managed by the deployment administrator; ask them to configure
+the Tableau Server profile.
+{% endif %}
+{% endif %}

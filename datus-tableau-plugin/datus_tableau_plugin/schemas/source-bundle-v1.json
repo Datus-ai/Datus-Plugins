@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://datus.ai/schemas/bi/source-bundle-v1.json",
+  "type": "object",
+  "required": ["schema_version", "platform", "source", "selection", "exported_at", "files", "status", "summary"],
+  "properties": {
+    "schema_version": {"const": 1},
+    "platform": {"type": "string", "minLength": 1},
+    "source": {"type": "object"},
+    "selection": {"type": "object"},
+    "exported_at": {"type": "string"},
+    "status": {"enum": ["ok", "partial", "error"]},
+    "summary": {"type": "object"},
+    "files": {"type": "object", "additionalProperties": {"type": "string", "pattern": "^[a-f0-9]{64}$"}},
+    "extensions": {"type": "object"}
+  }
+}

@@ -1,0 +1,25 @@
+<?xml version="1.0"?>
+<workbook version="18.1" name="Revenue">
+  <datasources>
+    <datasource name="sales" caption="Sales dataset">
+      <connection class="federated">
+        <named-connections><named-connection name="warehouse"><connection class="postgres" server="warehouse.example.test" dbname="analytics" username="synthetic-user" password="synthetic-secret"/></named-connection></named-connections>
+        <relation type="join" join="left"><clause type="join"><expression op="="><expression op="[orders].[customer_id]"/><expression op="[customers].[id]"/></expression></clause><relation type="table" name="orders" table="[public].[orders]" connection="warehouse"/><relation type="text" name="customers" connection="warehouse">SELECT id, region FROM public.customers</relation></relation>
+      </connection>
+      <column name="[Sales]" datatype="real" role="measure"/>
+      <column name="[Region]" datatype="string" role="dimension"/>
+      <column name="[FixedSales]" datatype="real"><calculation class="tableau" formula="{ FIXED [Region] : SUM([Sales]) }"/></column>
+    </datasource>
+    <datasource name="published-sales"><repository-location id="sales-content-name" derived-from="https://tableau.example.test/datasources/sales" path="/datasources/sales"/><connection class="proxy" server="https://tableau.example.test"/></datasource>
+    <datasource name="Parameters"><column name="[Year]" parameter-domain-type="range" datatype="integer" value="2026"/></datasource>
+  </datasources>
+  <worksheets>
+    <worksheet name="Sales by Region"><table><view><datasources><datasource name="sales"/></datasources><filter column="[sales].[Region]" class="categorical"/></view><panes><pane><mark class="Bar"/><encodings><color column="[sales].[Region]"/></encodings></pane></panes><rows>[sales].[sum:Sales:qk]</rows><cols>[sales].[Region]</cols></table></worksheet>
+    <worksheet name="Fixed Sales"><table><view><datasources><datasource name="sales"/></datasources></view><rows>[sales].[sum:FixedSales:qk]</rows><cols>[sales].[Region]</cols></table></worksheet>
+  </worksheets>
+  <dashboards>
+    <dashboard name="Regional overview"><size minwidth="1000"/><zones><zone id="1" name="Sales by Region" x="0" y="0" w="100000" h="100000"/></zones></dashboard>
+    <dashboard name="Fixed overview"><zones><zone id="2" name="Fixed Sales" x="0" y="0" w="100000" h="100000"/></zones></dashboard>
+  </dashboards>
+  <actions><action name="Filter region"><source dashboard="Regional overview" worksheet="Sales by Region"/><target dashboard="Fixed overview"/></action></actions>
+</workbook>
