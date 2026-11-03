@@ -281,6 +281,13 @@ def sync_sources(
                 edges.append(
                     {"from": workbook_id, "to": query_id, "relation": "custom_sql"}
                 )
+                # Metadata proves workbook-level use, not the exact consuming sheet.
+                # Conservatively expose the query and its coverage to this selection's
+                # charts only; a chart -> workbook edge would introduce contains cycles.
+                for chart_id in charts_here:
+                    edges.append(
+                        {"from": chart_id, "to": query_id, "relation": "custom_sql"}
+                    )
                 if usable:
                     queries[query_id] = {
                         "id": query_id,

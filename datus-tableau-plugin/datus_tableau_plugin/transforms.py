@@ -12,7 +12,7 @@ from collections import defaultdict
 from typing import Any
 
 import sqlglot
-from sqlglot import exp
+from sqlglot import ErrorLevel, exp
 
 
 def _name(asset_id: str) -> str:
@@ -22,7 +22,9 @@ def _name(asset_id: str) -> str:
 def _quoted(name: str, dialect: str) -> str:
     if not isinstance(name, str) or not name or "\x00" in name:
         raise ValueError("column names must be non-empty strings")
-    return exp.Identifier(this=name, quoted=True).sql(dialect=dialect)
+    return exp.Identifier(this=name, quoted=True).sql(
+        dialect=dialect, unsupported_level=ErrorLevel.RAISE
+    )
 
 
 def _table(name: str, dialect: str) -> str:
@@ -49,7 +51,7 @@ def _select(sql: str, dialect: str, source_dialect: str | None = None) -> str:
     for node in tree.walk():
         if isinstance(node, (exp.DDL, exp.DML, exp.Command, exp.Into)):
             raise ValueError("data-changing SQL is not a processing model")
-    return tree.sql(dialect=dialect, pretty=True)
+    return tree.sql(dialect=dialect, pretty=True, unsupported_level=ErrorLevel.RAISE)
 
 
 def _expression(value: Any, operation: dict, dialect: str) -> str:
@@ -66,7 +68,7 @@ def _expression(value: Any, operation: dict, dialect: str) -> str:
         isinstance(n, (exp.Query, exp.DDL, exp.DML, exp.Command)) for n in tree.walk()
     ):
         raise ValueError("expected a scalar SQL expression")
-    return tree.sql(dialect=dialect)
+    return tree.sql(dialect=dialect, unsupported_level=ErrorLevel.RAISE)
 
 
 def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
@@ -190,7 +192,7 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
         for column in values:
             keep = [_quoted(c, dialect) for c in index]
             keep += [
-                f"{exp.Literal.string(column).sql(dialect=dialect)} AS {names_to}",
+                f"{exp.Literal.string(column).sql(dialect=dialect, unsupported_level=ErrorLevel.RAISE)} AS {names_to}",
                 f"{_quoted(column, dialect)} AS {values_to}",
             ]
             condition = (

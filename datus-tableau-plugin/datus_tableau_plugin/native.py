@@ -40,6 +40,11 @@ SECRET_KEYS = {
     "credentials",
     "credential",
     "connectionpassword",
+    # Connection strings may embed credentials even when they are not URIs.
+    # Hide these known fields in full rather than trying to parse vendor syntax.
+    "odbcconnectstringextras",
+    "odbcconnectstring",
+    "connectionstring",
 }
 SAMPLE_KEYS = {"samplerows", "sampledata", "previewdata", "rowdata", "profilestats"}
 

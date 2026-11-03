@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from collections import Counter
 import copy
+import hashlib
 import json
 from pathlib import Path
 from types import SimpleNamespace
@@ -11,6 +12,8 @@ import pytest
 from datus_tableau_plugin.bundle import inspect_bundle
 from datus_tableau_plugin.errors import PluginError, UsageError
 from datus_tableau_plugin.native import parse_workbook
+from datus_tableau_plugin.rebuild import assess_rebuild
+from test_rebuild_workflow import binding, catalog
 from datus_tableau_plugin.sync import sync_sources
 
 
@@ -303,7 +306,14 @@ def test_shared_metadata_query_identity_is_not_conflicted_by_workbook(workspace)
         edge["from"]
         for edge in bundle["dependencies"]
         if edge["to"] == "query:metadata:shared-query"
-    } == {"workbook:book1", "workbook:book2"}
+    } == {
+        "workbook:book1",
+        "workbook:book2",
+        "chart:book1:Revenue",
+        "chart:book1:Trend",
+        "chart:book2:Revenue",
+        "chart:book2:Trend",
+    }
 
 
 def test_unresolved_upstream_flow_and_blocked_generation_reach_consumers(workspace):
@@ -347,3 +357,205 @@ def test_unresolved_upstream_flow_and_blocked_generation_reach_consumers(workspa
     pipeline = json.loads((Path(result["output_dir"]) / "pipeline.json").read_text())
     assert pipeline["execution"] == "not_run"
     assert pipeline["status"] == "partial"
+
+
+def test_connection_string_credentials_do_not_reach_any_bundle_artifact(workspace):
+    client = Client(published=True)
+    client.workbook_lineage = lambda identifier: {
+        "workbook": {"id": "metadata:book", "luid": identifier},
+        "tables": [],
+        "datasources": [
+            {"id": "metadata:pub", "luid": "pub-luid", "name": "Published Sales"}
+        ],
+        "flows": [{"id": "metadata:prep", "luid": "prep-luid", "name": "Prep"}],
+    }
+
+    def download(group, identifier):
+        if group == "workbooks":
+            return workbook(identifier, published=True).replace(
+                b'<repository-location id="pub-luid"/>',
+                b'<repository-location id="pub-luid"/><connection class="postgres" server="warehouse.example.test" dbname="analytics" odbc-connect-string-extras="UID=reader;PWD=synthetic-workbook-password"/>',
+            )
+        if group == "datasources":
+            return b"""<datasource name="published"><connection class="postgres" server="warehouse.example.test" dbname="analytics" connection-string="UID=reader;PWD=synthetic-datasource-password"><connection-string>UID=reader;PWD=synthetic-text-password</connection-string><relation type="text">SELECT 7 AS revenue</relation></connection></datasource>"""
+        if group == "flows":
+            return json.dumps(
+                {
+                    "flow": {
+                        "connections": {
+                            "warehouse": {
+                                "server": "warehouse.example.test",
+                                "database": "analytics",
+                                "properties": {
+                                    "connectionString": "UID=reader;PWD=synthetic-flow-password"
+                                },
+                            }
+                        },
+                        "nodes": {"input": {"nodeType": "Input", "table": "sales"}},
+                    }
+                }
+            ).encode()
+        raise AssertionError(group)
+
+    client.download = download
+    result = sync_sources(client, dashboard_ids=["dashboard:book1:Overview"])
+    bundle = inspect_bundle(result["output_dir"])
+    root = Path(result["output_dir"])
+    contents = b"\n".join(
+        (root / name).read_bytes() for name in bundle["manifest"]["files"]
+    )
+    for secret in (
+        b"synthetic-workbook-password",
+        b"synthetic-datasource-password",
+        b"synthetic-text-password",
+        b"synthetic-flow-password",
+    ):
+        assert secret not in contents
+    assert b"warehouse.example.test" in contents and b"analytics" in contents
+    assert b"SELECT 7 AS revenue" in contents
+    assert sum(name.startswith("native/") for name in bundle["manifest"]["files"]) == 3
+
+
+def assess_synced_bundle(path):
+    bundle = inspect_bundle(path)
+    manifest_hash = hashlib.sha256(
+        (Path(path) / "manifest.json").read_bytes()
+    ).hexdigest()
+    bindings = {
+        "schema_version": 1,
+        "source_manifest_sha256": manifest_hash,
+        "charts": [],
+    }
+    for index, asset in enumerate(bundle["assets"]):
+        if asset["kind"] == "chart":
+            item = binding()["charts"][0]
+            item["chart_id"] = asset["id"]
+            item["queries"][0]["name"] = f"metric_query_{index}"
+            bindings["charts"].append(item)
+    return bundle, assess_rebuild(
+        bundle,
+        bindings=bindings,
+        metric_catalog=catalog(),
+        source_manifest_sha256=manifest_hash,
+    )
+
+
+@pytest.mark.parametrize(
+    "query_text, unsupported",
+    [(None, False), (None, True), ("SELECT 42 AS revenue", True)],
+)
+def test_custom_sql_coverage_blocks_only_charts_in_its_consuming_workbook(
+    workspace, query_text, unsupported
+):
+    client = Client(books=2)
+    client.workbook_custom_sql = lambda identifier: (
+        [
+            {
+                "id": "metadata-query-one",
+                "name": "Revenue SQL",
+                "query": query_text,
+                "isUnsupportedCustomSql": unsupported,
+            }
+        ]
+        if identifier == "book1"
+        else []
+    )
+    result = sync_sources(client, all_dashboards=True)
+    bundle, report = assess_synced_bundle(result["output_dir"])
+    rows = {row["chart_id"]: row for row in report["charts"]}
+    assert set(rows) == {
+        "chart:book1:Revenue",
+        "chart:book1:Trend",
+        "chart:book2:Revenue",
+        "chart:book2:Trend",
+    }
+    for chart_id in ("chart:book1:Revenue", "chart:book1:Trend"):
+        row = rows[chart_id]
+        assert row["status"] == "blocked"
+        assert any("custom_sql_coverage" in reason for reason in row["reasons"])
+        assert row["tool_calls"] == []
+        assert any(
+            edge["from"] == chart_id
+            and edge["to"] == "query:metadata:metadata-query-one"
+            for edge in bundle["dependencies"]
+        )
+    for chart_id in ("chart:book2:Revenue", "chart:book2:Trend"):
+        assert rows[chart_id]["status"] == "ready_for_metric_validation"
+        assert rows[chart_id]["reasons"] == []
+    assert report["summary"] == {"total": 4, "blocked": 2, "ready": 2}
+    assert not any(
+        edge["from"].startswith("chart:") and edge["to"].startswith("workbook:")
+        for edge in bundle["dependencies"]
+    )
+
+
+def test_supported_custom_sql_keeps_consumers_ready_and_preserves_source_evidence(
+    workspace,
+):
+    client = Client(books=2)
+    client.workbook_custom_sql = lambda identifier: (
+        [
+            {
+                "id": "metadata-query-one",
+                "name": "Revenue SQL",
+                "query": "SELECT 42 AS revenue",
+                "isUnsupportedCustomSql": False,
+            }
+        ]
+        if identifier == "book1"
+        else []
+    )
+    result = sync_sources(client, all_dashboards=True)
+    bundle, report = assess_synced_bundle(result["output_dir"])
+    assert report["summary"] == {"total": 4, "blocked": 0, "ready": 4}
+    for row in report["charts"]:
+        assert row["status"] == "ready_for_metric_validation"
+        assert row["reasons"] == []
+        assert row["tool_calls"][0]["tool"] == "save_metric_query_template"
+    evidence = next(
+        query
+        for query in bundle["queries"]
+        if query["id"] == "query:metadata:metadata-query-one"
+    )
+    assert evidence["origin"] == "source"
+    assert evidence["text"] == "SELECT 42 AS revenue"
+    assert (
+        Path(result["output_dir"]) / evidence["file"]
+    ).read_text().strip() == "SELECT 42 AS revenue"
+    assert {
+        edge["from"]
+        for edge in bundle["dependencies"]
+        if edge["to"] == evidence["asset_id"]
+    } == {
+        "workbook:book1",
+        "chart:book1:Revenue",
+        "chart:book1:Trend",
+    }
+
+
+def test_unresolved_custom_sql_coverage_only_attaches_to_selected_charts(workspace):
+    client = Client(books=2)
+    client.workbook_custom_sql = lambda identifier: (
+        [
+            {
+                "id": "metadata-query-one",
+                "name": "Hidden SQL",
+                "query": None,
+                "isUnsupportedCustomSql": False,
+            }
+        ]
+        if identifier == "book1"
+        else []
+    )
+    result = sync_sources(
+        client, dashboard_ids=["dashboard:book1:Overview", "dashboard:book2:Overview"]
+    )
+    bundle, report = assess_synced_bundle(result["output_dir"])
+    rows = {row["chart_id"]: row for row in report["charts"]}
+    assert set(rows) == {"chart:book1:Revenue", "chart:book2:Revenue"}
+    assert rows["chart:book1:Revenue"]["status"] == "blocked"
+    assert rows["chart:book2:Revenue"]["status"] == "ready_for_metric_validation"
+    assert not any(
+        asset["id"] in {"chart:book1:Trend", "chart:book2:Trend"}
+        for asset in bundle["assets"]
+    )

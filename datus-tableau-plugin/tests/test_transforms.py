@@ -160,3 +160,68 @@ def test_incomplete_source_is_never_emitted_as_a_successful_model(status):
     )
     assert not result["models"]
     assert result["validation"]["blocked"] == 1
+
+
+def test_unsupported_query_translation_blocks_dependents_without_dropping_sampling():
+    result = generate_transforms(
+        [
+            node(
+                "sampled",
+                {
+                    "type": "source",
+                    "sql": "SELECT * FROM t TABLESAMPLE BERNOULLI (10)",
+                    "source_dialect": "postgres",
+                },
+            ),
+            node("dependent", {"type": "output"}, ("sampled",)),
+            node(
+                "independent",
+                {
+                    "type": "source",
+                    "sql": "SELECT 7 AS value",
+                    "source_dialect": "postgres",
+                },
+            ),
+        ],
+        [],
+        dialect="sqlite",
+    )
+    rows = {row["id"]: row for row in result["pipeline"]["nodes"]}
+    assert rows["sampled"]["status"] == "blocked"
+    assert rows["sampled"]["error"]
+    assert rows["dependent"]["status"] == "blocked"
+    assert rows["independent"]["status"] == "generated"
+    assert result["validation"]["blocked"] == 2
+    assert result["validation"]["generated"] == 1
+    with sqlite3.connect(":memory:") as database:
+        assert database.execute(model(result, "independent")).fetchall() == [(7,)]
+
+
+def test_unsupported_scalar_translation_blocks_dependents_without_losing_array_dimension():
+    result = generate_transforms(
+        [
+            node("input", {"type": "source", "table": "orders"}),
+            node(
+                "length",
+                {
+                    "type": "derive",
+                    "expression": "ARRAY_LENGTH(my_values, dimension)",
+                    "expression_language": "sql",
+                    "source_dialect": "postgres",
+                    "columns": ["my_values", "dimension"],
+                    "column_name": "array_size",
+                },
+                ("input",),
+            ),
+            node("dependent", {"type": "output"}, ("length",)),
+        ],
+        [],
+        dialect="sqlite",
+    )
+    rows = {row["id"]: row for row in result["pipeline"]["nodes"]}
+    assert rows["length"]["status"] == "blocked"
+    assert "ARRAY_LENGTH" in rows["length"]["error"]
+    assert rows["dependent"]["status"] == "blocked"
+    assert rows["input"]["status"] == "generated"
+    assert result["validation"]["blocked"] == 2
+    assert result["validation"]["generated"] == 1

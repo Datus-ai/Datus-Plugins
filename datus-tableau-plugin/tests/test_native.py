@@ -336,3 +336,60 @@ def test_flow_join_next_nodes_topology_does_not_prove_left_and_right_inputs(
     )
     assert result["status"] == "blocked"
     assert "file" not in result
+
+
+@pytest.mark.parametrize("field", ["odbc-connect-string-extras", "connection-string"])
+@pytest.mark.parametrize("parser_kind", ["workbook", "datasource"])
+def test_connection_strings_are_redacted_in_xml_attributes_and_element_text(
+    field, parser_kind
+):
+    connection = f"""<connection class="postgres" server="warehouse.example.test" dbname="analytics"
+        {field}="UID=reader;PWD=synthetic-attribute-password">
+      <{field}>UID=reader;PWD=synthetic-element-password</{field}>
+      <relation type="text">SELECT 'connection-string' AS label FROM public.sales</relation>
+    </connection>"""
+    datasource = f'<datasource name="sales">{connection}</datasource>'
+    if parser_kind == "workbook":
+        payload = f"<workbook><datasources>{datasource}</datasources></workbook>"
+        parsed = parse_workbook(payload.encode(), workbook_id="book")
+    else:
+        parsed = parse_datasource(datasource.encode(), datasource_id="source")
+    serialized = json.dumps(parsed)
+    assert "synthetic-attribute-password" not in serialized
+    assert "synthetic-element-password" not in serialized
+    assert "warehouse.example.test" in serialized and "analytics" in serialized
+    assert (
+        parsed["queries"][0]["text"]
+        == "SELECT 'connection-string' AS label FROM public.sales"
+    )
+    assert "[REDACTED]" in next(iter(parsed["documents"].values()))
+
+
+@pytest.mark.parametrize(
+    "field", ["odbc-connect-string-extras", "connection-string", "connectionString"]
+)
+def test_connection_strings_are_redacted_in_nested_prep_json(field):
+    payload = {
+        "flow": {
+            "connections": {
+                "warehouse": {
+                    "server": "warehouse.example.test",
+                    "database": "analytics",
+                    "properties": {field: "UID=reader;PWD=synthetic-prep-password"},
+                },
+            },
+            "nodes": {
+                "input": {
+                    "nodeType": "Input",
+                    "table": "sales",
+                    "connection": {field: "UID=reader;PWD=synthetic-node-password"},
+                }
+            },
+        }
+    }
+    parsed = parse_flow(json.dumps(payload).encode(), flow_id="flow")
+    serialized = json.dumps(parsed)
+    assert "synthetic-prep-password" not in serialized
+    assert "synthetic-node-password" not in serialized
+    assert "warehouse.example.test" in serialized and "analytics" in serialized
+    assert "[REDACTED]" in next(iter(parsed["documents"].values()))
