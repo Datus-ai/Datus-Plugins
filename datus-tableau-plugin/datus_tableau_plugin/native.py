@@ -146,7 +146,14 @@ def _xml(payload: bytes, kind: str) -> ET.Element:
         element.tag = element.tag.rsplit("}", 1)[-1]
         element.attrib = redact(element.attrib)
         if _key(element.tag) in SECRET_KEYS:
-            element.text = "[REDACTED]"
+            # A known credential field may wrap arbitrary XML, not just text.
+            # Preserve names/structure but hide every value inside its subtree.
+            # The root tail belongs to its parent and remains ordinary content.
+            for descendant in element.iter():
+                descendant.attrib = {key: "[REDACTED]" for key in descendant.attrib}
+                descendant.text = "[REDACTED]"
+                if descendant is not element and descendant.tail:
+                    descendant.tail = "[REDACTED]"
     return root
 
 

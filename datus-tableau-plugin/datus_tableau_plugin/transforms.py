@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import hashlib
 import re
-from collections import defaultdict
+from collections import defaultdict, deque
 from typing import Any
 
 import sqlglot
@@ -253,44 +253,35 @@ def generate_transforms(
     order: list[str] = []
     raw_sql: dict[str, str] = {}
     ancestors: dict[str, set[str]] = {}
-    states: dict[str, int] = {}
-    cycle_error = None
-    # Iterative DFS preserves each node's declared input order without a Python
-    # recursion limit. A flat or deep source graph remains inspectable.
-    for start in sorted(transforms):
-        if states.get(start) == 2:
-            continue
-        stack = [(start, 0)]
-        states[start] = 1
-        while stack:
-            asset_id, offset = stack[-1]
-            inputs = parents[asset_id]
-            if offset == len(inputs):
-                states[asset_id] = 2
-                order.append(asset_id)
-                stack.pop()
-                continue
-            parent = inputs[offset]
-            stack[-1] = (asset_id, offset + 1)
-            if parent not in transforms or states.get(parent) == 2:
-                continue
-            if states.get(parent) == 1:
-                cycle_error = "processing graph contains a cycle"
-                break
-            states[parent] = 1
-            stack.append((parent, 0))
-        if cycle_error:
-            break
-    if cycle_error:
-        order.clear()
-        for asset_id in transforms:
-            rows[asset_id] = {
-                "id": asset_id,
-                "inputs": parents[asset_id],
-                "status": "blocked",
-                "error": cycle_error,
-                "origin": "derived",
-            }
+    # Count only known dependencies here; compilation still reports missing
+    # identities. Kahn's remainder is precisely cycles and their descendants,
+    # so independent and valid upstream branches can still produce models.
+    consumers: dict[str, list[str]] = defaultdict(list)
+    remaining = {}
+    for asset_id in sorted(transforms):
+        inputs = parents[asset_id]
+        known = [parent for parent in inputs if parent in transforms]
+        remaining[asset_id] = len(known)
+        for parent in known:
+            consumers[parent].append(asset_id)
+    pending = deque(sorted(node for node, count in remaining.items() if count == 0))
+    while pending:
+        asset_id = pending.popleft()
+        order.append(asset_id)
+        for consumer in consumers[asset_id]:
+            remaining[consumer] -= 1
+            if remaining[consumer] == 0:
+                pending.append(consumer)
+    affected = {node for node, count in remaining.items() if count}
+    cycle_error = "processing graph contains a cycle" if affected else None
+    for asset_id in affected:
+        rows[asset_id] = {
+            "id": asset_id,
+            "inputs": parents[asset_id],
+            "status": "blocked",
+            "error": "processing node contains or depends on a cycle",
+            "origin": "derived",
+        }
     for asset_id in order:
         item = transforms[asset_id]
         error = None
