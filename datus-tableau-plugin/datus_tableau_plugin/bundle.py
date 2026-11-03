@@ -238,12 +238,23 @@ def write_bundle(
     target = workspace_path(path)
     target.parent.mkdir(parents=True, exist_ok=True)
     with _directory_guard(target.parent, exclusive=True):
-        if not target.exists():
-            backup = _backup_snapshot(target, manifest.get("source"))
-            if backup is not None:
-                # Recovery mutates only an authorized workspace writer's target.
-                # inspect_bundle instead reads the same checked backup in place.
-                os.replace(backup, target)
+        backup = (
+            None
+            if target.exists()
+            else _backup_snapshot(target, manifest.get("source"))
+        )
+        # Check only after acquiring the writer lock: a previous snapshot may
+        # appear while sync is collecting remote definitions or waiting here.
+        if (target.exists() or backup is not None) and manifest.get("summary", {}).get(
+            "failures", 0
+        ):
+            raise PluginError(
+                "synchronization failed; previous snapshot was preserved (retry without changing the selection)"
+            )
+        if backup is not None:
+            # Recovery mutates only an authorized workspace writer's target.
+            # inspect_bundle instead reads the same checked backup in place.
+            os.replace(backup, target)
         return _write_bundle_locked(
             target, manifest, documents, extra_files, overwrite=overwrite
         )

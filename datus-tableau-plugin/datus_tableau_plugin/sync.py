@@ -692,10 +692,5 @@ def sync_sources(
             "coverage_issues": len(coverage),
         },
     }
-    # A transient service/download failure must not replace the last usable snapshot.
-    if failures and target.exists():
-        raise PluginError(
-            "synchronization failed; previous snapshot was preserved (retry without changing the selection)"
-        )
     stored = write_bundle(target, manifest, documents, extra, overwrite=overwrite)
     return {"output_dir": str(target), **stored}
