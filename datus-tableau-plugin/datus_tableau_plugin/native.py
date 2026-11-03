@@ -50,7 +50,7 @@ SAMPLE_KEYS = {"samplerows", "sampledata", "previewdata", "rowdata", "profilesta
 
 
 def _key(value: str) -> str:
-    return re.sub(r"[^a-z0-9]", "", value.lower())
+    return re.sub(r"[^a-z0-9]", "", value.rsplit("}", 1)[-1].lower())
 
 
 def redact(value: Any) -> Any:
@@ -130,6 +130,16 @@ def _xml(payload: bytes, kind: str) -> ET.Element:
         )
     except Exception as exc:
         raise ValueError(f"invalid or unsafe {kind} XML") from exc
+    # Drop row samples before any node serialization, including namespaced tags.
+    # Attributes alone are insufficient: sample payloads also occur as XML children.
+    pending = [root]
+    while pending:
+        parent = pending.pop()
+        for child in list(parent):
+            if _key(child.tag) in SAMPLE_KEYS:
+                parent.remove(child)
+            else:
+                pending.append(child)
     # Namespaced inputs are accepted without losing their original element names
     # in the source document. Tableau normally uses unnamespaced definitions.
     for element in root.iter():

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import contextmanager
 import hashlib
 import json
 import os
@@ -79,7 +80,7 @@ def workspace_path(value: str | Path) -> Path:
     return resolved
 
 
-def inspect_bundle(path: str | Path) -> dict:
+def _inspect_bundle(path: str | Path) -> dict:
     candidate = Path(path).absolute()
     if candidate.is_symlink():
         raise UsageError("bundle directory cannot be a symbolic link")
@@ -89,7 +90,8 @@ def inspect_bundle(path: str | Path) -> dict:
     try:
         if (root / "manifest.json").is_symlink():
             raise PluginError("bundle manifest cannot be a symbolic link")
-        manifest = json.loads((root / "manifest.json").read_text())
+        manifest_bytes = (root / "manifest.json").read_bytes()
+        manifest = json.loads(manifest_bytes)
         schema = json.loads(
             (Path(__file__).parent / "schemas/source-bundle-v1.json").read_text()
         )
@@ -110,7 +112,11 @@ def inspect_bundle(path: str | Path) -> dict:
                 raise PluginError(f"bundle checksum mismatch: {name}")
         if set(DOCUMENTS.values()) - files.keys():
             raise PluginError("bundle is missing a required document")
-        result = {"manifest": manifest}
+        result = {
+            "manifest": manifest,
+            "manifest_sha256": digest(manifest_bytes),
+            "resolved_path": str(root),
+        }
         document_schema = json.loads(
             (Path(__file__).parent / "schemas/assets-v1.json").read_text()
         )
@@ -148,6 +154,79 @@ def inspect_bundle(path: str | Path) -> dict:
         raise
 
 
+@contextmanager
+def _directory_guard(parent: Path, *, exclusive: bool):
+    """Lock a stable directory inode; readers remain read-only, no lock-file races.
+
+    Supported on POSIX hosts with flock (Linux/macOS). Sibling bundles serialize
+    their writes deliberately; no lock pathname is ever removed or replaced.
+    """
+    try:
+        import fcntl
+    except ImportError:
+        raise PluginError(
+            "source bundle concurrency requires POSIX flock support"
+        ) from None
+    flags = os.O_RDONLY | getattr(os, "O_DIRECTORY", 0)
+    try:
+        descriptor = os.open(parent, flags)
+    except OSError:
+        raise UsageError(
+            "bundle parent directory does not exist or is unreadable"
+        ) from None
+    try:
+        fcntl.flock(descriptor, fcntl.LOCK_EX if exclusive else fcntl.LOCK_SH)
+        yield
+    finally:
+        os.close(
+            descriptor
+        )  # The OS also releases this lock after process termination.
+
+
+def _backup_snapshot(target: Path, expected_source: dict | None = None) -> Path | None:
+    """Never guess by timestamp or follow an unverified recovery path."""
+    prefix = f".{target.name}-previous-"
+    candidates = [
+        path for path in target.parent.iterdir() if path.name.startswith(prefix)
+    ]
+    if not candidates:
+        return None
+    verified = []
+    for path in candidates:
+        if path.is_symlink() or not path.is_dir():
+            raise PluginError("unsafe snapshot recovery entry; restore it explicitly")
+        try:
+            result = _inspect_bundle(path)
+        except PluginError:
+            raise PluginError(
+                "invalid snapshot recovery entry; restore it explicitly"
+            ) from None
+        if (
+            expected_source is not None
+            and result["manifest"]["source"] != expected_source
+        ):
+            raise UsageError(
+                "snapshot backup belongs to another source; refusing automatic recovery"
+            )
+        verified.append(path)
+    if len(verified) != 1:
+        raise PluginError("ambiguous snapshot backups; explicit recovery is required")
+    return verified[0]
+
+
+def inspect_bundle(path: str | Path) -> dict:
+    target = Path(path).absolute()
+    if target.is_symlink():
+        raise UsageError("bundle directory cannot be a symbolic link")
+    with _directory_guard(target.parent, exclusive=False):
+        resolved = target if target.exists() else _backup_snapshot(target)
+        if resolved is None:
+            raise UsageError("bundle directory does not exist")
+        result = _inspect_bundle(resolved)
+        result["recovered_from_backup"] = resolved != target
+        return result
+
+
 def write_bundle(
     path: Path,
     manifest: dict,
@@ -157,12 +236,33 @@ def write_bundle(
     overwrite: bool = False,
 ) -> dict:
     target = workspace_path(path)
+    target.parent.mkdir(parents=True, exist_ok=True)
+    with _directory_guard(target.parent, exclusive=True):
+        if not target.exists():
+            backup = _backup_snapshot(target, manifest.get("source"))
+            if backup is not None:
+                # Recovery mutates only an authorized workspace writer's target.
+                # inspect_bundle instead reads the same checked backup in place.
+                os.replace(backup, target)
+        return _write_bundle_locked(
+            target, manifest, documents, extra_files, overwrite=overwrite
+        )
+
+
+def _write_bundle_locked(
+    target: Path,
+    manifest: dict,
+    documents: dict,
+    extra_files: dict[str, bytes],
+    *,
+    overwrite: bool = False,
+) -> dict:
     if target.exists() and not overwrite:
         raise UsageError(
             "bundle already exists; use --overwrite to update its snapshot"
         )
     if target.exists():
-        previous = inspect_bundle(target)
+        previous = _inspect_bundle(target)
         if previous["manifest"].get("source") != manifest.get("source"):
             raise UsageError(
                 "cannot overwrite a snapshot from another Tableau server or site"
@@ -185,7 +285,7 @@ def write_bundle(
             "files": {name: digest(content) for name, content in sorted(files.items())},
         }
         (staging / "manifest.json").write_bytes(json_bytes(manifest))
-        inspect_bundle(staging)
+        _inspect_bundle(staging)
         if target.exists():
             backup = Path(
                 tempfile.mkdtemp(prefix=f".{target.name}-previous-", dir=target.parent)

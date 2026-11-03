@@ -14,6 +14,10 @@ from typing import Any
 import sqlglot
 from sqlglot import ErrorLevel, exp
 
+MAX_MODEL_ANCESTORS = 64
+MAX_MODEL_SQL_BYTES = 256 * 1024
+MAX_TOTAL_MODEL_SQL_BYTES = 8 * 1024 * 1024
+
 
 def _name(asset_id: str) -> str:
     return "node_" + hashlib.sha256(asset_id.encode()).hexdigest()[:16]
@@ -44,6 +48,8 @@ def _table(name: str, dialect: str) -> str:
 
 
 def _select(sql: str, dialect: str, source_dialect: str | None = None) -> str:
+    if len(sql.encode()) > MAX_MODEL_SQL_BYTES:
+        raise ValueError("processing SQL exceeds per-model byte limit")
     statements = sqlglot.parse(sql, read=source_dialect or dialect)
     if len(statements) != 1 or not isinstance(statements[0], exp.Query):
         raise ValueError("only one read-only SELECT query is supported")
@@ -60,6 +66,8 @@ def _expression(value: Any, operation: dict, dialect: str) -> str:
     # SQL-like text in a Tableau calculation is not proof of equivalent SQL.
     if operation.get("expression_language") != "sql":
         raise ValueError("expression requires explicit SQL-language mapping")
+    if len(value.encode()) > MAX_MODEL_SQL_BYTES:
+        raise ValueError("processing expression exceeds per-model byte limit")
     parsed = sqlglot.parse(value, read=operation.get("source_dialect") or dialect)
     if len(parsed) != 1:
         raise ValueError("expected one scalar SQL expression")
@@ -124,8 +132,10 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
         raise ValueError(f"{kind!r} requires exactly one input")
     source = inputs[0]
     if kind in {"output", "clean"}:
-        if kind == "clean" and operation.get("changes"):
-            raise ValueError("clean changes must be expanded into explicit operations")
+        if kind == "clean" and operation.get("changes") != []:
+            raise ValueError(
+                "clean requires changes: [] for a verified passthrough; other changes must be expanded into explicit operations"
+            )
         if kind == "output" and operation.get("write_mode") not in {
             None,
             "replace",
@@ -242,15 +252,46 @@ def generate_transforms(
     rows: dict[str, dict] = {}
     order: list[str] = []
     raw_sql: dict[str, str] = {}
-    visiting: set[str] = set()
     ancestors: dict[str, set[str]] = {}
-
-    def visit(asset_id: str) -> None:
-        if asset_id in rows:
-            return
-        if asset_id in visiting:
-            raise ValueError("processing graph contains a cycle")
-        visiting.add(asset_id)
+    states: dict[str, int] = {}
+    cycle_error = None
+    # Iterative DFS preserves each node's declared input order without a Python
+    # recursion limit. A flat or deep source graph remains inspectable.
+    for start in sorted(transforms):
+        if states.get(start) == 2:
+            continue
+        stack = [(start, 0)]
+        states[start] = 1
+        while stack:
+            asset_id, offset = stack[-1]
+            inputs = parents[asset_id]
+            if offset == len(inputs):
+                states[asset_id] = 2
+                order.append(asset_id)
+                stack.pop()
+                continue
+            parent = inputs[offset]
+            stack[-1] = (asset_id, offset + 1)
+            if parent not in transforms or states.get(parent) == 2:
+                continue
+            if states.get(parent) == 1:
+                cycle_error = "processing graph contains a cycle"
+                break
+            states[parent] = 1
+            stack.append((parent, 0))
+        if cycle_error:
+            break
+    if cycle_error:
+        order.clear()
+        for asset_id in transforms:
+            rows[asset_id] = {
+                "id": asset_id,
+                "inputs": parents[asset_id],
+                "status": "blocked",
+                "error": cycle_error,
+                "origin": "derived",
+            }
+    for asset_id in order:
         item = transforms[asset_id]
         error = None
         lineage: set[str] = set()
@@ -258,11 +299,14 @@ def generate_transforms(
             if parent not in transforms:
                 error = f"missing transform dependency {parent}"
                 continue
-            visit(parent)
-            lineage.add(parent)
-            lineage.update(ancestors[parent])
             if rows[parent]["status"] != "generated":
                 error = f"dependency {parent} is not generated"
+                continue
+            lineage.add(parent)
+            lineage.update(ancestors[parent])
+            if len(lineage) > MAX_MODEL_ANCESTORS:
+                error = "processing model exceeds ancestor resource limit"
+                break
         operation = item.get("definition", {}).get("operation", {})
         if operation.get("type") == "join":
             explicit = item.get("definition", {}).get("inputs", [])
@@ -287,7 +331,7 @@ def generate_transforms(
                 TypeError,
             ) as exc:
                 error = str(exc)
-        ancestors[asset_id] = lineage
+        ancestors[asset_id] = lineage if error is None else set()
         rows[asset_id] = {
             "id": asset_id,
             "inputs": parents[asset_id],
@@ -298,39 +342,58 @@ def generate_transforms(
             "incremental": item.get("definition", {}).get("incremental"),
             "parameters": item.get("definition", {}).get("parameters", {}),
         }
-        order.append(asset_id)
-        visiting.remove(asset_id)
-
-    cycle_error = None
-    try:
-        for asset_id in sorted(transforms):
-            visit(asset_id)
-    except ValueError as exc:
-        cycle_error = str(exc)
-        for asset_id in transforms:
-            rows[asset_id] = {
-                "id": asset_id,
-                "inputs": parents[asset_id],
-                "status": "blocked",
-                "error": cycle_error,
-                "origin": "derived",
-            }
-        raw_sql.clear()
-        order.clear()
     models = {}
+    total_bytes = 0
+    order_index = {asset_id: offset for offset, asset_id in enumerate(order)}
     for asset_id in order:
-        if rows[asset_id]["status"] != "generated":
+        row = rows[asset_id]
+        if row["status"] != "generated":
+            continue
+        if any(rows[parent]["status"] != "generated" for parent in parents[asset_id]):
+            row.update(
+                status="blocked", error="dependency model exceeded SQL resource limits"
+            )
+            continue
+        ancestor_ids = sorted(ancestors[asset_id], key=order_index.__getitem__)
+        # Bound expansion before constructing or parsing the CTE text. Sorting
+        # only actual ancestors also avoids scanning every unrelated graph node.
+        estimated_bytes = (
+            len(raw_sql[asset_id].encode())
+            + sum(
+                len(raw_sql[parent].encode()) + len(_name(parent)) + 16
+                for parent in ancestor_ids
+            )
+            + 16
+        )
+        if (
+            estimated_bytes > MAX_MODEL_SQL_BYTES
+            or total_bytes + estimated_bytes > MAX_TOTAL_MODEL_SQL_BYTES
+        ):
+            row.update(
+                status="blocked",
+                error="processing model exceeds SQL byte resource limit",
+            )
             continue
         ctes = [
-            f"{_name(parent)} AS (\n{raw_sql[parent]}\n)"
-            for parent in order
-            if parent in ancestors[asset_id]
+            f"{_name(parent)} AS (\n{raw_sql[parent]}\n)" for parent in ancestor_ids
         ]
         sql = (("WITH " + ",\n".join(ctes) + "\n") if ctes else "") + raw_sql[asset_id]
-        sql = _select(sql, dialect) + ";\n"
+        try:
+            sql = _select(sql, dialect) + ";\n"
+        except (ValueError, sqlglot.errors.SqlglotError) as exc:
+            row.update(status="blocked", error=str(exc))
+            continue
+        size = len(sql.encode())
+        if size > MAX_MODEL_SQL_BYTES or total_bytes + size > MAX_TOTAL_MODEL_SQL_BYTES:
+            row.update(
+                status="blocked",
+                error="processing model exceeds SQL byte resource limit",
+            )
+            continue
         path = f"models/{_name(asset_id)}.sql"
         models[path] = sql
-        rows[asset_id]["file"] = path
+        total_bytes += size
+        row["file"] = path
     blocked = sum(row["status"] == "blocked" for row in rows.values())
     return {
         "models": models,
@@ -346,6 +409,11 @@ def generate_transforms(
             "nodes": [rows[asset_id] for asset_id in sorted(rows)],
             "status": "partial" if blocked else "generated",
             "execution": "not_run",
+            "limits": {
+                "model_ancestors": MAX_MODEL_ANCESTORS,
+                "model_sql_bytes": MAX_MODEL_SQL_BYTES,
+                "total_model_sql_bytes": MAX_TOTAL_MODEL_SQL_BYTES,
+            },
             "cycle": cycle_error,
         },
         "validation": {

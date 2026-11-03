@@ -111,3 +111,24 @@ independent SQLite results for processing graphs and ordered LEFT JOINs, DOSI
 binding checks, and packaged-plugin contracts. Live Server access, real DOSI
 warehouse queries and SaaS rendering/publication require a configured project
 and are not exercised by these offline tests.
+
+### Snapshot coordination and recovery
+
+Concurrent snapshot access currently requires POSIX `flock` support (Linux/macOS).
+Readers take a shared lock and writers an exclusive lock on the stable parent
+directory. Writes to sibling bundles in that directory therefore serialize too;
+inspection creates no lock files and never modifies a snapshot.
+
+If a process terminates between the two directory renames, inspection can read the
+single checksum-verified previous snapshot in place. Its result includes the actual
+`resolved_path`, `manifest_sha256`, and `recovered_from_backup`; rebuilding uses that
+verified manifest identity. The next authorized writer can restore the same-source
+backup. Multiple, corrupted, symlinked or differently sourced backups require
+explicit recovery; no backup is chosen by timestamp.
+
+Processing generation uses iterative graph traversal. A model may expand at most
+64 ancestors, 256 KiB of SQL, and the complete generated output at most 8 MiB of SQL.
+Limit violations and their downstream consumers are reported as blocked, while
+independent models can continue within the remaining budget. Rebuild dependency
+inspection is bounded to depth 64 and 4096 visited nodes per chart and reports a
+resource blocker instead of exhausting the Python stack.

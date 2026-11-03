@@ -8,7 +8,6 @@ compilation, warehouse policy enforcement, trial data and model snapshots.
 from __future__ import annotations
 
 import argparse
-import hashlib
 import json
 import re
 import sys
@@ -269,38 +268,53 @@ def assess_rebuild(
         if issue.get("status") not in {"ok", "complete", "supported"}:
             coverage[issue.get("asset_id", "")].append(issue)
 
-    def blockers(
-        asset_id: str, resolutions: set[tuple[str, str]], path: tuple[str, ...] = ()
-    ) -> list[str]:
-        if asset_id in path:
-            return [f"dependency cycle: {asset_id}"]
-        asset = assets.get(asset_id)
-        if asset is None:
-            return [f"missing dependency: {asset_id}"]
+    def blockers(asset_id: str, resolutions: set[tuple[str, str]]) -> list[str]:
         reasons = []
-        issues = coverage.get(asset_id, [])
-        historical_only = (
-            asset["kind"] == "external_source"
-            and bool(issues)
-            and all((asset_id, issue.get("code")) in resolutions for issue in issues)
-        )
-        if asset.get("status") != "ok" and not (
-            asset.get("status") == "partial" and historical_only
-        ):
-            reasons.append(
-                f"source asset {asset_id} is {asset.get('status', 'unknown')}"
+        active, visited = set(), set()
+        pending = [(asset_id, 0, False)]
+        while pending:
+            current, depth, finished = pending.pop()
+            if finished:
+                active.remove(current)
+                visited.add(current)
+                continue
+            if current in active:
+                reasons.append(f"dependency cycle: {current}")
+                continue
+            if current in visited:
+                continue
+            if depth > 64 or len(visited) + len(active) >= 4096:
+                reasons.append(f"dependency traversal resource limit: {current}")
+                continue
+            asset = assets.get(current)
+            if asset is None:
+                reasons.append(f"missing dependency: {current}")
+                visited.add(current)
+                continue
+            active.add(current)
+            pending.append((current, depth, True))
+            issues = coverage.get(current, [])
+            historical_only = (
+                asset["kind"] == "external_source"
+                and bool(issues)
+                and all((current, issue.get("code")) in resolutions for issue in issues)
             )
-        # Native parsing propagates referenced complex fields to the chart.
-        # An unused calculated field in a shared dataset must not block every
-        # consumer of that dataset.
-        reasons += [
-            f"{asset_id}: {issue.get('code', 'coverage_gap')}"
-            for issue in coverage.get(asset_id, [])
-            if (asset_id, issue.get("code")) not in resolutions
-            and not (asset["kind"] == "dataset" and issue.get("field_id"))
-        ]
-        for dependency in dependencies[asset_id]:
-            reasons += blockers(dependency, resolutions, (*path, asset_id))
+            if asset.get("status") != "ok" and not (
+                asset.get("status") == "partial" and historical_only
+            ):
+                reasons.append(
+                    f"source asset {current} is {asset.get('status', 'unknown')}"
+                )
+            reasons += [
+                f"{current}: {issue.get('code', 'coverage_gap')}"
+                for issue in issues
+                if (current, issue.get("code")) not in resolutions
+                and not (asset["kind"] == "dataset" and issue.get("field_id"))
+            ]
+            pending.extend(
+                (dependency, depth + 1, False)
+                for dependency in reversed(dependencies[current])
+            )
         return reasons
 
     results = []
@@ -443,9 +457,9 @@ def plan_rebuild(
         bundle,
         bindings=bindings,
         metric_catalog=metric_catalog,
-        source_manifest_sha256=hashlib.sha256(
-            (path / "manifest.json").read_bytes()
-        ).hexdigest(),
+        # Use the exact bytes verified under the snapshot read lock, including a
+        # read-only recovery backup when a previous writer died mid-exchange.
+        source_manifest_sha256=bundle["manifest_sha256"],
     )
 
 

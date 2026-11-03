@@ -70,21 +70,24 @@ def _cycles(assets: list[dict], edges: list[dict]) -> list[str]:
     for edge in edges:
         adjacent[edge["from"]].append(edge["to"])
     active, done, cycles = set(), set(), set()
-
-    def visit(node):
-        if node in active:
-            cycles.add(node)
-            return
-        if node in done:
-            return
-        active.add(node)
-        for dep in adjacent[node]:
-            visit(dep)
-        active.remove(node)
-        done.add(node)
-
     for asset in assets:
-        visit(asset["id"])
+        node = asset["id"]
+        if node in done:
+            continue
+        active.add(node)
+        stack = [(node, iter(adjacent[node]))]
+        while stack:
+            current, dependencies = stack[-1]
+            target = next(dependencies, None)
+            if target is None:
+                active.remove(current)
+                done.add(current)
+                stack.pop()
+            elif target in active:
+                cycles.add(target)
+            elif target not in done:
+                active.add(target)
+                stack.append((target, iter(adjacent[target])))
     return sorted(cycles)
 
 
@@ -201,11 +204,17 @@ def sync_sources(
         parsed = item["document"]
         # Retain only selected dashboards plus their upstream graph. A sibling dashboard is not selected implicitly.
         selected_here = {a["id"] for a in parsed["assets"] if a["id"] in chosen}
+        partial_workbook = selected_here != {
+            asset["id"] for asset in parsed["assets"] if asset["kind"] == "dashboard"
+        }
         keep = _reachable(selected_here, parsed.get("dependencies", []))
         keep.update(a["id"] for a in parsed["assets"] if a["kind"] == "workbook")
         merge(
             {
                 **parsed,
+                # A complete native workbook also contains unselected dashboards
+                # and their queries. Structured selected assets retain their dependencies.
+                "documents": {} if partial_workbook else parsed.get("documents", {}),
                 "assets": [a for a in parsed["assets"] if a["id"] in keep],
                 "dependencies": [
                     e
@@ -244,12 +253,20 @@ def sync_sources(
                     "status": "ok",
                 }
             )
+        if partial_workbook:
+            issue(
+                workbook_id,
+                "selection_scoped_source_copy",
+                "Full native workbook and raw workbook-level Metadata copy omitted for a partial dashboard selection; selected structured definitions and shared dependencies are retained.",
+                status="ok",
+            )
         # Keep REST identity and Metadata identity separate.
         try:
             lineage = client.workbook_lineage(identifier)
-            extra[f"metadata/{digest(identifier.encode())[:24]}.json"] = json_bytes(
-                redact(lineage)
-            )
+            if not partial_workbook:
+                extra[f"metadata/{digest(identifier.encode())[:24]}.json"] = json_bytes(
+                    redact(lineage)
+                )
             assets[workbook_id]["source"]["metadata_id"] = lineage.get(
                 "workbook", {}
             ).get("id")
@@ -266,6 +283,19 @@ def sync_sources(
                 text = row.get("query")
                 usable = isinstance(text, str) and bool(text.strip())
                 unsupported = bool(row.get("isUnsupportedCustomSql"))
+                if partial_workbook and text not in {
+                    query["text"]
+                    for query in queries.values()
+                    if query["origin"] == "source" and query["language"] == "sql"
+                }:
+                    # A workbook-level association does not establish that this SQL
+                    # belongs to the selected dashboard. Never export an unscoped SQL body.
+                    book_issue(
+                        "custom_sql_scope_unresolved",
+                        "Workbook-level custom SQL was omitted because its selected-dashboard dependency could not be established.",
+                        status="partial",
+                    )
+                    continue
                 add_asset(
                     {
                         "id": query_id,
@@ -325,6 +355,12 @@ def sync_sources(
             edges.append(
                 {"from": workbook_id, "to": table_id, "relation": "upstream_table"}
             )
+            # Metadata only establishes workbook-level use. Keep its unresolved
+            # producing definition visible to this selection's actual consumers.
+            for chart_id in charts_here:
+                edges.append(
+                    {"from": chart_id, "to": table_id, "relation": "upstream_table"}
+                )
             issue(
                 table_id,
                 "external_definition_required",

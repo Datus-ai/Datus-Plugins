@@ -398,7 +398,7 @@ def test_connection_string_credentials_do_not_reach_any_bundle_artifact(workspac
         raise AssertionError(group)
 
     client.download = download
-    result = sync_sources(client, dashboard_ids=["dashboard:book1:Overview"])
+    result = sync_sources(client, all_dashboards=True)
     bundle = inspect_bundle(result["output_dir"])
     root = Path(result["output_dir"])
     contents = b"\n".join(
