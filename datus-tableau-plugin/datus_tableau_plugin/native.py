@@ -142,14 +142,16 @@ def _xml(payload: bytes, kind: str) -> ET.Element:
                 pending.append(child)
     # Namespaced inputs are accepted without losing their original element names
     # in the source document. Tableau normally uses unnamespaced definitions.
+    redacted_elements: set[ET.Element] = set()
     for element in root.iter():
         element.tag = element.tag.rsplit("}", 1)[-1]
         element.attrib = redact(element.attrib)
-        if _key(element.tag) in SECRET_KEYS:
+        if element not in redacted_elements and _key(element.tag) in SECRET_KEYS:
             # A known credential field may wrap arbitrary XML, not just text.
             # Preserve names/structure but hide every value inside its subtree.
             # The root tail belongs to its parent and remains ordinary content.
             for descendant in element.iter():
+                redacted_elements.add(descendant)
                 descendant.attrib = {key: "[REDACTED]" for key in descendant.attrib}
                 descendant.text = "[REDACTED]"
                 if descendant is not element and descendant.tail:
