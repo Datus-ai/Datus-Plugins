@@ -36,6 +36,18 @@ internal identifiers distinct, including identically named sheets in different
 workbooks. Missing permissions or a GraphQL partial response are not evidence
 that a dependency does not exist.
 
+For a downloaded Prep flow without verified dashboard lineage, plan it offline
+with `python -m datus_tableau_plugin.plan --flow FLOW --flow-id ID --output DIR`.
+Inspect `pipeline.json.source_bindings_required` and local semantic diagnostics.
+Use the README's source-binding contract to map full source transform IDs to
+actual target tables; optional columns validate the exact native order. Pass
+`--source-bindings FILE` to the planner or `sync run`. Keep retrieved source
+assets immutable and use binding provenance in derived artifacts. A local
+synthetic fixture can test SQL behavior; label that evidence separately from
+real source data or warehouse validation. A partial plan remains partial when
+DATE string parsing, missing pivot fields, union types or provenance are
+unresolved, even if independent branches generate models.
+
 SQL retains its provenance: a source query is retrieved evidence; a derived
 query is a reconstruction; target SQL is compiled for the chosen target model.
 LOD expressions, table calculations and Prep operations must retain their

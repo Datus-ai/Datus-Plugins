@@ -7,6 +7,7 @@ import json
 import sys
 from typing import Any
 
+from .bindings import read_bindings
 from .bundle import inspect_bundle
 from .client import TableauClient
 from .config import Settings
@@ -58,6 +59,10 @@ def build_parser() -> argparse.ArgumentParser:
         action="append",
         default=[],
         help="workspace SQL or JSON definition pack; never executed",
+    )
+    run.add_argument(
+        "--source-bindings",
+        help="local JSON mapping full source transform IDs to explicit tables",
     )
     run.add_argument(
         "--dialect",
@@ -125,6 +130,9 @@ def main(argv: list[str], profile: dict) -> int:
                     overwrite=ns.overwrite,
                     external_sources=ns.external_source,
                     dialect=ns.dialect,
+                    source_bindings=read_bindings(ns.source_bindings)
+                    if ns.source_bindings
+                    else None,
                 )
             elif ns.group == "dashboards":
                 if ns.command == "get" and (

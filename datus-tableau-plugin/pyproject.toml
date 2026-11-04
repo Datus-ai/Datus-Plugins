@@ -13,7 +13,7 @@ authors = [{name = "Datus"}]
 dependencies = ["tableauserverclient>=0.38,<1", "defusedxml>=0.7", "jsonschema>=4", "sqlglot>=26,<31"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "Jinja2>=3.1", "PyYAML>=6", "build>=1.2"]
+dev = ["pytest>=8", "Jinja2>=3.1", "PyYAML>=6", "build>=1.2", "duckdb>=1.4,<2"]
 
 [project.entry-points."datus.plugins"]
 tableau = "datus_tableau_plugin"

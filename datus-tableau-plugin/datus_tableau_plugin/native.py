@@ -778,10 +778,21 @@ def parse_flow(payload: bytes, *, flow_id: str) -> dict:
         raise ValueError("invalid Prep flow JSON") from exc
     if not isinstance(document, dict):
         raise ValueError("expected Prep flow object")
-    document = redact(document)
+    try:
+        document = redact(document)
+    except RecursionError as exc:
+        raise ValueError("Prep flow nesting resource limit") from exc
     flow = document.get("flow", document)
     if not isinstance(flow, dict):
         raise ValueError("invalid Prep flow root")
+    from .prep import native_flow, normalize
+
+    if native_flow(flow):
+        out = normalize(flow, flow_id)
+        out["documents"][f"flow-{_identifier(flow_id)}.tfl"] = json.dumps(
+            document, ensure_ascii=False, indent=2
+        )
+        return out
     out = _result()
     raw_nodes = flow.get("nodes")
     if not isinstance(raw_nodes, (dict, list)):

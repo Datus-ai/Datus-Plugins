@@ -121,6 +121,7 @@ commands:
     - name: --overwrite
     - name: --external-source
     - name: --dialect
+    - name: --source-bindings
   - name: inspect
     description: Verify source bundle checksums and schema offline
     args:

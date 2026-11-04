@@ -86,7 +86,20 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
             raise ValueError("source operations must not have graph inputs")
         if operation.get("sql"):
             return _select(operation["sql"], dialect, operation.get("source_dialect"))
-        return f"SELECT * FROM {_table(operation.get('table'), dialect)}"
+        if operation.get("binding_required") and not operation.get("binding"):
+            raise ValueError(
+                "source_binding_required: provide an explicit source table binding"
+            )
+        table = _table(operation.get("table"), dialect)
+        columns = operation.get("columns")
+        if operation.get("binding"):
+            projection = [_quoted(c, dialect) for c in columns]
+            projection.extend(
+                f"{exp.Literal.string(v).sql(dialect=dialect)} AS {_quoted(k, dialect)}"
+                for k, v in operation.get("constants", {}).items()
+            )
+            return f"SELECT {', '.join(projection)} FROM {table}"
+        return f"SELECT * FROM {table}"
     if kind == "union":
         if len(inputs) < 2:
             raise ValueError("union requires at least two inputs")
@@ -99,11 +112,32 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
             raise ValueError(
                 "union requires explicit ordered common columns; never infer SELECT * alignment"
             )
-        projection = ", ".join(_quoted(column, dialect) for column in columns)
+        if operation.get("native_type_conflicts"):
+            raise ValueError(
+                "native_union_type_conflict: incompatible fields "
+                + ", ".join(operation["native_type_conflicts"])
+            )
+        if operation.get("native_provenance_unresolved"):
+            raise ValueError(
+                "native_union_provenance_unresolved: Table Names values require an explicit native mapping"
+            )
+        input_columns = operation.get("input_columns")
+        if input_columns is not None and len(input_columns) != len(inputs):
+            raise ValueError("union input schema count mismatch")
         if operation.get("mode", "all") not in {"all", "distinct"}:
             raise ValueError("unknown union duplicate semantics")
         join = "\nUNION ALL\n" if operation.get("mode", "all") == "all" else "\nUNION\n"
-        return join.join(f"SELECT {projection} FROM {source}" for source in inputs)
+        projections = []
+        for index, source in enumerate(inputs):
+            known = input_columns[index] if input_columns is not None else columns
+            projection = ", ".join(
+                (_quoted(c, dialect) if c in known else "NULL")
+                + " AS "
+                + _quoted(c, dialect)
+                for c in columns
+            )
+            projections.append(f"SELECT {projection} FROM {source}")
+        return join.join(projections)
     if kind == "join":
         if len(inputs) != 2:
             raise ValueError("join requires exactly two ordered inputs")
@@ -154,15 +188,55 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
             )
         mapping = operation.get("mapping", {})
         return f"SELECT {', '.join(_quoted(c, dialect) + ' AS ' + _quoted(mapping.get(c, c), dialect) for c in columns)} FROM {source}"
+    if kind == "replace_fields":
+        columns = operation.get("columns")
+        expressions = operation.get("expressions")
+        if (
+            not isinstance(columns, list)
+            or not columns
+            or not isinstance(expressions, dict)
+            or not expressions
+            or not set(expressions) <= set(columns)
+        ):
+            raise ValueError(
+                "field replacement requires known columns and explicit expressions"
+            )
+        projection = [
+            (
+                _expression(expressions[c], operation, dialect)
+                if c in expressions
+                else _quoted(c, dialect)
+            )
+            + " AS "
+            + _quoted(c, dialect)
+            for c in columns
+        ]
+        return f"SELECT {', '.join(projection)} FROM {source}"
     if kind == "derive":
         expression = _expression(operation.get("expression"), operation, dialect)
         columns = operation.get("columns")
         name = operation.get("column_name")
-        if not isinstance(columns, list) or not columns or not name or name in columns:
+        if (
+            not isinstance(columns, list)
+            or not columns
+            or not name
+            or (name in columns and not operation.get("replace"))
+        ):
             raise ValueError(
                 "derive requires known input columns and a new, unique column_name"
             )
-        return f"SELECT {', '.join(_quoted(c, dialect) for c in columns)}, {expression} AS {_quoted(name, dialect)} FROM {source}"
+        if name in columns:
+            projection = [
+                f"{expression} AS {_quoted(name, dialect)}"
+                if c == name
+                else _quoted(c, dialect)
+                for c in columns
+            ]
+        else:
+            projection = [_quoted(c, dialect) for c in columns] + [
+                f"{expression} AS {_quoted(name, dialect)}"
+            ]
+        return f"SELECT {', '.join(projection)} FROM {source}"
     if kind == "aggregate":
         groups = operation.get("group_by", [])
         aggregations = operation.get("aggregations")
@@ -173,7 +247,12 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
         ):
             raise ValueError("aggregate requires group_by and explicit aggregations")
         names = set(groups)
-        projection = [_quoted(column, dialect) for column in groups]
+        projection = [
+            _quoted(column, dialect)
+            + " AS "
+            + _quoted(operation.get("group_aliases", {}).get(column, column), dialect)
+            for column in groups
+        ]
         for item in aggregations:
             if not isinstance(item, dict) or item.get("name") in names:
                 raise ValueError("aggregate output names must be unique")
@@ -187,6 +266,11 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
             else ""
         )
     if kind == "pivot":
+        if operation.get("native_missing_fields"):
+            raise ValueError(
+                "native_pivot_field_missing: "
+                + ", ".join(operation["native_missing_fields"])
+            )
         if operation.get("direction") != "columns_to_rows":
             raise ValueError(
                 "row-to-column and dynamic pivots require explicit semantic mapping"
@@ -199,10 +283,10 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
         names_to = _quoted(operation.get("names_to"), dialect)
         values_to = _quoted(operation.get("values_to"), dialect)
         projections = []
-        for column in values:
+        for offset, column in enumerate(values):
             keep = [_quoted(c, dialect) for c in index]
             keep += [
-                f"{exp.Literal.string(column).sql(dialect=dialect, unsupported_level=ErrorLevel.RAISE)} AS {names_to}",
+                f"{exp.Literal.string(operation.get('labels', values)[offset]).sql(dialect=dialect, unsupported_level=ErrorLevel.RAISE)} AS {names_to}",
                 f"{_quoted(column, dialect)} AS {values_to}",
             ]
             condition = (
@@ -308,7 +392,10 @@ def generate_transforms(
             ):
                 error = "join requires exactly two explicitly ordered input identities matching its dependencies"
         if item.get("status", "ok") != "ok":
-            error = "native operation is incomplete or requires an explicit verified semantic mapping"
+            error = (
+                item.get("definition", {}).get("normalization", {}).get("error")
+                or "native operation is incomplete or requires an explicit verified semantic mapping"
+            )
         if error is None:
             try:
                 statement = _compile(
@@ -332,6 +419,9 @@ def generate_transforms(
             "origin": "derived",
             "incremental": item.get("definition", {}).get("incremental"),
             "parameters": item.get("definition", {}).get("parameters", {}),
+            "binding": operation.get("binding"),
+            "local_semantic_issues": operation.get("semantic_issues", []),
+            "normalization": item.get("definition", {}).get("normalization"),
         }
     models = {}
     total_bytes = 0

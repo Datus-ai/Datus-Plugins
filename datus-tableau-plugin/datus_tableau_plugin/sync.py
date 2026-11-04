@@ -101,6 +101,7 @@ def sync_sources(
     overwrite: bool = False,
     external_sources: list[str] | None = None,
     dialect: str = "duckdb",
+    source_bindings: dict | None = None,
 ) -> dict:
     if sum(bool(x) for x in (dashboard_ids, project_ids, all_dashboards)) != 1:
         raise UsageError("select exactly one of --dashboard-id, --project-id or --all")
@@ -646,7 +647,15 @@ def sync_sources(
         )
     from .transforms import generate_transforms
 
-    generated = generate_transforms(list(assets.values()), edges, dialect=dialect)
+    from .bindings import apply_source_bindings, required_bindings
+
+    derived_assets = apply_source_bindings(
+        list(assets.values()), source_bindings, dialect=dialect
+    )
+    generated = generate_transforms(derived_assets, edges, dialect=dialect)
+    generated["pipeline"]["source_bindings_required"] = required_bindings(
+        derived_assets
+    )
     for node in generated.get("pipeline", {}).get("nodes", []):
         if node.get("status") == "blocked":
             issue(

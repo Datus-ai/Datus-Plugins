@@ -84,10 +84,73 @@ cannot replace an observed dashboard, chart or dataset definition.
 `--dialect` selects the processing SQL dialect (default `duckdb`). SQL models are
 generated only where operation semantics and ordered inputs are explicit.
 Supported mapped operations include source, projection, rename, derivation,
-filter, join, union, aggregation and columns-to-rows pivot. Native Prep
-containers, unknown scripts and ambiguous join direction are retained and
-blocked. Models are never deployed or run; physical schemas, types and real data
-remain unverified unless subsequently checked through the existing Datus tools.
+filter, join, union, aggregation and columns-to-rows pivot. Native `.v1` and
+`.v2018_2_3` shapes with explicit ports and schemas expand containers, loader
+actions and super-node annotations into scoped operations. Empty control
+containers produce no processing model. Join input sides come from namespace
+ports; duplicate right fields receive numeric suffixes. Native fields retain
+order and types through removal, rename, replacement, conversion, remap, range
+filters, union, single-group unpivot and aggregation. Unknown variants and
+ambiguous ports remain blocked locally. Models are never deployed or run;
+physical schemas, types and real data remain unverified.
+
+File inputs require an explicit target binding. A CSV filename, Excel relation
+or connection attribute is never treated as a warehouse table. Pass
+`sync run --source-bindings bindings.json` to bind derived processing artifacts;
+the retrieved source assets and native evidence retain their original content.
+The JSON object is keyed by full source transform ID, including generated input
+files and nested scopes:
+
+```json
+{
+  "transform:local:input-node": {
+    "table": "analytics.orders",
+    "columns": ["Order ID", "Sales"]
+  }
+}
+```
+
+`table` accepts a qualified identifier, without SQL fragments. Optional `columns`
+assert the exact native field order; differences and unknown source IDs are
+rejected. A binding records its explicit origin and hash, while physical schema
+verification remains pending. The packaged `schemas/source-bindings-v1.json`
+describes the contract. Missing mappings appear in
+`pipeline.json.source_bindings_required` and block affected models.
+
+A downloaded native flow can be planned independently of dashboard lineage and
+without a Tableau connection:
+
+```bash
+python -m datus_tableau_plugin.plan --flow downloaded.tfl --flow-id local \
+  --source-bindings bindings.json --output prep-plan --dialect duckdb
+```
+
+Omit bindings for an inventory of required mappings. The new output directory
+must be inside the current workspace and may not already exist. Output includes
+redacted native evidence, assets, dependencies, coverage, transforms, SQL models,
+pipeline and validation reports, and `plan-manifest.json` with file checksums
+and the original definition hash. This is an offline plan, separate from the
+server source-bundle format; inspect its manifest and reports directly. Exit
+status is 1 for a partial plan and 2 for invalid input.
+
+The native formula translator uses a bounded typed tokenizer/AST, tagging the
+original Tableau expression and translated SQL provenance. Its DuckDB subset
+includes typed IF/ELSEIF, IFNULL/ISNULL, integer/string/boolean STR, explicit
+`DATEPARSE("dd/MM/yyyy", ...)`, DATE on date/datetime, date components, day
+DATEDIFF, positive-index SPLIT and TRIM. Exact native RemoveLetters quick-calcs
+map Unicode Letter removal globally. Automatic DATE(string), unknown string
+formatting conversions, unsupported functions, LOD, table calculations and
+scripts remain blocked. Numeric conversions use null-on-invalid casts and
+real-to-integer truncation; division results retain real types. Numeric range
+bounds accept exact JSON integers or decimal strings. JSON floating-point bounds
+remain blocked because decoding has already discarded their exact decimal token.
+Generated input-union files apply their own loader actions and ordered selections
+before adding file provenance. Single-group native unpivot retains null rows;
+missing referenced fields remain blockers. Native unions retain unresolved
+mixed-type and generated Table Names provenance diagnostics rather than
+inventing values or implicit conversions. Existing model limits remain 64
+ancestors, 256 KiB per model and 8 MiB total SQL; native normalization also caps
+nodes, edges and propagated fields.
 
 ## DOSI-based SaaS rebuilding
 
@@ -122,7 +185,8 @@ uv build --package datus-tableau-plugin --wheel
 
 The offline suite includes real TSC HTTP serialization with synthetic responses,
 native XML/ZIP parsing, shared assets and failed snapshot updates, SQL provenance,
-independent SQLite results for processing graphs and ordered LEFT JOINs, DOSI
+independent SQLite results for processing graphs and ordered LEFT JOINs, synthetic
+DuckDB results for native Prep graphs and scalar formulas, DOSI
 binding checks, and packaged-plugin contracts. Live Server access, real DOSI
 warehouse queries and SaaS rendering/publication require a configured project
 and are not exercised by these offline tests.

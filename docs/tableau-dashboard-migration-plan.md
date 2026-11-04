@@ -130,3 +130,52 @@ SQL 先做语法、方言、字段和依赖校验；有可用连接且运行环�
 - DOSI 重建通过离线绑定评估器及 `tableau-rebuild` 技能交给已有真实指标/看板工具；静态评估不伪造 `.metric.json`、模型快照或已发布状态。现有 backend/SaaS 链路复用，本次没有修改这些仓库。
 - 178 项插件测试通过，包含真实 TSC 0.42 HTTP 序列化、SQLite 加工结果、来源覆盖/依赖传播、DOSI 绑定和插件契约；审查回归另覆盖连接字符串凭据脱敏、不支持 SQL 转换阻断、Metadata 自定义 SQL 和外部表缺口传播、快照并发锁与崩溃恢复、写锁内失败同步保护已有快照及恢复备份、部分选择范围、XML 命名空间凭据与样本子树脱敏、敏感 XML 子树全部值脱敏并保留父级尾文本、嵌套凭据脱敏线性遍历、环与下游局部阻断及独立分支生成、严格 clean 语义和深图资源限额。新增计算依赖回归验证精确字段与数据源作用域、工作表本地计算和字段实例、多跳 LOD 与 1200 层共享依赖链、缺失/歧义/环局部阻断、TOTAL/PREVIOUS_VALUE 等表计算、字符串/注释/科学计数法数值排除、裸字段依赖保留及实际 DOSI 预检中无关图表仍可通过。POSIX 锁要求与超限 blocked 行为详见插件 README。Ruff 检查与格式校验通过，wheel 构建并检查 manifest、schema、模板和四个技能齐全。
 - 真实 Tableau Server、目标 DOSI 数据源和 SaaS 预览/发布尚未验收。原生 Prep 容器、未知脚本及无等价映射的 LOD/表计算保留定义并明确阻断，不宣称已经通用转换。
+
+## 2026-11-04：原生 Prep 处理补齐与离线计划
+
+新增 `python -m datus_tableau_plugin.plan --flow ... --flow-id local --output ...`
+作为独立离线入口。它读取已下载的 native definition，不创建 dashboard 血缘或重复下载站点；
+生成带校验和的 `plan-manifest.json`、脱敏原生定义及 derived processing 产物。
+输出目录限定在当前 workspace 内，既有目录拒绝覆盖。此计划与服务器同步 source bundle
+分开，查看计划 manifest、pipeline 和 validation，不使用 `sync inspect` 冒充同一契约。
+
+`sync run` 与离线计划均支持 `--source-bindings FILE`。JSON 使用完整 source transform ID
+作为 key，值包含 qualified table identifier 与可选精确有序 columns。CSV/Excel relation、
+文件路径和连接属性不能自动映射为实际仓库表；未绑定源明确返回 `source_binding_required`。
+绑定只应用于 derived 资产，并保存显式来源及 hash；原始 source assets 不被覆写。
+未知 ID、SQL 片段和与原生字段顺序不同的列清单拒绝使用。物理表与类型仍需要实际验证。
+
+`.v1` 与 `.v2018_2_3` 的已观察结构通过显式 port namespace 展开 Container、source actions、
+selectedFields、superNode action 和 before/after annotations。root 与空 control container
+不生成 processing model，未知版本、运算、输出 port、join 顺序等保持局部阻断。
+字段顺序、重名 join 右侧后缀、替换列、类型转换、重映射、单字段范围过滤、按名 union、
+单组 columns-to-rows pivot（保留 null）及带别名聚合均有独立 synthetic DuckDB 结果断言。
+公式使用有界 typed tokenizer/AST；支持明确 DATEPARSE format 等有限 scalar 子集，
+自动 DATE(string)、未知 string formatting、LOD/table calc/script 等保持精确缺口。
+Unicode RemoveLetters 仅翻译经验证的原生 quick-calc 形状，使用 Letter category 与 global replacement。
+
+在不修改原始脱敏证据的实际下载 Flow 上，旧解析曾产生 46 个全部阻断的 processing 节点；
+新规范器展开为 55 个实际 processing 节点，包括 9 个需绑定源（其中 4 个是 input union 的独立文件）。
+显式绑定本地 synthetic tables 后生成 25 个模型、阻断 30 个；25 个生成 SELECT 均在本地 DuckDB
+执行成功。该证据仅证明此合成输入域下 SQL 可执行，未使用真实业务数据、未部署仓库对象，
+不能证明业务数值等价或源文件对应真实仓库表。本轮已在正式 Python 3.12.12 / DuckDB 1.5.6
+环境重做上述 25 个模型的合成执行，全部成功，0 个失败。
+
+剩余直接语义缺口：两处日期转换公式包含无法证明等价的自动 DATE(string) 回退，一处
+real→string 的展示格式未建立映射；union 的 Discount 混型转换及自动 Table Names 值缺乏
+明确映射；Quota metadata 缺少 pivot 引用的 2018 字段。下游通过依赖阻断，pipeline 同时保留
+本地 semantic issues，避免上游失败掩盖额外缺口。不能通过填造字段、空 provenance 或跳过
+annotation 来消除这些缺口。55 节点图未触及 64 ancestor 上限，既有 256 KiB/model 与 8 MiB
+总 SQL 上限继续生效；新规范器还限制节点、边、单节点与总传播字段数量。
+
+最终验证：项目正式 Python 3.12.12 / DuckDB 1.5.6 环境全量 210 项测试通过（原有 178 项，
+新增 32 项 native Prep 测试）。新增覆盖 synthetic DuckDB 行结果、null/date/split、join 多匹配、
+union 缺列与 provenance、pivot/aggregate、未知语义及版本、绑定拒绝、图循环/资源上限、
+离线计划 checksum 与路径约束。审查修复回归验证：整数除法先产生 real，再转换整数时按零截断；
+generatedInputs 的 loader actions 与 selectedFields 在 union 前生效，文件 provenance 随后加入；
+范围过滤保留 BIGINT 与 decimal 字符串的精确边界、相邻值及 null 语义；NOT 的优先级低于比较、
+高于 AND/OR，并验证 Boolean operands、括号、嵌套 NOT 与数值一元正负。
+数值范围边界仅接受精确 JSON integer 或 decimal string；直接 JSON floating-point 因原始十进制
+词法已丢失而明确阻断，不尝试恢复猜测精度。正式 dev 依赖声明 `duckdb>=1.4,<2`，本轮锁定并验证
+1.5.6；Ruff、format 与 diff whitespace 检查均通过。上述 25 个模型的合成执行与全量测试均使用
+同一正式项目环境，不包含真实业务数据验证或远端执行。
