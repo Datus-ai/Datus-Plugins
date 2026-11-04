@@ -35,6 +35,21 @@ Metadata API must be enabled and accessible. Native download permissions are nee
 
 Use the bundled `tableau-rebuild` skill to map source chart intent to existing DOSI metrics and generate a SaaS dashboard using the existing Datus artifact tools. Source SQL is evidence; it is never a silent fallback for an unmatched metric. Missing metrics, ambiguous source identity and unsupported calculations remain blocked in the mapping report.
 
+Native worksheet checks follow exact datasource-qualified field and column-instance
+bindings through used calculation dependencies, including worksheet-local fields.
+An indirect LOD or table calculation blocks its consuming chart; unused calculation
+metadata does not block other charts. This includes `TOTAL`, `PREVIOUS_VALUE`,
+window/running/rank functions, predictive model table calculations and analytics
+extension calls documented in Tableau's [table calculation functions](https://help.tableau.com/current/pro/desktop/en-us/functions_functions_tablecalculation.htm).
+Quoted strings, date and numeric literals (including scientific notation), and
+comments follow Tableau's [calculation syntax](https://help.tableau.com/current/pro/desktop/en-us/functions_operators.htm)
+and do not create field references or function calls. Ordinary aggregates remain
+supported. Missing generated calculation identities or instance targets, incomplete
+or conflicting calculation definitions, ambiguous field scope and dependency cycles
+produce explicit chart coverage gaps. Sparse physical column metadata remains
+allowed, including undeclared SQL output fields; this bounded dependency check is
+not a complete Tableau formula compiler.
+
 Tests are deterministic, using SDK doubles and native source fixtures. No production Tableau Server compatibility or real SaaS deployment is claimed until a target environment is verified.
 
 ## Source bundle and processing output

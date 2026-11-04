@@ -308,14 +308,246 @@ def _dataset(out: dict, element: ET.Element, asset_id: str, **source: Any) -> No
             out["coverage"][-1]["field_id"] = column.get("name")
 
 
+_FORMULA_PARTS = re.compile(
+    r"\[(?:[^\]]|\]\])*\]|'(?:\\.|''|[^'\\])*'|\"(?:\\.|\"\"|[^\"\\])*\""
+    r"|\#[^#]*\#|//[^\r\n]*|/\*[\s\S]*?\*/"
+    r"|(?<![\w.])(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?![\w.])"
+)
+_FIELD = r"\[(?:[^\]]|\]\])*\]"
+_FIELD_REFERENCES = re.compile(
+    rf"(?P<field>{_FIELD}(?:\s*\.\s*{_FIELD})?)|(?P<bare>(?<!\w)[A-Za-z_]\w*)"
+)
+_FORMULA_KEYWORDS = {
+    "AND",
+    "OR",
+    "NOT",
+    "IF",
+    "THEN",
+    "ELSE",
+    "ELSEIF",
+    "END",
+    "CASE",
+    "WHEN",
+    "TRUE",
+    "FALSE",
+    "NULL",
+    "IN",
+}
+
+
+def _formula_code(formula: str, *, fields: bool = True) -> str:
+    """Mask literals/comments without interpreting Tableau expressions as SQL."""
+    return _FORMULA_PARTS.sub(
+        lambda match: (
+            match[0] if fields and match[0].startswith("[") else " " * len(match[0])
+        ),
+        formula,
+    )
+
+
+def _field_references(text: str, known: dict | None = None) -> list[tuple]:
+    code = _formula_code(text)
+    references = []
+    for match in _FIELD_REFERENCES.finditer(code):
+        if match["field"]:
+            parts = re.split(r"\]\s*\.\s*\[", match[0][1:-1])
+            references.append(
+                (parts[0].replace("]]", "]"), f"[{parts[1]}]")
+                if len(parts) == 2
+                else (None, match[0])
+            )
+        elif (
+            known is not None
+            and f"[{match[0]}]" in known
+            and match[0].upper() not in _FORMULA_KEYWORDS
+            and not code[match.end() :].lstrip().startswith("(")
+        ):
+            references.append((None, f"[{match[0]}]"))
+    return references
+
+
 def _complex_formula(formula: str) -> bool:
     return bool(
         re.search(
-            r"\{\s*(?:FIXED|INCLUDE|EXCLUDE)\b|\b(?:WINDOW_\w+|LOOKUP|RUNNING_\w+|INDEX|SIZE|FIRST|LAST|RANK\w*)\s*\(",
-            formula,
+            r"\{\s*(?:FIXED|INCLUDE|EXCLUDE)\b|\b(?:WINDOW_\w+|LOOKUP|RUNNING_\w+|INDEX|SIZE|FIRST|LAST|RANK\w*|TOTAL|PREVIOUS_VALUE|MODEL_PERCENTILE|MODEL_QUANTILE|SCRIPT_(?:BOOL|INT|REAL|STR|STRING)|MODEL_EXTENSION_(?:BOOL|INT|REAL|STR|STRING))\s*\(",
+            _formula_code(formula, fields=False),
             re.I,
         )
     )
+
+
+def _worksheet_calculations(
+    out: dict, worksheet: ET.Element, chart: dict, sources: dict[str, ET.Element]
+) -> None:
+    """Follow only used native fields, retaining datasource and instance identity."""
+    fields: dict[str, dict[str, list[dict]]] = {}
+    instances: dict[str, dict[str, set[str]]] = {}
+    visible = {
+        item.get("name") or item.get("datasource")
+        for item in worksheet.iter()
+        if item.tag in {"datasource", "datasource-dependencies"}
+    }
+
+    def add_columns(source: str, element: ET.Element) -> None:
+        scope = fields.setdefault(source, {})
+        for column in element.findall("./column"):
+            name = column.get("name")
+            if name:
+                calculations = scope.setdefault(name, [])
+                calculation = column.find("./calculation")
+                if calculation is not None:
+                    definition = {
+                        key: calculation.get(key)
+                        for key in ("class", "formula")
+                        if key in calculation.attrib
+                    }
+                    if definition not in calculations:
+                        calculations.append(definition)
+        for instance in element.findall("./column-instance"):
+            name, column = instance.get("name"), instance.get("column")
+            if name and column:
+                instances.setdefault(source, {}).setdefault(name, set()).add(column)
+
+    for source, element in sources.items():
+        add_columns(source, element)
+    for element in worksheet.findall(".//datasource-dependencies"):
+        source = element.get("datasource")
+        if source:
+            add_columns(source, element)
+
+    reported = set()
+
+    def block(code: str, message: str) -> None:
+        if (code, message) not in reported:
+            reported.add((code, message))
+            chart["status"] = "unsupported"
+            _coverage(out, chart["id"], code, message)
+
+    def resolve(source: str | None, field: str) -> tuple | None:
+        if source is None:
+            candidates = [
+                name
+                for name in visible
+                if field in fields.get(name, {}) or field in instances.get(name, {})
+            ]
+            if not candidates and len(visible - {None, "Parameters"}) == 1:
+                candidates = list(visible - {None, "Parameters"})
+            if len(candidates) != 1:
+                block(
+                    "calculation_dependency_unresolved",
+                    f"Field {field} has missing or ambiguous datasource scope.",
+                )
+                return None
+            source = candidates[0]
+        if source not in fields and source != "Parameters":
+            block(
+                "calculation_dependency_unresolved",
+                f"Field [{source}].{field} has no datasource definition.",
+            )
+            return None
+        scope = fields.get(source, {})
+        aliases = instances.get(source, {}).get(field, set())
+        if field not in scope:
+            if len(aliases) > 1:
+                block(
+                    "calculation_dependency_unresolved",
+                    f"Field instance [{source}].{field} has ambiguous targets.",
+                )
+                return None
+            if aliases:
+                field = next(iter(aliases))
+                if field not in scope:
+                    block(
+                        "calculation_dependency_unresolved",
+                        f"Field instance [{source}] targets missing field {field}.",
+                    )
+                    return None
+            else:
+                # Native shelves can omit column-instance metadata. Recognize
+                # the aggregation wrapper, never substrings of a field name.
+                instance = re.fullmatch(
+                    r"\[(?:none|sum|avg|min|max|count|cnt|cntd|attr|usr|median|stdev|stdevp|var|varp):(.+):(?:qk|nk|ok)\]",
+                    field,
+                    re.I,
+                )
+                if instance:
+                    field = f"[{instance[1]}]"
+        if field not in scope:
+            # SQL-derived physical columns need not have column declarations.
+            # Generated calculation identities do require their native formula.
+            if field.lower().startswith("[calculation_"):
+                block(
+                    "calculation_dependency_unresolved",
+                    f"Calculation [{source}].{field} has no field definition.",
+                )
+            return None
+        return source, field
+
+    known_visible = {
+        field: None for source in visible for field in fields.get(source, {})
+    }
+    roots = []
+    pending = [worksheet]
+    while pending:
+        element = pending.pop()
+        if element.tag == "datasource-dependencies":
+            continue
+        pending.extend(element)
+        for key in {"column", "field", "field-name", "level"}:
+            roots.extend(_field_references(element.get(key, "")))
+        if element.tag in {"rows", "cols", "slices", "pages"}:
+            roots.extend(_field_references(element.text or ""))
+        if element.tag == "calculation":
+            formula = element.get("formula", "")
+            if _complex_formula(formula) or element.get("class") == "table":
+                block(
+                    "tableau_calculation",
+                    "Active LOD/table calculation requires explicit DOSI semantic mapping.",
+                )
+            roots.extend(_field_references(formula, known_visible))
+
+    active, visited = set(), set()
+    pending = [
+        (node, False) for source, field in roots if (node := resolve(source, field))
+    ]
+    while pending:
+        node, finished = pending.pop()
+        if finished:
+            active.remove(node)
+            visited.add(node)
+            continue
+        if node in active:
+            block(
+                "calculation_dependency_cycle",
+                f"Calculation dependency cycle at [{node[0]}].{node[1]}.",
+            )
+            continue
+        if node in visited:
+            continue
+        source, field = node
+        calculations = fields[source][field]
+        if len(calculations) > 1 or any(
+            not item.get("formula", "").strip() for item in calculations
+        ):
+            block(
+                "calculation_dependency_unresolved",
+                f"Calculation [{source}].{field} has missing or ambiguous formula definitions.",
+            )
+            visited.add(node)
+            continue
+        active.add(node)
+        pending.append((node, True))
+        for calculation in calculations:
+            formula = calculation.get("formula", "")
+            if _complex_formula(formula) or calculation.get("class") == "table":
+                block(
+                    "tableau_calculation",
+                    f"Referenced field [{source}].{field} requires explicit DOSI semantic mapping.",
+                )
+            for qualifier, dependency in _field_references(formula, fields[source]):
+                target = resolve(qualifier or source, dependency)
+                if target:
+                    pending.append((target, False))
 
 
 def parse_workbook(
@@ -340,6 +572,10 @@ def parse_workbook(
         },
         workbook_luid=workbook_id,
     )
+    sources = {
+        element.get("name", ""): element
+        for element in root.findall("./datasources/datasource")
+    }
     datasets: dict[str, str] = {}
     for element in root.findall("./datasources/datasource"):
         name = element.get("name", "")
@@ -395,45 +631,7 @@ def parse_workbook(
                     f"Referenced dataset {ref!r} was not present in the workbook.",
                     "partial",
                 )
-        for item in worksheet.findall(".//calculation"):
-            if (
-                _complex_formula(item.get("formula", ""))
-                or item.get("class") == "table"
-            ):
-                chart["status"] = "unsupported"
-                _coverage(
-                    out,
-                    chart_id,
-                    "tableau_calculation",
-                    "LOD/table calculations require an explicit equivalent DOSI metric; native calculation and filter order are retained.",
-                )
-        binding_text = " ".join(
-            value
-            for item in worksheet.iter()
-            if item.tag not in {"datasource-dependencies", "column", "calculation"}
-            for value in [*(str(v) for v in item.attrib.values()), item.text or ""]
-        )
-        for dataset in out["assets"]:
-            if dataset["kind"] != "dataset" or not any(
-                edge["from"] == chart_id and edge["to"] == dataset["id"]
-                for edge in out["dependencies"]
-            ):
-                continue
-            for column in dataset["definition"]["columns"]:
-                formula = column.get("calculation", {}).get("formula", "")
-                native_field = column.get("name", "").strip("[]")
-                if (
-                    native_field
-                    and native_field in binding_text
-                    and _complex_formula(formula)
-                ):
-                    chart["status"] = "unsupported"
-                    _coverage(
-                        out,
-                        chart_id,
-                        "tableau_calculation",
-                        f"Referenced field {column.get('name')} requires explicit DOSI semantic mapping.",
-                    )
+        _worksheet_calculations(out, worksheet, chart, sources)
         if worksheet.findall(".//table-calc") or worksheet.findall(
             ".//table-calculation"
         ):
