@@ -211,3 +211,8 @@ Limit violations and their downstream consumers are reported as blocked, while
 independent models can continue within the remaining budget. Rebuild dependency
 inspection is bounded to depth 64 and 4096 visited nodes per chart and reports a
 resource blocker instead of exhausting the Python stack.
+
+Workbook calculation dependency scanning is linear and limited to 256 KiB and
+65,536 lexical tokens per formula. Unclosed field references, literals or block
+comments and exceeded limits reject the definition explicitly; dependency
+references are never discarded to make a malformed chart appear supported.

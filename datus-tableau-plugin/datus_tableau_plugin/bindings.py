@@ -67,6 +67,7 @@ def apply_source_bindings(
         columns = binding.get("columns")
         if columns is not None and (
             not isinstance(columns, list)
+            or not columns
             or not all(isinstance(c, str) and c for c in columns)
             or len(set(columns)) != len(columns)
         ):

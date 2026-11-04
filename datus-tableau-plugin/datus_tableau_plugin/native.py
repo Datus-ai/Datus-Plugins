@@ -146,7 +146,13 @@ def _xml(payload: bytes, kind: str) -> ET.Element:
     for element in root.iter():
         element.tag = element.tag.rsplit("}", 1)[-1]
         element.attrib = redact(element.attrib)
-        if element not in redacted_elements and _key(element.tag) in SECRET_KEYS:
+        secret_property = _key(element.tag) == "property" and any(
+            _key(name) == "name" and _key(value) in SECRET_KEYS
+            for name, value in element.attrib.items()
+        )
+        if element not in redacted_elements and (
+            _key(element.tag) in SECRET_KEYS or secret_property
+        ):
             # A known credential field may wrap arbitrary XML, not just text.
             # Preserve names/structure but hide every value inside its subtree.
             # The root tail belongs to its parent and remains ordinary content.
@@ -308,15 +314,95 @@ def _dataset(out: dict, element: ET.Element, asset_id: str, **source: Any) -> No
             out["coverage"][-1]["field_id"] = column.get("name")
 
 
-_FORMULA_PARTS = re.compile(
-    r"\[(?:[^\]]|\]\])*\]|'(?:\\.|''|[^'\\])*'|\"(?:\\.|\"\"|[^\"\\])*\""
-    r"|\#[^#]*\#|//[^\r\n]*|/\*[\s\S]*?\*/"
-    r"|(?<![\w.])(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?![\w.])"
-)
-_FIELD = r"\[(?:[^\]]|\]\])*\]"
-_FIELD_REFERENCES = re.compile(
-    rf"(?P<field>{_FIELD}(?:\s*\.\s*{_FIELD})?)|(?P<bare>(?<!\w)[A-Za-z_]\w*)"
-)
+MAX_FORMULA_BYTES = 256 * 1024
+MAX_FORMULA_TOKENS = 65536
+
+
+def _formula_tokens(text: str):
+    """Yield bounded lexical spans; every character is advanced over once."""
+    if len(text) > MAX_FORMULA_BYTES or len(text.encode()) > MAX_FORMULA_BYTES:
+        raise ValueError("Tableau formula exceeds byte resource limit")
+    offset, count, size = 0, 0, len(text)
+    while offset < size:
+        start, char, kind = offset, text[offset], "code"
+        offset += 1
+        if char == "[":
+            while offset < size:
+                if text[offset] == "]":
+                    if offset + 1 < size and text[offset + 1] == "]":
+                        offset += 2
+                        continue
+                    offset += 1
+                    break
+                offset += 1
+            else:
+                raise ValueError("Unclosed Tableau field reference")
+            kind = "field"
+        elif char in {"'", '"', "#"}:
+            while offset < size:
+                current = text[offset]
+                offset += 1
+                if current == "\\" and char != "#" and offset < size:
+                    offset += 1
+                elif current == char:
+                    if char != "#" and offset < size and text[offset] == char:
+                        offset += 1
+                    else:
+                        break
+            else:
+                raise ValueError("Unclosed Tableau literal")
+            kind = "literal"
+        elif char == "/" and offset < size and text[offset] == "/":
+            offset += 1
+            while offset < size and text[offset] not in "\r\n":
+                offset += 1
+            kind = "literal"
+        elif char == "/" and offset < size and text[offset] == "*":
+            offset += 1
+            while offset + 1 < size and not (
+                text[offset] == "*" and text[offset + 1] == "/"
+            ):
+                offset += 1
+            if offset + 1 >= size:
+                raise ValueError("Unclosed Tableau comment")
+            offset += 2
+            kind = "literal"
+        elif char.isspace():
+            while offset < size and text[offset].isspace():
+                offset += 1
+            kind = "space"
+        elif char.isdigit() or char == "." and offset < size and text[offset].isdigit():
+            # Consume the entire number once; never restart an unanchored
+            # digit regex at each position of a long malformed numeric token.
+            while offset < size and text[offset].isdigit():
+                offset += 1
+            if char != "." and offset < size and text[offset] == ".":
+                offset += 1
+                while offset < size and text[offset].isdigit():
+                    offset += 1
+            if offset < size and text[offset] in "eE":
+                exponent = offset + 1
+                if exponent < size and text[exponent] in "+-":
+                    exponent += 1
+                if exponent < size and text[exponent].isdigit():
+                    offset = exponent + 1
+                    while offset < size and text[offset].isdigit():
+                        offset += 1
+            kind = "literal"
+            if offset < size and (text[offset].isalnum() or text[offset] == "_"):
+                while offset < size and (text[offset].isalnum() or text[offset] == "_"):
+                    offset += 1
+                kind = "code"
+        elif char.isascii() and (char.isalpha() or char == "_"):
+            while offset < size and (text[offset].isalnum() or text[offset] == "_"):
+                offset += 1
+            kind = "word"
+        count += 1
+        if count > MAX_FORMULA_TOKENS:
+            raise ValueError("Tableau formula exceeds token resource limit")
+        yield kind, start, offset
+
+
 _FORMULA_KEYWORDS = {
     "AND",
     "OR",
@@ -337,32 +423,45 @@ _FORMULA_KEYWORDS = {
 
 def _formula_code(formula: str, *, fields: bool = True) -> str:
     """Mask literals/comments without interpreting Tableau expressions as SQL."""
-    return _FORMULA_PARTS.sub(
-        lambda match: (
-            match[0] if fields and match[0].startswith("[") else " " * len(match[0])
-        ),
-        formula,
+    return "".join(
+        formula[start:end]
+        if kind != "literal" and (fields or kind != "field")
+        else " " * (end - start)
+        for kind, start, end in _formula_tokens(formula)
     )
 
 
 def _field_references(text: str, known: dict | None = None) -> list[tuple]:
     code = _formula_code(text)
-    references = []
-    for match in _FIELD_REFERENCES.finditer(code):
-        if match["field"]:
-            parts = re.split(r"\]\s*\.\s*\[", match[0][1:-1])
-            references.append(
-                (parts[0].replace("]]", "]"), f"[{parts[1]}]")
-                if len(parts) == 2
-                else (None, match[0])
-            )
+    tokens = [
+        (kind, code[start:end])
+        for kind, start, end in _formula_tokens(code)
+        if kind != "space"
+    ]
+    references, index = [], 0
+    while index < len(tokens):
+        kind, value = tokens[index]
+        if kind == "field":
+            if (
+                index + 2 < len(tokens)
+                and tokens[index + 1] == ("code", ".")
+                and tokens[index + 2][0] == "field"
+            ):
+                references.append(
+                    (value[1:-1].replace("]]", "]"), tokens[index + 2][1])
+                )
+                index += 3
+                continue
+            references.append((None, value))
         elif (
-            known is not None
-            and f"[{match[0]}]" in known
-            and match[0].upper() not in _FORMULA_KEYWORDS
-            and not code[match.end() :].lstrip().startswith("(")
+            kind == "word"
+            and known is not None
+            and f"[{value}]" in known
+            and value.upper() not in _FORMULA_KEYWORDS
+            and (index + 1 == len(tokens) or tokens[index + 1] != ("code", "("))
         ):
-            references.append((None, f"[{match[0]}]"))
+            references.append((None, f"[{value}]"))
+        index += 1
     return references
 
 
