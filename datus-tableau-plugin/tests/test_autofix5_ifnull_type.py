@@ -7,6 +7,7 @@ from test_prep_native import edge, generate, model, node, parsed, source
 @pytest.mark.parametrize(
     "formula, expected_type, expected",
     [
+        ("IFNULL([value], 0.5)", "real", 0.5),
         ("IFNULL([value], 1.5)", "real", 1.5),
         ("IFNULL(1.5, [value])", "real", 1.5),
         ("IFNULL(NULL, 1.5)", "real", 1.5),
@@ -27,7 +28,10 @@ def test_ifnull_infers_widest_nonnull_type_and_executes_null_first(
         translate('IFNULL([value], "incompatible")', {"value": "integer"})
 
 
-def test_ifnull_mixed_numeric_result_is_truncated_by_later_integer_conversion():
+@pytest.mark.parametrize("fallback,expected_integer", [(0.5, 0), (1.5, 1)])
+def test_ifnull_mixed_numeric_result_is_truncated_by_later_integer_conversion(
+    fallback, expected_integer
+):
     doc = parsed(
         {
             "input": source(
@@ -37,7 +41,7 @@ def test_ifnull_mixed_numeric_result_is_truncated_by_later_integer_conversion():
                 "fallback",
                 "AddColumn",
                 columnName="filled",
-                expression="IFNULL([value], 1.5)",
+                expression=f"IFNULL([value], {fallback})",
                 nextNodes=[edge("integer")],
             ),
             "integer": node(
@@ -47,11 +51,22 @@ def test_ifnull_mixed_numeric_result_is_truncated_by_later_integer_conversion():
             ),
         }
     )
+    derived = next(
+        asset for asset in doc["assets"] if asset["id"] == "transform:fixture:fallback"
+    )
+    assert derived["definition"]["output_schema"] == {
+        "value": "integer",
+        "filled": "real",
+    }
     result = generate(doc)
     connection = duckdb.connect()
     connection.execute("CREATE TABLE input(value INTEGER)")
     connection.execute("INSERT INTO input VALUES (NULL),(4)")
+    assert connection.execute(model(result, "fallback")).fetchall() == [
+        (None, fallback),
+        (4, 4),
+    ]
     assert connection.execute(model(result, "integer")).fetchall() == [
-        (None, 1),
+        (None, expected_integer),
         (4, 4),
     ]
