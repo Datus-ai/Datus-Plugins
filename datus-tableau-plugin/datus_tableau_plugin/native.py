@@ -476,7 +476,11 @@ def _complex_formula(formula: str) -> bool:
 
 
 def _worksheet_calculations(
-    out: dict, worksheet: ET.Element, chart: dict, sources: dict[str, ET.Element]
+    out: dict,
+    worksheet: ET.Element,
+    chart: dict,
+    sources: dict[str, ET.Element],
+    datasets: dict[str, str],
 ) -> None:
     """Follow only used native fields, retaining datasource and instance identity."""
     fields: dict[str, dict[str, list[dict]]] = {}
@@ -544,6 +548,9 @@ def _worksheet_calculations(
                 f"Field [{source}].{field} has no datasource definition.",
             )
             return None
+        # Dataset identity is known even when sparse metadata omits a physical field.
+        if source in datasets:
+            _edge(out, chart["id"], datasets[source])
         scope = fields.get(source, {})
         aliases = instances.get(source, {}).get(field, set())
         if field not in scope:
@@ -596,6 +603,16 @@ def _worksheet_calculations(
             roots.extend(_field_references(element.get(key, "")))
         if element.tag in {"rows", "cols", "slices", "pages"}:
             roots.extend(_field_references(element.text or ""))
+        if element.tag == "customized-tooltip":
+            for run in element.findall(".//run"):
+                for placeholder in re.finditer(r"<([^<>]*)>", "".join(run.itertext())):
+                    # Only Tableau's qualified field placeholders are bindings;
+                    # ordinary bracketed prose and other run text stay literal.
+                    if re.fullmatch(
+                        r"\[(?:[^\]]|\]\])*\]\s*\.\s*\[(?:[^\]]|\]\])*\]",
+                        placeholder[1],
+                    ):
+                        roots.extend(_field_references(placeholder[1]))
         if element.tag == "calculation":
             formula = element.get("formula", "")
             if _complex_formula(formula) or element.get("class") == "table":
@@ -730,7 +747,7 @@ def parse_workbook(
                     f"Referenced dataset {ref!r} was not present in the workbook.",
                     "partial",
                 )
-        _worksheet_calculations(out, worksheet, chart, sources)
+        _worksheet_calculations(out, worksheet, chart, sources, datasets)
         if worksheet.findall(".//table-calc") or worksheet.findall(
             ".//table-calculation"
         ):

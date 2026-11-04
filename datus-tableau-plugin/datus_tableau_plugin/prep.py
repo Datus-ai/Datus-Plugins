@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from collections import defaultdict, deque
 from decimal import Decimal, InvalidOperation
+import hashlib
 import json
 import math
 import re
@@ -18,6 +19,8 @@ MAX_TOTAL_SCHEMA_FIELDS = 262144
 
 def native_flow(flow):
     nodes = flow.get("nodes", {})
+    if not isinstance(nodes, (dict, list)):
+        raise ValueError("Prep flow nodes must be an object or array")
     return any(
         isinstance(n, dict)
         and n.get("baseType") in {"input", "transform", "container", "superNode"}
@@ -324,6 +327,7 @@ def normalize(flow, flow_id):
             op, schema = operation(
                 record["node"], {p: schemas.get(parent) for p, parent in ports.items()}
             )
+            error = op.get("semantic_error")
         except (ValueError, KeyError, TypeError) as exc:
             op, schema, error = (
                 {"type": "unsupported"},
@@ -372,6 +376,25 @@ def normalize(flow, flow_id):
                 }
             )
         out["assets"].append(asset)
+        custom_sql = record["node"].get("customSql")
+        if (
+            record["node"].get("nodeType") == ".v1.LoadSql"
+            and isinstance(custom_sql, str)
+            and custom_sql.strip()
+        ):
+            identity = hashlib.sha256(
+                (asset["id"] + "\x00" + custom_sql).encode()
+            ).hexdigest()[:20]
+            out["queries"].append(
+                {
+                    "id": "query:" + identity,
+                    "asset_id": asset["id"],
+                    "origin": "source",
+                    "language": "sql",
+                    "text": custom_sql,
+                    "status": "ok",
+                }
+            )
         out["dependencies"].extend(
             {"from": asset["id"], "to": prefix + p, "relation": "depends_on"}
             for p in parents
@@ -428,6 +451,11 @@ def operation(node, ports):
         raise ValueError("unsupported native Prep operation version")
     short = str(node.get("nodeType", "")).split(".")[-1]
     if short in {"LoadCsv", "LoadExcel", "LoadSql"}:
+        custom_sql_unmapped = (
+            short == "LoadSql"
+            and isinstance(node.get("customSql"), str)
+            and bool(node["customSql"].strip())
+        )
         if any(
             node.get(k)
             for k in [
@@ -447,6 +475,10 @@ def operation(node, ports):
             for k, v in constants.items()
         ):
             raise ValueError("native file-union path provenance is missing")
+        if set(constants) & set(schema):
+            raise ValueError(
+                "native file-union path provenance collides with physical fields"
+            )
         schema.update({k: "string" for k in constants})
         return {
             "type": "source",
@@ -454,6 +486,13 @@ def operation(node, ports):
             "constants": constants,
             "binding_required": True,
             "source_kind": short,
+            **(
+                {
+                    "semantic_error": "native LoadSql custom SQL requires an explicit verified query mapping"
+                }
+                if custom_sql_unmapped
+                else {}
+            ),
         }, schema
     if not ports or any(schema is None for schema in ports.values()):
         raise ValueError("input field schema is unavailable")

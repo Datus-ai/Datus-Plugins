@@ -117,6 +117,11 @@ def main(argv: list[str], profile: dict) -> int:
             result = inspect_bundle(ns.bundle_path)
             print(render(result, ns.output))
             return 0
+        source_bindings = (
+            read_bindings(ns.source_bindings)
+            if ns.group == "sync" and ns.command == "run" and ns.source_bindings
+            else None
+        )
         with TableauClient(Settings.from_profile(profile)) as client:
             if ns.group == "status":
                 result = client.status()
@@ -130,9 +135,7 @@ def main(argv: list[str], profile: dict) -> int:
                     overwrite=ns.overwrite,
                     external_sources=ns.external_source,
                     dialect=ns.dialect,
-                    source_bindings=read_bindings(ns.source_bindings)
-                    if ns.source_bindings
-                    else None,
+                    source_bindings=source_bindings,
                 )
             elif ns.group == "dashboards":
                 if ns.command == "get" and (

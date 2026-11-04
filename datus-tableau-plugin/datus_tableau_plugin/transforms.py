@@ -84,12 +84,16 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
     if kind == "source":
         if inputs:
             raise ValueError("source operations must not have graph inputs")
-        if operation.get("sql"):
-            return _select(operation["sql"], dialect, operation.get("source_dialect"))
         if operation.get("binding_required") and not operation.get("binding"):
             raise ValueError(
                 "source_binding_required: provide an explicit source table binding"
             )
+        if operation.get("binding_required") and operation.get("sql"):
+            raise ValueError(
+                "binding-required source conflicts with an embedded SQL query"
+            )
+        if operation.get("sql"):
+            return _select(operation["sql"], dialect, operation.get("source_dialect"))
         table = _table(operation.get("table"), dialect)
         columns = operation.get("columns")
         if operation.get("binding"):
@@ -280,13 +284,22 @@ def _compile(operation: dict, inputs: list[str], dialect: str) -> str:
             raise ValueError(
                 "pivot requires explicit retained columns and value columns"
             )
+        labels = operation.get("labels", values)
+        if (
+            not isinstance(labels, list)
+            or len(labels) != len(values)
+            or not all(isinstance(label, str) for label in labels)
+        ):
+            raise ValueError(
+                "pivot labels must be a string list matching the value columns"
+            )
         names_to = _quoted(operation.get("names_to"), dialect)
         values_to = _quoted(operation.get("values_to"), dialect)
         projections = []
         for offset, column in enumerate(values):
             keep = [_quoted(c, dialect) for c in index]
             keep += [
-                f"{exp.Literal.string(operation.get('labels', values)[offset]).sql(dialect=dialect, unsupported_level=ErrorLevel.RAISE)} AS {names_to}",
+                f"{exp.Literal.string(labels[offset]).sql(dialect=dialect, unsupported_level=ErrorLevel.RAISE)} AS {names_to}",
                 f"{_quoted(column, dialect)} AS {values_to}",
             ]
             condition = (

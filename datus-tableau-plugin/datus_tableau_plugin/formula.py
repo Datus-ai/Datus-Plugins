@@ -281,13 +281,11 @@ def translate(text: str, columns: dict[str, str], dialect="duckdb") -> tuple[str
         if name == "ISNULL":
             return f"({a[0]} IS NULL)", "boolean"
         if name == "IFNULL":
-            if args[0][1] != args[1][1] and not {args[0][1], args[1][1]} <= {
-                "integer",
-                "real",
-                "null",
-            }:
+            types = {args[0][1], args[1][1]} - {"null"}
+            if len(types) > 1 and not types <= {"integer", "real"}:
                 raise ValueError("incompatible Tableau IFNULL result types")
-            return f"COALESCE({a[0]}, {a[1]})", args[0][1]
+            result_type = "real" if "real" in types else next(iter(types), "null")
+            return f"COALESCE({a[0]}, {a[1]})", result_type
         if name in {"YEAR", "MONTH", "DAY"}:
             if args[0][1] not in {"date", "datetime", "null"}:
                 raise ValueError("date component requires a date or datetime input")
