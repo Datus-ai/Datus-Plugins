@@ -72,7 +72,31 @@ def build_parser() -> argparse.ArgumentParser:
     _output(run)
     inspect = subs.add_parser("inspect")
     inspect.add_argument("bundle_path")
+    inspect.add_argument(
+        "--summary",
+        action="store_true",
+        help="bounded verified JSON summary; full validation still runs",
+    )
     _output(inspect)
+    plan = commands.add_parser(
+        "plan", help="offline native-flow processing artifacts; no login or execution"
+    )
+    plan.add_argument("--flow", required=True)
+    plan.add_argument("--flow-id", default="local")
+    plan.add_argument("--source-bindings")
+    plan.add_argument(
+        "--output",
+        required=True,
+        help="new workspace directory for derived models and reports",
+    )
+    plan.add_argument("--dialect", default="duckdb")
+    rebuild = commands.add_parser(
+        "rebuild",
+        help="offline read-only DOSI binding preflight; prints proposed tool calls",
+    )
+    rebuild.add_argument("--bundle", required=True)
+    rebuild.add_argument("--bindings", required=True)
+    rebuild.add_argument("--metric-catalog", required=True)
     return parser
 
 
@@ -107,14 +131,58 @@ def render(value: Any, format: str = "json") -> str:
     )
 
 
+def _offline(command, args: list[str]) -> int:
+    """Keep standalone parser exits inside the managed plugin's return contract."""
+    try:
+        return command(args)
+    except SystemExit as exc:
+        return exc.code if isinstance(exc.code, int) else 1
+
+
 def main(argv: list[str], profile: dict) -> int:
     try:
         try:
             ns = build_parser().parse_args(argv)
         except SystemExit as exc:
             return int(exc.code or 0)
+        if ns.group == "plan":
+            from .plan import main as plan_main
+
+            args = [
+                "--flow",
+                ns.flow,
+                "--flow-id",
+                ns.flow_id,
+                "--output",
+                ns.output,
+                "--dialect",
+                ns.dialect,
+            ]
+            if ns.source_bindings:
+                args.extend(["--source-bindings", ns.source_bindings])
+            return _offline(plan_main, args)
+        if ns.group == "rebuild":
+            from .rebuild import main as rebuild_main
+
+            return _offline(
+                rebuild_main,
+                [
+                    "--bundle",
+                    ns.bundle,
+                    "--bindings",
+                    ns.bindings,
+                    "--metric-catalog",
+                    ns.metric_catalog,
+                ],
+            )
         if ns.group == "sync" and ns.command == "inspect":
-            result = inspect_bundle(ns.bundle_path)
+            if ns.summary and ns.output != "json":
+                raise UsageError("--summary requires --output json")
+            result = (
+                inspect_bundle(ns.bundle_path, summary=True)
+                if ns.summary
+                else inspect_bundle(ns.bundle_path)
+            )
             print(render(result, ns.output))
             return 0
         source_bindings = (

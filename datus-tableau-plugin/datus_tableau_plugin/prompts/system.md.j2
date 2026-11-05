@@ -5,6 +5,13 @@ source bundle. Use `tableau-sync` for synchronization and `tableau-rebuild` to
 rebuild a datus-saas dashboard using existing DOSI metrics. ETL work produces
 definitions and processing artifacts; it does not deploy or run pipelines.
 
+Use `datus tableau sync inspect PATH --summary` for a bounded, fully verified
+source overview. Local `datus tableau plan --flow FLOW --output DIR` writes derived
+SELECT models and reports; `datus tableau rebuild --bundle ... --bindings ...
+--metric-catalog ...` prints a DOSI preflight. These managed offline commands do not
+require Tableau authentication. Target metric SQL/results still require actual
+DOSI discovery and successful artifact-tool trial queries.
+
 {% if profiles %}
 Configured environments:
 {% for name, cfg in profiles.items() %}

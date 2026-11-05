@@ -54,7 +54,7 @@ SQL instead. Other independent charts may continue and remain marked partial.
 
 ## Deterministic handoff report
 
-`datus_tableau_plugin.rebuild` is an offline, read-only evaluator. It verifies
+`datus tableau rebuild` is the managed offline, read-only evaluator. It verifies
 the source bundle, checks explicit bindings against a discovered metric catalogue
 and produces proposed calls for the existing artifact tool. It does not execute
 the metric engine, create a target dashboard or prove numerical equivalence.
@@ -121,15 +121,18 @@ datasource, identity or supported capability.
 Replace every placeholder and synthetic example with verified project values.
 Use an empty `differences` list when the comparison finds none; never copy the
 example's business difference as a fact. Keep these files under the project.
-Using the interpreter where the plugin is installed, run:
+Invoke it through the managed Tableau plugin runtime:
 
 ```bash
-python -m datus_tableau_plugin.rebuild \
+datus tableau rebuild \
   --bundle bi_sources/tableau/VERIFIED_BUNDLE \
   --bindings bi_rebuild/bindings.json \
   --metric-catalog bi_rebuild/metric-catalog.json
 ```
 
+The command works without Tableau login and prints JSON to stdout. It requires
+an actually discovered metric catalogue and its real datasource/model binding;
+an empty or unrelated project model is not evidence that a target metric exists.
 The command prints JSON to stdout. Exit 0 means every chart is
 `ready_for_metric_validation`; exit 1 includes blocked/partial plans or invalid
 inputs. Persist the report with the workspace file tool and inspect every chart's
@@ -180,6 +183,12 @@ was synchronized. The actual metric tool trial is still required.
    flow with its model snapshot; do not mark published until that flow succeeds.
 
 ## Dataset and ETL handoff
+
+For a downloaded native flow, invoke
+`datus tableau plan --flow FLOW --source-bindings FILE --output DIR --dialect DIALECT`
+through the same managed CLI. This writes checked derived processing artifacts in
+a new workspace directory; it does not execute them. Inspect its pipeline and
+validation findings before proposing any target dependency.
 
 Read synchronized dataset/transform definitions and generated `models/*.sql`,
 `pipeline.json` and validation findings. First reuse existing DOSI datasets,

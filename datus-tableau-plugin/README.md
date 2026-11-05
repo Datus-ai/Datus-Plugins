@@ -9,7 +9,7 @@ datus tableau dashboards list
 datus tableau sync run --dashboard-id 'dashboard:WORKBOOK_LUID:DASHBOARD_NAME'
 datus tableau sync run --project-id PROJECT_LUID
 datus tableau sync run --all
-datus tableau sync inspect bi_sources/tableau/SNAPSHOT
+datus tableau sync inspect bi_sources/tableau/SNAPSHOT --summary
 ```
 
 Profiles live under `agent.plugins.tableau.<profile>`:
@@ -28,6 +28,12 @@ agent:
 ```
 
 Password authentication uses `auth_type: password`, `username`, and `password: ${TABLEAU_PASSWORD}`. Optional settings are `api_version: auto`, `verify_ssl: true`, `ca_bundle` and `timeout: 60` seconds. The default site has an empty content URL, not its REST LUID. Configure TLS options before version negotiation. One CLI invocation owns one session; use separate PATs for simultaneous automation.
+
+Offline processing uses the same managed CLI as server reads. `datus tableau plan`
+writes derived processing artifacts from a downloaded native flow, and
+`datus tableau rebuild` evaluates explicit DOSI bindings from a verified bundle.
+Both run before profile authentication and work with an empty Tableau profile.
+In SaaS, invoke these commands through the managed Tableau plugin runtime.
 
 The plugin reads metadata and native definitions. It never publishes to Tableau, runs Prep, refreshes extracts, or deploys transformation SQL. `sync run` writes a checksummed workspace-local snapshot; `sync inspect` validates it offline without credentials. Existing snapshots require `--overwrite`.
 
@@ -121,7 +127,7 @@ A downloaded native flow can be planned independently of dashboard lineage and
 without a Tableau connection:
 
 ```bash
-python -m datus_tableau_plugin.plan --flow downloaded.tfl --flow-id local \
+datus tableau plan --flow downloaded.tfl --flow-id local \
   --source-bindings bindings.json --output prep-plan --dialect duckdb
 ```
 
@@ -152,20 +158,48 @@ inventing values or implicit conversions. Existing model limits remain 64
 ancestors, 256 KiB per model and 8 MiB total SQL; native normalization also caps
 nodes, edges and propagated fields.
 
+## Compact verified inspection
+
+```bash
+datus tableau sync inspect bi_sources/tableau/SNAPSHOT --summary
+```
+
+`--summary` returns JSON within 4096 UTF-8 bytes, including pretty formatting and
+the final newline. Every manifest file is still checksum-verified and the complete
+source document schemas, asset/query IDs and dependency edges are validated
+under the same reader lock. The default inspection response stays the full JSON;
+`--summary` requires JSON output and rejects `-o table`.
+
+The summary includes source/selection, manifest SHA256, computed asset/query and
+coverage counts, asset kinds, chart IDs/names, coverage code counts, and available
+pipeline/validation counts. Lists contain at most 10 items and display text at
+most 64 characters; the byte budget can shorten lists further. `omitted_counts`,
+`truncation`, `truncated` and `limits` describe every omission or clipped display.
+Truncated identities are display hints; use the verified full assets for bindings.
+Processing documents larger than 8 MiB are fully checksum-verified but omitted
+from the compact processing view with their byte size recorded. No source SQL,
+formulas, chart layouts or row data are returned in the summary.
+
 ## DOSI-based SaaS rebuilding
 
 The `tableau-rebuild` skill guides source-chart interpretation, existing DOSI
 metric discovery, differences and missing dependencies, real metric-tool trial
 queries, render generation and the existing SaaS publishing workflow.
 
-Its deterministic preflight helper also runs independently:
+Run its deterministic, read-only preflight through the managed CLI:
 
 ```bash
-python -m datus_tableau_plugin.rebuild \
+datus tableau rebuild \
   --bundle bi_sources/tableau/SNAPSHOT \
   --bindings bi_rebuild/bindings.json \
   --metric-catalog bi_rebuild/metric-catalog.json
 ```
+
+This command prints JSON only. Use the workspace file tool to save the preflight
+report when needed. The CLI performs no metric query and writes no target SQL or
+dashboard artifact. A catalogue must come from actual DOSI discovery with its
+real model revision; a project without that model remains blocked until a valid
+catalogue and target binding are provided.
 
 The skill includes complete input examples. Bindings pin the source manifest
 SHA256 and the discovered DOSI metric's full subject identity, datasource and
@@ -216,3 +250,9 @@ Workbook calculation dependency scanning is linear and limited to 256 KiB and
 65,536 lexical tokens per formula. Unclosed field references, literals or block
 comments and exceeded limits reject the definition explicitly; dependency
 references are never discarded to make a malformed chart appear supported.
+
+Version 0.1.1 exposes offline plan/rebuild through the managed plugin CLI and adds
+bounded verified source summaries. Upload the new version rather than replacing
+an existing 0.1.0 SaaS installation. Source SQL remains retrieved evidence;
+`models/*.sql` is derived SELECT SQL; target metric SQL and query results require
+the actual DOSI artifact tool's successful compilation and read validation.

@@ -1,4 +1,4 @@
-"""Offline handoff to Datus' existing metric and dashboard tools.
+"""Offline handoff behind ``datus tableau rebuild`` to existing Datus tools.
 
 This module neither executes SQL nor creates metric recipes. Its report is a
 preflight plan; the real ``save_metric_query_template`` tool still owns metric

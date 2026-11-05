@@ -15,7 +15,7 @@ their request; do not widen a single dashboard to a site-wide export.
 datus tableau --profile prod sync run --dashboard-id DASHBOARD_ID
 datus tableau --profile prod sync run --project-id PROJECT_LUID
 datus tableau --profile prod sync run --all
-datus tableau sync inspect bi_sources/tableau/BUNDLE
+datus tableau sync inspect bi_sources/tableau/BUNDLE --summary
 ```
 
 Use exactly one selection mode. Repeat the ID flag for multiple selections.
@@ -25,6 +25,10 @@ be replaced without an explicit `--overwrite` decision.
 
 Read the command's returned output directory rather than guessing its slug.
 Inspect that bundle offline with `sync inspect` before consuming any files.
+Start with `sync inspect PATH --summary` for a bounded JSON overview. It retains
+full file/schema/identity/dependency validation, and reports omitted/truncated
+items. Use the full response or verified files when an exact identity or missing
+item is needed; a clipped chart ID cannot serve as a source binding.
 Verify the source identity, requested selections, checksums, dependencies,
 coverage and errors. An existing bundle failing checksum checks is not usable
 context. Do not rewrite its checksums to make it pass.
@@ -37,7 +41,9 @@ workbooks. Missing permissions or a GraphQL partial response are not evidence
 that a dependency does not exist.
 
 For a downloaded Prep flow without verified dashboard lineage, plan it offline
-with `python -m datus_tableau_plugin.plan --flow FLOW --flow-id ID --output DIR`.
+with `datus tableau plan --flow FLOW --flow-id ID --output DIR`.
+Use the managed Tableau CLI runtime in SaaS; this offline path does not
+authenticate a Tableau profile.
 Inspect `pipeline.json.source_bindings_required` and local semantic diagnostics.
 Use the README's source-binding contract to map full source transform IDs to
 actual target tables; optional columns validate the exact native order. Pass

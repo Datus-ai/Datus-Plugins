@@ -127,6 +127,26 @@ commands:
     args:
     - name: bundle_path
       required: true
+    - name: --summary
+- name: plan
+  description: Generate offline native-flow derived SELECT models and checked artifacts; no login or execution
+  args:
+  - name: --flow
+    required: true
+  - name: --flow-id
+  - name: --source-bindings
+  - name: --output
+    required: true
+  - name: --dialect
+- name: rebuild
+  description: Read-only source-to-DOSI binding preflight; prints proposed artifact tool calls without executing them
+  args:
+  - name: --bundle
+    required: true
+  - name: --bindings
+    required: true
+  - name: --metric-catalog
+    required: true
 permissions:
   normal:
     allow:
@@ -142,8 +162,10 @@ permissions:
     - flows list:*
     - flows get:*
     - sync inspect:*
+    - rebuild:*
     ask:
     - sync run:*
+    - plan:*
   auto:
     allow:
     - status
@@ -158,5 +180,7 @@ permissions:
     - flows list:*
     - flows get:*
     - sync inspect:*
+    - rebuild:*
     ask:
     - sync run:*
+    - plan:*

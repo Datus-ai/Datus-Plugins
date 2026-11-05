@@ -80,7 +80,7 @@ def workspace_path(value: str | Path) -> Path:
     return resolved
 
 
-def _inspect_bundle(path: str | Path) -> dict:
+def _inspect_bundle(path: str | Path, *, summary: bool = False) -> dict:
     candidate = Path(path).absolute()
     if candidate.is_symlink():
         raise UsageError("bundle directory cannot be a symbolic link")
@@ -99,6 +99,7 @@ def _inspect_bundle(path: str | Path) -> dict:
 
         jsonschema.validate(manifest, schema)
         files = manifest["files"]
+        processing = {}
         for name, expected in files.items():
             relative = safe_relative(name)
             target = root / relative
@@ -108,8 +109,16 @@ def _inspect_bundle(path: str | Path) -> dict:
                 or not target.is_file()
             ):
                 raise PluginError(f"bundle file is missing or unsafe: {name}")
-            if digest(target.read_bytes()) != expected:
+            content = target.read_bytes()
+            if digest(content) != expected:
                 raise PluginError(f"bundle checksum mismatch: {name}")
+            if summary and name in {"pipeline.json", "validation.json"}:
+                from .summary import MAX_PROCESSING_DOCUMENT_BYTES
+
+                processing[name] = (
+                    content if len(content) <= MAX_PROCESSING_DOCUMENT_BYTES else None,
+                    len(content),
+                )
         if set(DOCUMENTS.values()) - files.keys():
             raise PluginError("bundle is missing a required document")
         result = {
@@ -141,6 +150,10 @@ def _inspect_bundle(path: str | Path) -> dict:
                 query.get("file") and query["file"] not in files
             ):
                 raise PluginError("query has an unknown asset or untracked file")
+        if summary:
+            from .summary import summarize_bundle
+
+            return summarize_bundle(result, processing)
         return result
     except PluginError:
         raise
@@ -214,7 +227,7 @@ def _backup_snapshot(target: Path, expected_source: dict | None = None) -> Path 
     return verified[0]
 
 
-def inspect_bundle(path: str | Path) -> dict:
+def inspect_bundle(path: str | Path, *, summary: bool = False) -> dict:
     target = Path(path).absolute()
     if target.is_symlink():
         raise UsageError("bundle directory cannot be a symbolic link")
@@ -222,7 +235,11 @@ def inspect_bundle(path: str | Path) -> dict:
         resolved = target if target.exists() else _backup_snapshot(target)
         if resolved is None:
             raise UsageError("bundle directory does not exist")
-        result = _inspect_bundle(resolved)
+        result = (
+            _inspect_bundle(resolved, summary=True)
+            if summary
+            else _inspect_bundle(resolved)
+        )
         result["recovered_from_backup"] = resolved != target
         return result
 

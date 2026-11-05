@@ -71,7 +71,7 @@ def test_catalogue_and_permissions_cover_parser_leaves():
         for leaf in leaves:
             rule = " ".join(leaf) + ":*"
             assert rule in perms["allow"] + perms["ask"]
-        assert perms["ask"] == ["sync run:*"]
+        assert perms["ask"] == ["sync run:*", "plan:*"]
         assert ":*" not in perms["allow"]
     properties = manifest["config_schema"]["properties"]
     assert properties["password"]["x-secret"] is True

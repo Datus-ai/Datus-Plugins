@@ -1,4 +1,4 @@
-"""Offline native-flow planning: python -m datus_tableau_plugin.plan --help."""
+"""Offline native-flow planning exposed through ``datus tableau plan``."""
 
 from __future__ import annotations
 
