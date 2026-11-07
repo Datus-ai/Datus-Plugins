@@ -759,6 +759,18 @@ def operation(node, ports):
                 name: "CASE " + " ".join(cases) + f" ELSE {quote(name)} END"
             },
         }, schema
+    if short == "FilterOperation":
+        expression = node.get("filterExpression")
+        condition, dtype = translate(expression, schema)
+        if dtype != "boolean":
+            raise ValueError("native filter formula must return a boolean")
+        return {
+            **base,
+            "type": "filter",
+            "condition": condition,
+            "original_expression_language": "tableau",
+            "original_expression": expression,
+        }, schema
     if short == "RangeFilter":
         if not isinstance(node.get("ranges"), dict) or len(node["ranges"]) != 1:
             raise ValueError(
@@ -833,7 +845,7 @@ def operation(node, ports):
             name = item.get("columnName")
             if (
                 name not in schema
-                or item.get("function")
+                or item.get("function") not in (None, "", "GroupBy")
                 or item.get("specialFieldType")
             ):
                 raise ValueError("unsupported native aggregation grouping")

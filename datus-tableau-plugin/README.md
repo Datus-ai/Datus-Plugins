@@ -256,3 +256,21 @@ bounded verified source summaries. Upload the new version rather than replacing
 an existing 0.1.0 SaaS installation. Source SQL remains retrieved evidence;
 `models/*.sql` is derived SELECT SQL; target metric SQL and query results require
 the actual DOSI artifact tool's successful compilation and read validation.
+
+Version 0.1.2 adds native Prep `FilterOperation` formulas through the bounded
+typed translator, requiring a boolean result, and accepts the native `GroupBy`
+marker for plain aggregate grouping. Missing, malformed and unsupported filter
+formulas remain blocked together with their downstream models. The downloaded
+native regression flow retains its Completed filter; its generated SELECTs are
+checked against CSV inputs in DuckDB. These corrections require a fresh 0.1.2
+artifact; an already installed SaaS 0.1.1 artifact does not include them.
+
+Version 0.1.3 adds independently paginated published-datasource Metadata lineage
+to bind known upstream Prep flows through stable datasource and flow identities.
+An explicit native Hyper create-output marker, an exact datasource-scoped table
+identity, and one verified native flow can resolve a Prep materialization's
+upstream-definition boundary. Append/update outputs, ambiguous identities, hidden
+Metadata and ordinary physical tables retain their coverage gaps. Source input
+bindings and processing validation remain required; `upstream_flow` describes
+dependency and does not claim a direct producing output node. Installed 0.1.2
+artifacts require replacement with a fresh 0.1.3 artifact for this behavior.

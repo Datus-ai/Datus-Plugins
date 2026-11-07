@@ -191,6 +191,8 @@ def translate(text: str, columns: dict[str, str], dialect="duckdb") -> tuple[str
             )
         args = [emit(child) for child in node.children]
         if node.kind == "if":
+            if any(t not in {"boolean", "null"} for _, t in args[:-1:2]):
+                raise ValueError("Tableau IF condition must be boolean")
             types = {t for _, t in args[1::2]} | {args[-1][1]}
             types.discard("null")
             if len(types) > 1:

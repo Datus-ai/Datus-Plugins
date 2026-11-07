@@ -1,0 +1,16 @@
+{
+  "datasources": [
+    {
+      "id": "c3f7e59b-a7bd-2d65-be73-4c79855bc286",
+      "luid": "28f38d5c-cc2e-4717-a203-effb2f2ec5d6",
+      "name": "Datus_E2E_Disposable_CustomSQL_Extract_20261107"
+    }
+  ],
+  "flows": [],
+  "tables": [],
+  "workbook": {
+    "id": "7a84af2e-98c1-38f7-30b6-eff6459959cd",
+    "luid": "598554f9-7e4f-44ec-aff9-25d92154b6e2",
+    "name": "Datus_E2E_Disposable_CustomSQL_Workbook_20261107"
+  }
+}

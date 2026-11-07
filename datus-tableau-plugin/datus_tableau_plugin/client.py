@@ -185,6 +185,79 @@ class TableauClient:
             result["workbook"] = {key: book.get(key) for key in ("id", "luid", "name")}
         return result
 
+    def datasource_lineage(self, identifier: str) -> dict:
+        """Read independently paged lineage for one exact published datasource.
+
+        The upstream relationships are shortcuts, not a claim of direct production.
+        https://help.tableau.com/current/api/metadata_api/en-us/reference/publisheddatasource.doc.html
+        """
+        result = {}
+        identity = None
+        for name in ("flows", "tables"):
+            connection, fields = RELATION_FIELDS[name]
+            query = f"""query DatusDatasourceLineage($luid: String!, $first: Int!, $after: String) {{
+              publishedDatasources(filter: {{luid: $luid}}) {{ id luid name
+                {connection}(first: $first, after: $after) {{ nodes {{ {fields} }} pageInfo {{ hasNextPage endCursor }} }}
+              }} }}"""
+            rows, seen, after = [], set(), None
+            while True:
+                data = self.metadata(
+                    query, {"luid": identifier, "first": 100, "after": after}
+                )
+                sources = data.get("publishedDatasources")
+                if (
+                    not isinstance(sources, list)
+                    or len(sources) != 1
+                    or not isinstance(sources[0], dict)
+                    or sources[0].get("luid") != identifier
+                    or not sources[0].get("id")
+                ):
+                    raise MetadataError(
+                        "published datasource is missing, ambiguous or hidden in Metadata API"
+                    )
+                source = sources[0]
+                current = {key: source.get(key) for key in ("id", "luid", "name")}
+                if identity is not None and current["id"] != identity["id"]:
+                    raise MetadataError(
+                        "published datasource Metadata identity changed during pagination"
+                    )
+                identity = current
+                page = source.get(connection)
+                if not isinstance(page, dict) or not isinstance(
+                    page.get("nodes"), list
+                ):
+                    raise MetadataError(
+                        f"Metadata API hid or omitted datasource {name} lineage"
+                    )
+                if any(
+                    not isinstance(row, dict) or not row.get("id")
+                    for row in page["nodes"]
+                ):
+                    raise MetadataError("datasource lineage contains a hidden identity")
+                rows.extend(page["nodes"])
+                info = page.get("pageInfo")
+                if len(rows) > 100000:
+                    raise MetadataError("datasource lineage exceeds row resource limit")
+                if not isinstance(info, dict) or not isinstance(
+                    info.get("hasNextPage"), bool
+                ):
+                    raise MetadataError(
+                        "datasource lineage pagination completeness is unavailable"
+                    )
+                if not info["hasNextPage"]:
+                    break
+                after = info.get("endCursor")
+                if not isinstance(after, str) or not after or after in seen:
+                    raise MetadataError("datasource lineage pagination did not advance")
+                seen.add(after)
+                if len(seen) >= 1000:
+                    raise MetadataError(
+                        "datasource lineage exceeds pagination resource limit"
+                    )
+            result[name] = rows
+        result["datasource"] = identity
+        return result
+
     def workbook_custom_sql(self, identifier: str) -> list[dict]:
         """Scope SQL by proven downstream workbook identity before retrieving query text."""
         query = """query DatusCustomSQLIndex($luid: String!, $first: Int!, $after: String) {

@@ -257,7 +257,75 @@ def _dataset(out: dict, element: ET.Element, asset_id: str, **source: Any) -> No
         definition,
         **source,
     )
+    connection_classes = {
+        item.get("name"): item.find("./connection").get("class")
+        for item in element.findall(".//named-connection")
+        if item.get("name") and item.find("./connection") is not None
+    }
+    connection_classes.update(
+        {
+            item.get("composed-connection-name"): item.get("class")
+            for item in element.findall(".//connection")
+            if item.get("composed-connection-name")
+        }
+    )
+    source_relations = set()
+    relation_classes = {}
+    has_extract_relation = False
+    has_proxy_relation = False
+    pending = [(element, False, None)]
+    while pending:
+        node, in_extract, connection_class = pending.pop()
+        in_extract = (
+            in_extract
+            or node.tag == "extract"
+            or (node.tag == "properties" and node.get("context") == "extract")
+        )
+        if node.tag == "connection":
+            connection_class = node.get("class")
+        pending.extend((child, in_extract, connection_class) for child in node)
+        if node.tag != "relation":
+            continue
+        if in_extract:
+            # These describe Tableau's materialized copy, not a producing table.
+            # Keep them in the native definition without inventing upstream ETL.
+            has_extract_relation = True
+            continue
+        relation_class = connection_classes.get(
+            node.get("connection"), connection_class
+        )
+        if relation_class == "sqlproxy":
+            # A Tableau data-server reference is bound at the dataset boundary.
+            has_proxy_relation = True
+            continue
+        source_relations.add(node)
+        relation_classes[node] = relation_class
+    has_source_definition = any(
+        (node.get("type") == "text" and (node.text or "").strip())
+        or (node.get("type") == "table" and (node.get("table") or node.get("name")))
+        for node in source_relations
+    )
+    if has_extract_relation and not has_source_definition and not has_proxy_relation:
+        _coverage(
+            out,
+            asset_id,
+            "extract_source_unresolved",
+            "Only an extract materialization is available; its producing source definition is missing.",
+            "partial",
+        )
+    if has_proxy_relation and not any(
+        source.get(key) for key in ("published_id", "content_url")
+    ):
+        _coverage(
+            out,
+            asset_id,
+            "published_identity_missing",
+            "Tableau data-server reference has no stable published datasource identity.",
+            "partial",
+        )
     for index, relation in enumerate(element.findall(".//relation")):
+        if relation not in source_relations:
+            continue
         if relation.get("type") == "text" and (relation.text or "").strip():
             text = relation.text.strip()
             query_id = f"query:{_identifier(asset_id, str(index), text)}"
@@ -288,8 +356,22 @@ def _dataset(out: dict, element: ET.Element, asset_id: str, **source: Any) -> No
                         "connection": connection,
                         "connections": connections,
                         "etl_definition": None,
+                        **(
+                            {"prep_output_type": "outputOperationTypeCreate"}
+                            if relation_classes.get(relation) == "hyper"
+                            and any(
+                                child.get("prep-output-type")
+                                == "outputOperationTypeCreate"
+                                for child in relation.findall("./columns")
+                            )
+                            else {}
+                        ),
                     },
-                    **source,
+                    **{
+                        key: value
+                        for key, value in source.items()
+                        if key not in {"published_id", "content_url"}
+                    },
                 )
             _edge(out, asset_id, external_id)
             _coverage(

@@ -1,0 +1,84 @@
+<datasource formatted-name="Extract" inline="true" source-platform="linux" version="18.1" xml:base="http://prod-dataplane22-worker-k8s.cp-containerization-core-contai.svc.mesh.sfdc.net:8080">
+  <repository-location id="Datus_E2E_Disposable_Prep_Output_20261107" path="/t/louisliu-6562d45ba2/datasources" revision="1.0" site="louisliu-6562d45ba2" />
+  <connection class="federated">
+    <named-connections>
+      <named-connection name="hyper_0">
+        <connection class="hyper" dbname="d69dde34-9a36-4139-b144-2ec75b64f726" default-settings="yes" extract-engine="true" schema="Extract" tablename="Extract" update-time="11/7/2026 3:33:13 AM" />
+      </named-connection>
+    </named-connections>
+    <relation connection="hyper_0" name="Extract" table="[Extract].[Extract]" type="table">
+      <columns prep-output-type="outputOperationTypeCreate" />
+    </relation>
+    <metadata-records>
+      <metadata-record class="column">
+        <remote-name>NetSales</remote-name>
+        <remote-type>20</remote-type>
+        <local-name>[NetSales]</local-name>
+        <parent-name>[Extract]</parent-name>
+        <remote-alias>NetSales</remote-alias>
+        <ordinal>0</ordinal>
+        <local-type>integer</local-type>
+        <aggregation>Sum</aggregation>
+        <contains-null>true</contains-null>
+      </metadata-record>
+      <metadata-record class="column">
+        <remote-name>Region</remote-name>
+        <remote-type>129</remote-type>
+        <local-name>[Region]</local-name>
+        <parent-name>[Extract]</parent-name>
+        <remote-alias>Region</remote-alias>
+        <ordinal>1</ordinal>
+        <local-type>string</local-type>
+        <aggregation>Count</aggregation>
+        <contains-null>true</contains-null>
+        <collation flag="0" name="LEN_RUS" />
+      </metadata-record>
+      <metadata-record class="column">
+        <remote-name>Market</remote-name>
+        <remote-type>129</remote-type>
+        <local-name>[Market]</local-name>
+        <parent-name>[Extract]</parent-name>
+        <remote-alias>Market</remote-alias>
+        <ordinal>2</ordinal>
+        <local-type>string</local-type>
+        <aggregation>Count</aggregation>
+        <contains-null>true</contains-null>
+        <collation flag="0" name="LEN_RUS" />
+      </metadata-record>
+      <metadata-record class="column">
+        <remote-name>Amount</remote-name>
+        <remote-type>20</remote-type>
+        <local-name>[Amount]</local-name>
+        <parent-name>[Extract]</parent-name>
+        <remote-alias>Amount</remote-alias>
+        <ordinal>3</ordinal>
+        <local-type>integer</local-type>
+        <aggregation>Sum</aggregation>
+        <contains-null>true</contains-null>
+      </metadata-record>
+      <metadata-record class="column">
+        <remote-name>Cost</remote-name>
+        <remote-type>20</remote-type>
+        <local-name>[Cost]</local-name>
+        <parent-name>[Extract]</parent-name>
+        <remote-alias>Cost</remote-alias>
+        <ordinal>4</ordinal>
+        <local-type>integer</local-type>
+        <aggregation>Sum</aggregation>
+        <contains-null>true</contains-null>
+      </metadata-record>
+      <metadata-record class="column">
+        <remote-name>Quantity</remote-name>
+        <remote-type>20</remote-type>
+        <local-name>[Quantity]</local-name>
+        <parent-name>[Extract]</parent-name>
+        <remote-alias>Quantity</remote-alias>
+        <ordinal>5</ordinal>
+        <local-type>integer</local-type>
+        <aggregation>Sum</aggregation>
+        <contains-null>true</contains-null>
+      </metadata-record>
+    </metadata-records>
+  </connection>
+  <layout dim-ordering="alphabetic" dim-percentage="0.5" measure-ordering="alphabetic" measure-percentage="0.4" show-structure="true" />
+</datasource>

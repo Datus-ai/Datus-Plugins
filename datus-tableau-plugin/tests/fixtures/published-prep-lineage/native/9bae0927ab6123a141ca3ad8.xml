@@ -1,0 +1,339 @@
+<workbook _.fcp.WorkbookFingerprinting.true...author-id="34831b81a88cb4d6a90aa9403c7db732ac6b0e9f1c8796426bcfcda9a9b660e5" _.fcp.WorkbookFingerprinting.true...creator-author-id="34831b81a88cb4d6a90aa9403c7db732ac6b0e9f1c8796426bcfcda9a9b660e5" _.fcp.WorkbookFingerprinting.true...creator-license-type="creator" _.fcp.WorkbookFingerprinting.true...creator-site-id="36ea17a9c31450400491e402626a5d5866249117d3bef5b622526431f4f0e1f5" _.fcp.WorkbookFingerprinting.true...license-type="creator" _.fcp.WorkbookFingerprinting.true...site-id="36ea17a9c31450400491e402626a5d5866249117d3bef5b622526431f4f0e1f5" original-version="18.1" source-build="2026.3.2 (20263.26.1102.1025)" version="18.1" xml:base="https://prod-apsoutheast-b.online.tableau.com">
+  <document-format-change-manifest>
+    <AccessibleZoneTabOrder />
+    <AnimationOnByDefault />
+    <AutoCreateAndUpdateDSDPhoneLayouts />
+    <ISO8601DefaultCalendarPref />
+    <MarkAnimation />
+    <ObjectModelEncapsulateLegacy />
+    <ObjectModelTableType />
+    <SchemaViewerObjectModel />
+    <SetMembershipControl />
+    <SheetIdentifierTracking />
+    <WindowsPersistSimpleIdentifiers />
+    <_.fcp.WorkbookFingerprinting.true...WorkbookFingerprinting />
+  </document-format-change-manifest>
+  <repository-location derived-from="http://localhost:9100/t/louisliu-6562d45ba2/workbooks/Datus_E2E_012_Prep_Workbook_20261107" id="Datus_E2E_012_Prep_Workbook_20261107" path="/t/louisliu-6562d45ba2/workbooks" revision="1.0" site="louisliu-6562d45ba2" />
+  <preferences />
+  <datasources>
+    <datasource caption="Datus_E2E_Disposable_Prep_Output_20261107" inline="true" name="sqlproxy.056beq31v2fk8q14rmfpg1hlae1v" version="18.1">
+      <repository-location derived-from="http://localhost:9100/t/louisliu-6562d45ba2/datasources/Datus_E2E_Disposable_Prep_Output_20261107" id="Datus_E2E_Disposable_Prep_Output_20261107" path="/t/louisliu-6562d45ba2/datasources" revision="1.0" site="louisliu-6562d45ba2" />
+      <connection channel="https" class="sqlproxy" composed-connection-name="sqlproxy.056beq31v2fk8q14rmfpg1hlae1v" dbname="Datus_E2E_Disposable_Prep_Output_20261107" directory="dataserver" port="443" server="prod-apsoutheast-b.online.tableau.com" server-ds-friendly-name="Datus_E2E_Disposable_Prep_Output_20261107" username="[REDACTED]">
+        <relation connection="sqlproxy.056beq31v2fk8q14rmfpg1hlae1v" name="sqlproxy" table="[sqlproxy]" type="table" />
+        <metadata-records>
+          <metadata-record class="measure">
+            <remote-name>Amount</remote-name>
+            <remote-type>20</remote-type>
+            <local-name>[Amount]</local-name>
+            <parent-name>[sqlproxy]</parent-name>
+            <remote-alias>Amount</remote-alias>
+            <ordinal>3</ordinal>
+            <layered>true</layered>
+            <family>Extract</family>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype="integer" name="field-type">0</attribute>
+            </attributes>
+            <object-id>[Migrated Data]</object-id>
+          </metadata-record>
+          <metadata-record class="measure">
+            <remote-name>Cost</remote-name>
+            <remote-type>20</remote-type>
+            <local-name>[Cost]</local-name>
+            <parent-name>[sqlproxy]</parent-name>
+            <remote-alias>Cost</remote-alias>
+            <ordinal>4</ordinal>
+            <layered>true</layered>
+            <family>Extract</family>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype="integer" name="field-type">0</attribute>
+            </attributes>
+            <object-id>[Migrated Data]</object-id>
+          </metadata-record>
+          <metadata-record class="column">
+            <remote-name>Market</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Market]</local-name>
+            <parent-name>[sqlproxy]</parent-name>
+            <remote-alias>Market</remote-alias>
+            <ordinal>2</ordinal>
+            <layered>true</layered>
+            <family>Extract</family>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag="0" name="LEN_RUS" />
+            <attributes>
+              <attribute datatype="integer" name="field-type">2</attribute>
+              <attribute datatype="integer" name="role">0</attribute>
+            </attributes>
+            <object-id>[Migrated Data]</object-id>
+          </metadata-record>
+          <metadata-record class="measure">
+            <remote-name>NetSales</remote-name>
+            <remote-type>20</remote-type>
+            <local-name>[NetSales]</local-name>
+            <parent-name>[sqlproxy]</parent-name>
+            <remote-alias>NetSales</remote-alias>
+            <ordinal>0</ordinal>
+            <layered>true</layered>
+            <family>Extract</family>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype="integer" name="field-type">0</attribute>
+            </attributes>
+            <object-id>[Migrated Data]</object-id>
+          </metadata-record>
+          <metadata-record class="measure">
+            <remote-name>Quantity</remote-name>
+            <remote-type>20</remote-type>
+            <local-name>[Quantity]</local-name>
+            <parent-name>[sqlproxy]</parent-name>
+            <remote-alias>Quantity</remote-alias>
+            <ordinal>5</ordinal>
+            <layered>true</layered>
+            <family>Extract</family>
+            <local-type>integer</local-type>
+            <aggregation>Sum</aggregation>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype="integer" name="field-type">0</attribute>
+            </attributes>
+            <object-id>[Migrated Data]</object-id>
+          </metadata-record>
+          <metadata-record class="column">
+            <remote-name>Region</remote-name>
+            <remote-type>129</remote-type>
+            <local-name>[Region]</local-name>
+            <parent-name>[sqlproxy]</parent-name>
+            <remote-alias>Region</remote-alias>
+            <ordinal>1</ordinal>
+            <layered>true</layered>
+            <family>Extract</family>
+            <local-type>string</local-type>
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <collation flag="0" name="LEN_RUS" />
+            <attributes>
+              <attribute datatype="integer" name="field-type">2</attribute>
+              <attribute datatype="integer" name="role">0</attribute>
+            </attributes>
+            <object-id>[Migrated Data]</object-id>
+          </metadata-record>
+          <metadata-record class="capability">
+            <remote-name />
+            <remote-type>0</remote-type>
+            <parent-name>[sqlproxy]</parent-name>
+            <remote-alias />
+            <aggregation>Count</aggregation>
+            <contains-null>true</contains-null>
+            <attributes>
+              <attribute datatype="boolean" name="CAP_CREATE_TEMP_TABLES">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_BLENDING_ALWAYS_USE_LOCAL_MAPPING_TABLES">false</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_BLENDING_PREFER_LOCAL_MAPPING_TABLES">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_BLENDING_REMOTE_MAPPING_TABLES">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_CASE_INSENSITIVE_CONTAINS">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_IGNORE_HINT_CHECK_NOT_NULL">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_SORT_BY">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_SUBQUERIES">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_SUBQUERY_QUERY_CONTEXT">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_SUPPORTS_LODJOINS">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_SUPPORT_ANALYTIC_FUNCTIONS">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_TOP_N">true</attribute>
+              <attribute datatype="boolean" name="CAP_QUERY_USE_QUERY_FUSION">true</attribute>
+              <attribute datatype="boolean" name="CAP_SUPPORTS_SPLIT_FROM_LEFT">true</attribute>
+              <attribute datatype="boolean" name="CAP_SUPPORTS_SPLIT_FROM_RIGHT">true</attribute>
+              <attribute datatype="integer" name="charset">0</attribute>
+              <attribute datatype="string" name="collation">"binary"</attribute>
+              <attribute datatype="string" name="datasource">"&lt;?xml version='1.0' encoding='utf-8' ?&gt;
+
+&lt;datasource :source-version='18.1' formatted-name='Extract' inline='true' version='18.1' xml:base='http://prod-dataplane22-worker-k8s.cp-containerization-core-contai.svc.mesh.sfdc.net:8080' xmlns:user='http://www.tableausoftware.com/xml/user'&gt;
+  &lt;repository-location derived-from='http://prod-dataplane22-worker-k8s.cp-containerization-core-contai.svc.mesh.sfdc.net:8080/t/louisliu-6562d45ba2/datasources/Datus_E2E_Disposable_Prep_Output_20261107?rev=1.0' id='Datus_E2E_Disposable_Prep_Output_20261107' path='/t/louisliu-6562d45ba2/datasources' revision='1.0' site='louisliu-6562d45ba2' /&gt;
+  &lt;connection channel='http' class='sqlproxy' dbname='Datus_E2E_Disposable_Prep_Output_20261107' directory='dataserver' port='8080' server='localhost'&gt;
+    &lt;relation connection='sqlproxy.056beq31v2fk8q14rmfpg1hlae1v' name='sqlproxy' table='[sqlproxy]' type='table' /&gt;
+    &lt;cols&gt;
+      &lt;map key='[Amount]' value='[sqlproxy].[Amount]' /&gt;
+      &lt;map key='[Cost]' value='[sqlproxy].[Cost]' /&gt;
+      &lt;map key='[Market]' value='[sqlproxy].[Market]' /&gt;
+      &lt;map key='[NetSales]' value='[sqlproxy].[NetSales]' /&gt;
+      &lt;map key='[Quantity]' value='[sqlproxy].[Quantity]' /&gt;
+      &lt;map key='[Region]' value='[sqlproxy].[Region]' /&gt;
+    &lt;/cols&gt;
+  &lt;/connection&gt;
+  &lt;layout dim-ordering='alphabetic' dim-percentage='0.5' measure-ordering='alphabetic' measure-percentage='0.4' show-structure='true' /&gt;
+&lt;/datasource&gt;
+"</attribute>
+              <attribute datatype="string" name="dialect-definition">"&lt;dialect-definition&gt;
+  &lt;primary-dialect class='hyper' version='0.0.0'&gt;
+  &lt;/primary-dialect&gt;
+  &lt;overlay-dialect-set&gt;
+    &lt;overlay-dialect class='vizengine' version='0.1.0'&gt;
+    &lt;/overlay-dialect&gt;
+  &lt;/overlay-dialect-set&gt;
+&lt;/dialect-definition&gt;
+"</attribute>
+              <attribute datatype="boolean" name="extract-active">false</attribute>
+              <attribute datatype="boolean" name="fast-get-server-time">true</attribute>
+              <attribute datatype="string" name="update-time">"11/7/2026 3:33:13 AM"</attribute>
+            </attributes>
+          </metadata-record>
+        </metadata-records>
+      </connection>
+      <overridable-settings>
+        <date-options fiscal-year-start="january" start-of-week="sunday" />
+        <default-date-format />
+        <default-calendar-type>Gregorian</default-calendar-type>
+      </overridable-settings>
+      <column aggregation="Sum" datatype="integer" default-type="quantitative" layered="true" name="[Amount]" pivot="key" role="measure" type="quantitative" user-datatype="integer" visual-totals="Default" />
+      <column aggregation="Sum" datatype="integer" default-type="quantitative" layered="true" name="[Cost]" pivot="key" role="measure" type="quantitative" user-datatype="integer" visual-totals="Default" />
+      <column aggregation="Count" datatype="string" default-type="nominal" layered="true" name="[Market]" pivot="key" role="dimension" type="nominal" user-datatype="string" visual-totals="Default" />
+      <column aggregation="Sum" datatype="integer" default-type="quantitative" layered="true" name="[NetSales]" pivot="key" role="measure" type="quantitative" user-datatype="integer" visual-totals="Default" />
+      <column aggregation="Sum" datatype="integer" default-type="quantitative" layered="true" name="[Quantity]" pivot="key" role="measure" type="quantitative" user-datatype="integer" visual-totals="Default" />
+      <column aggregation="Count" datatype="string" default-type="nominal" layered="true" name="[Region]" pivot="key" role="dimension" type="nominal" user-datatype="string" visual-totals="Default" />
+      <column caption="Migrated Data" datatype="table" name="[__tableau_internal_object_id__].[Migrated Data]" role="measure" type="quantitative" />
+      <layout dim-ordering="alphabetic" measure-ordering="alphabetic" show-structure="true" />
+      <semantic-values>
+        <semantic-value key="[Country].[Name]" value="&quot;United States&quot;" />
+      </semantic-values>
+      <object-graph>
+        <objects>
+          <object caption="Migrated Data" id="Migrated Data">
+            <properties context="">
+              <relation connection="sqlproxy.056beq31v2fk8q14rmfpg1hlae1v" name="sqlproxy" table="[sqlproxy]" type="table" />
+            </properties>
+          </object>
+        </objects>
+      </object-graph>
+    </datasource>
+  </datasources>
+  <worksheets>
+    <worksheet name="Sheet 1">
+      <repository-location derived-from="http://localhost:9100/t/louisliu-6562d45ba2/workbooks/Datus_E2E_012_Prep_Workbook_20261107/Sheet1" id="7849995" path="/t/louisliu-6562d45ba2/workbooks/Datus_E2E_012_Prep_Workbook_20261107" revision="" site="louisliu-6562d45ba2" />
+      <table>
+        <view>
+          <datasources>
+            <datasource caption="Datus_E2E_Disposable_Prep_Output_20261107" name="sqlproxy.056beq31v2fk8q14rmfpg1hlae1v" />
+          </datasources>
+          <datasource-dependencies datasource="sqlproxy.056beq31v2fk8q14rmfpg1hlae1v">
+            <column aggregation="Sum" datatype="integer" default-type="quantitative" layered="true" name="[NetSales]" pivot="key" role="measure" type="quantitative" user-datatype="integer" visual-totals="Default" />
+            <column aggregation="Count" datatype="string" default-type="nominal" layered="true" name="[Region]" pivot="key" role="dimension" type="nominal" user-datatype="string" visual-totals="Default" />
+            <column-instance column="[Region]" derivation="None" name="[none:Region:nk]" pivot="key" type="nominal" />
+            <column-instance column="[NetSales]" derivation="Sum" name="[sum:NetSales:qk]" pivot="key" type="quantitative" />
+          </datasource-dependencies>
+          <aggregation value="true" />
+        </view>
+        <style />
+        <panes>
+          <pane selection-relaxation-option="selection-relaxation-allow">
+            <view>
+              <breakdown value="auto" />
+            </view>
+            <mark class="Automatic" />
+            <encodings>
+              <text column="[sqlproxy.056beq31v2fk8q14rmfpg1hlae1v].[sum:NetSales:qk]" />
+            </encodings>
+            <style>
+              <style-rule element="mark">
+                <format attr="mark-labels-show" value="true" />
+              </style-rule>
+            </style>
+          </pane>
+        </panes>
+        <rows>[sqlproxy.056beq31v2fk8q14rmfpg1hlae1v].[none:Region:nk]</rows>
+        <cols />
+      </table>
+      <simple-id uuid="{B5796B7E-140E-4DEE-B26E-10BA33A4367F}" />
+    </worksheet>
+  </worksheets>
+  <dashboards>
+    <dashboard enable-sort-zone-taborder="true" name="Dashboard 1">
+      <repository-location derived-from="http://localhost:9100/t/louisliu-6562d45ba2/workbooks/Datus_E2E_012_Prep_Workbook_20261107/Dashboard1" id="7849996" path="/t/louisliu-6562d45ba2/workbooks/Datus_E2E_012_Prep_Workbook_20261107" revision="" site="louisliu-6562d45ba2" />
+      <style />
+      <size maxheight="800" maxwidth="1000" minheight="800" minwidth="1000" />
+      <zones>
+        <zone h="100000" id="4" type-v2="layout-basic" w="100000" x="0" y="0">
+          <zone h="98000" id="3" name="Sheet 1" w="98400" x="800" y="1000">
+            <zone-style>
+              <format attr="border-color" value="#000000" />
+              <format attr="border-style" value="none" />
+              <format attr="border-width" value="0" />
+              <format attr="margin" value="4" />
+            </zone-style>
+          </zone>
+          <zone-style>
+            <format attr="border-color" value="#000000" />
+            <format attr="border-style" value="none" />
+            <format attr="border-width" value="0" />
+            <format attr="margin" value="8" />
+          </zone-style>
+        </zone>
+      </zones>
+      <devicelayouts>
+        <devicelayout auto-generated="true" name="Phone">
+          <size maxheight="700" minheight="700" sizing-mode="vscroll" />
+          <zones>
+            <zone h="100000" id="6" type-v2="layout-basic" w="100000" x="0" y="0">
+              <zone h="98000" id="5" param="vert" type-v2="layout-flow" w="98400" x="800" y="1000">
+                <zone fixed-size="280" h="98000" id="3" is-fixed="true" name="Sheet 1" w="98400" x="800" y="1000">
+                  <zone-style>
+                    <format attr="border-color" value="#000000" />
+                    <format attr="border-style" value="none" />
+                    <format attr="border-width" value="0" />
+                    <format attr="margin" value="4" />
+                    <format attr="padding" value="0" />
+                  </zone-style>
+                </zone>
+              </zone>
+              <zone-style>
+                <format attr="border-color" value="#000000" />
+                <format attr="border-style" value="none" />
+                <format attr="border-width" value="0" />
+                <format attr="margin" value="8" />
+              </zone-style>
+            </zone>
+          </zones>
+        </devicelayout>
+      </devicelayouts>
+      <simple-id uuid="{741CAAE2-314D-4E82-8BC8-FDC9598F10A1}" />
+    </dashboard>
+  </dashboards>
+  <windows>
+    <window class="worksheet" name="Sheet 1">
+      <cards>
+        <edge name="left">
+          <strip size="160">
+            <card type="pages" />
+            <card type="filters" />
+            <card type="marks" />
+          </strip>
+        </edge>
+        <edge name="top">
+          <strip size="31">
+            <card type="columns" />
+          </strip>
+          <strip size="31">
+            <card type="rows" />
+          </strip>
+          <strip size="31">
+            <card type="title" />
+          </strip>
+        </edge>
+      </cards>
+      <simple-id uuid="{0D3E6348-2340-45DF-9FA9-02A24D9F6644}" />
+    </window>
+    <window class="dashboard" maximized="true" name="Dashboard 1">
+      <viewpoints>
+        <viewpoint name="Sheet 1" />
+      </viewpoints>
+      <active id="-1" />
+      <simple-id uuid="{D39D3CA6-3359-4A82-9CFD-9A610C15E3E1}" />
+    </window>
+  </windows>
+</workbook>

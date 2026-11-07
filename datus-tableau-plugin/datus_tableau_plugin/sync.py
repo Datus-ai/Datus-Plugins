@@ -148,6 +148,9 @@ def sync_sources(
     coverage: list[dict] = []
     extra: dict[str, bytes] = {}
     fetched = set()
+    datasource_bindings = []
+    datasource_lineages = {}
+    flow_bindings = []
     failures = 0
 
     def issue(asset_id, code, message, *, status="error"):
@@ -418,43 +421,48 @@ def sync_sources(
                     for a in parsed["assets"]
                     if a["kind"] == "dataset" and a["id"] in keep
                 ]
-                matched_sources = [
-                    a
-                    for a in local_sources
-                    if any(
-                        ref
-                        and ref
-                        in {luid, assets[upstream_id]["source"].get("content_url")}
-                        for ref in (
-                            a["source"].get("published_id"),
-                            a["source"].get("content_url"),
+                if group == "datasources":
+                    # Resolve after every identity has been read, so ambiguous
+                    # references cannot bind to whichever source was fetched first.
+                    datasource_bindings.append(
+                        (
+                            workbook_id,
+                            charts_here,
+                            [a["id"] for a in local_sources],
+                            upstream_id,
                         )
                     )
-                ]
-                if matched_sources and group == "datasources":
-                    for local_source in matched_sources:
-                        edges.append(
-                            {
-                                "from": local_source["id"],
-                                "to": upstream_id,
-                                "relation": "published_datasource",
-                            }
-                        )
+                    if lineage.get("flows") and luid not in datasource_lineages:
+                        # Workbook shortcuts cannot assign a flow to a datasource.
+                        # Keep the independently scoped response as source evidence.
+                        datasource_lineages[luid] = None
+                        try:
+                            scoped = client.datasource_lineage(luid)
+                            identity = scoped.get("datasource", {})
+                            if (
+                                identity.get("luid") != luid
+                                or not identity.get("id")
+                                or identity["id"]
+                                != assets[upstream_id]["source"].get("metadata_id")
+                                or not isinstance(scoped.get("flows"), list)
+                                or not isinstance(scoped.get("tables"), list)
+                            ):
+                                raise PluginError(
+                                    "datasource lineage identity is unavailable"
+                                )
+                            datasource_lineages[luid] = scoped
+                            extra[
+                                f"metadata/datasource-{digest(luid.encode())[:24]}.json"
+                            ] = json_bytes(redact(scoped))
+                        except Exception:
+                            issue(
+                                upstream_id,
+                                "datasource_metadata_unavailable",
+                                "Datasource-scoped Metadata lineage could not be verified",
+                                status="partial",
+                            )
                 else:
-                    # Workbook-level lineage is insufficient to assign a producing flow/dataset to a selected chart.
-                    book_issue(
-                        "lineage_binding_unresolved",
-                        f"Upstream {group} is known at workbook level but its selected chart/dataset binding needs explicit resolution",
-                        status="partial",
-                    )
-                    for chart_id in charts_here:
-                        edges.append(
-                            {
-                                "from": chart_id,
-                                "to": upstream_id,
-                                "relation": "unresolved_upstream_" + group,
-                            }
-                        )
+                    flow_bindings.append((workbook_id, charts_here, upstream_id))
                 # A shared source is downloaded once even when several dashboards/workbooks use it.
                 if (group, luid) in fetched:
                     continue
@@ -474,8 +482,8 @@ def sync_sources(
                     )
                     if root:
                         root["source"] = {
-                            **assets[upstream_id]["source"],
                             **root["source"],
+                            **assets[upstream_id]["source"],
                         }
                         assets.pop(upstream_id)
                     merge(document, upstream_id)
@@ -594,15 +602,22 @@ def sync_sources(
     published = [
         a for a in assets.values() if a["kind"] == "dataset" and a["source"].get("luid")
     ]
+    resolved_datasources = {}
     for asset in list(assets.values()):
-        ref = asset["source"].get("published_id") or asset["source"].get("content_url")
-        if ref and asset not in published:
+        if asset["kind"] != "dataset" or asset["source"].get("luid"):
+            continue
+        refs = {
+            asset["source"].get("published_id"),
+            asset["source"].get("content_url"),
+        } - {None, ""}
+        if refs:
             matched = [
                 a
                 for a in published
-                if ref in {a["source"].get("luid"), a["source"].get("content_url")}
+                if refs & {a["source"].get("luid"), a["source"].get("content_url")}
             ]
             if len(matched) == 1:
+                resolved_datasources[asset["id"]] = matched[0]["id"]
                 edges.append(
                     {
                         "from": asset["id"],
@@ -617,6 +632,199 @@ def sync_sources(
                     "Published datasource reference could not be bound by stable source identity",
                     status="partial",
                 )
+
+    materialized_tables = defaultdict(set)
+    for luid, scoped in datasource_lineages.items():
+        if scoped is None:
+            continue
+        dataset_id = f"dataset:{luid}"
+        verified_flows = []
+        for row in scoped["flows"]:
+            flow_id = f"transform:{row.get('luid')}"
+            flow_asset = assets.get(flow_id)
+            if (
+                not row.get("id")
+                or not row.get("luid")
+                or not flow_asset
+                or flow_asset["source"].get("metadata_id") != row["id"]
+                or flow_asset.get("status") == "error"
+                or flow_asset["definition"].get("operation", {}).get("type") != "flow"
+            ):
+                issue(
+                    dataset_id,
+                    "datasource_flow_identity_unresolved",
+                    "Datasource upstream flow identity or native definition is unavailable",
+                    status="partial",
+                )
+                continue
+            verified_flows.append(flow_id)
+            edges.append(
+                {"from": dataset_id, "to": flow_id, "relation": "upstream_flow"}
+            )
+        # The native create-output marker distinguishes this materialized result
+        # from arbitrary Hyper inputs. Never infer a producer from its table name.
+        if len(scoped["flows"]) != 1 or len(verified_flows) != 1:
+            continue
+        flow_luid = scoped["flows"][0]["luid"]
+        native_members = {
+            e["to"]
+            for e in edges
+            if e["from"] == verified_flows[0] and e["relation"] == "definition_member"
+        }
+        if not any(
+            member["kind"] == "transform"
+            and member["source"].get("flow_luid") == flow_luid
+            and member["definition"].get("operation", {}).get("type") == "output"
+            for member_id in native_members
+            if (member := assets.get(member_id)) is not None
+        ):
+            # A downloaded root with no native output cannot explain this
+            # materialization. An output belonging to another flow is no proof.
+            continue
+        for boundary in assets.values():
+            definition = boundary["definition"]
+            if (
+                boundary["kind"] != "external_source"
+                or boundary["source"].get("luid") != luid
+                or definition.get("prep_output_type") != "outputOperationTypeCreate"
+            ):
+                continue
+            candidates = [
+                a
+                for a in assets.values()
+                if a["kind"] == "external_source"
+                and a["source"].get("luid") == luid
+                and a["definition"].get("table") == definition.get("table")
+            ]
+            if len(candidates) != 1:
+                continue
+            tables = [
+                row
+                for row in scoped["tables"]
+                if row.get("id")
+                and row.get("connectionType") == "hyper"
+                and row.get("fullName") == definition.get("table")
+            ]
+            if len(tables) != 1:
+                continue
+            table_id = tables[0]["id"]
+            definition["etl_definition"] = {
+                "metadata_datasource_id": scoped["datasource"]["id"],
+                "metadata_table_id": table_id,
+                "upstream_flow_luids": [scoped["flows"][0]["luid"]],
+                "relationship": "upstream_flow",
+            }
+            edges.append(
+                {
+                    "from": boundary["id"],
+                    "to": verified_flows[0],
+                    "relation": "upstream_flow",
+                }
+            )
+            coverage[:] = [
+                c
+                for c in coverage
+                if not (
+                    c["asset_id"] == boundary["id"]
+                    and c["code"] == "external_etl_unresolved"
+                )
+            ]
+            materialized_tables[table_id].add(dataset_id)
+
+    # A workbook shortcut can reuse the same table across unrelated sources.
+    # Resolve its shared boundary only when every observed consumer has the
+    # exact datasource path just proven above; otherwise keep the original gap.
+    for metadata_id, dataset_ids in materialized_tables.items():
+        table_asset_id = f"external_source:table:{metadata_id}"
+        consumers = {
+            e["from"]
+            for e in edges
+            if e["to"] == table_asset_id
+            and e["relation"] == "upstream_table"
+            and assets.get(e["from"], {}).get("kind") == "chart"
+        }
+        proof_edges = [
+            e
+            for e in edges
+            if e["relation"] in {"depends_on", "published_datasource", "upstream_flow"}
+        ]
+        if not consumers or not all(
+            _reachable({consumer}, proof_edges) & dataset_ids for consumer in consumers
+        ):
+            continue
+        table_asset = assets.get(table_asset_id)
+        if table_asset:
+            table_asset["definition"]["etl_definition"] = {
+                "datasource_ids": sorted(dataset_ids),
+                "relationship": "upstream_flow",
+            }
+            table_asset["status"] = "ok"
+            for dataset_id in dataset_ids:
+                edges.append(
+                    {
+                        "from": table_asset_id,
+                        "to": dataset_id,
+                        "relation": "materialized_from",
+                    }
+                )
+            coverage[:] = [
+                c
+                for c in coverage
+                if not (
+                    c["asset_id"] == table_asset_id
+                    and c["code"] == "external_definition_required"
+                )
+            ]
+
+    for workbook_id, chart_ids, local_ids, upstream_id in datasource_bindings:
+        if any(
+            resolved_datasources.get(local_id) == upstream_id for local_id in local_ids
+        ):
+            continue
+        for asset_id in [workbook_id, *chart_ids]:
+            issue(
+                asset_id,
+                "lineage_binding_unresolved",
+                "Upstream datasources is known at workbook level but its selected chart/dataset binding needs explicit resolution",
+                status="partial",
+            )
+        for chart_id in chart_ids:
+            edges.append(
+                {
+                    "from": chart_id,
+                    "to": upstream_id,
+                    "relation": "unresolved_upstream_datasources",
+                }
+            )
+
+    for workbook_id, chart_ids, flow_id in flow_bindings:
+        proof_edges = [
+            e
+            for e in edges
+            if e["relation"] in {"depends_on", "published_datasource", "upstream_flow"}
+        ]
+        unresolved = [
+            chart_id
+            for chart_id in chart_ids
+            if flow_id not in _reachable({chart_id}, proof_edges)
+        ]
+        if not unresolved:
+            continue
+        for asset_id in [workbook_id, *unresolved]:
+            issue(
+                asset_id,
+                "lineage_binding_unresolved",
+                "Upstream flows is known at workbook level but its selected chart/dataset binding needs explicit resolution",
+                status="partial",
+            )
+        for chart_id in unresolved:
+            edges.append(
+                {
+                    "from": chart_id,
+                    "to": flow_id,
+                    "relation": "unresolved_upstream_flows",
+                }
+            )
 
     for edge in edges:
         for identifier in (edge["from"], edge["to"]):
