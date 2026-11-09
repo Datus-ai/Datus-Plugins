@@ -4,13 +4,22 @@ Experimental Tableau Server source synchronization for DOSI-driven dashboard reb
 
 ```bash
 datus plugin install src:./datus-tableau-plugin
-datus tableau status
-datus tableau dashboards list
+datus tableau status                       # auth, API version, Metadata, site_configured
+datus tableau sites list                   # discover sites when site_content_url is unset
+datus tableau projects list --site Sales   # --site targets or switches a site per command
+datus tableau dashboards list --project-id PROJECT_LUID
 datus tableau sync run --dashboard-id 'dashboard:WORKBOOK_LUID:DASHBOARD_NAME'
 datus tableau sync run --project-id PROJECT_LUID
 datus tableau sync run --all
 datus tableau sync inspect bi_sources/tableau/SNAPSHOT --summary
+datus tableau context export-dashboard 'dashboard:WORKBOOK_LUID:DASHBOARD_NAME'
+datus tableau api call sites/SITE_LUID/views --param pageSize=10
 ```
+
+Every command accepts `-o json|yaml|table` (default `json`). Exit codes: `0` success,
+`1` runtime/API error, `2` usage, `3` configuration, `8` missing optional dependency.
+
+## Configuration
 
 Profiles live under `agent.plugins.tableau.<profile>`:
 
@@ -21,13 +30,78 @@ agent:
       prod:
         default: true
         server_url: https://tableau.example.test
-        site_content_url: ""
-        auth_type: pat
+        auth_type: pat                       # pat | password (exactly one credential pair)
         token_name: ${TABLEAU_TOKEN_NAME}
         token_secret: ${TABLEAU_TOKEN_SECRET}
+        site_content_url: ""                 # "" = default site; omit to choose later
 ```
 
-Password authentication uses `auth_type: password`, `username`, and `password: ${TABLEAU_PASSWORD}`. Optional settings are `api_version: auto`, `verify_ssl: true`, `ca_bundle` and `timeout: 60` seconds. The default site has an empty content URL, not its REST LUID. Configure TLS options before version negotiation. One CLI invocation owns one session; use separate PATs for simultaneous automation.
+| Field | Required | Default | Notes |
+|---|:---:|:---:|---|
+| `server_url` | yes | — | HTTP(S) origin without credentials, query or fragment |
+| `auth_type` | no | `pat` | `pat` or `password`. Tableau Cloud and MFA-enabled servers accept only `pat` |
+| `token_name`, `token_secret` | with `pat` | — | Personal Access Token; `token_secret` is a secret (`x-secret`) |
+| `username`, `password` | with `password` | — | Server account; `password` is a secret |
+| `site_content_url` | no | *unset* | Site content URL as shown in Tableau URLs (`/#/site/<content_url>/`), not the display name or REST LUID. `""` is the default site. Unset means "not chosen yet" — see [Choosing a site](#choosing-a-site) |
+| `api_version` | no | `auto` | Negotiate, or pin a REST version such as `3.21` |
+| `verify_ssl` | no | `true` | Keep enabled; use `ca_bundle` for private CAs |
+| `ca_bundle` | no | — | Path to a CA bundle file; applied before version negotiation |
+| `timeout` | no | `60` | HTTP timeout in seconds |
+
+Secrets must be environment-variable references. Unknown keys are rejected
+(`additionalProperties: false`), and the credential pair for the other
+`auth_type` must not be present. One CLI invocation owns one session; use
+separate PATs for simultaneous automation, because a second sign-in with the
+same PAT can end the first session.
+
+### Choosing a site
+
+A Tableau Server hosts several sites and every asset is site-scoped, so the
+plugin never guesses which one you mean:
+
+- **Unset `site_content_url`** means no site has been chosen. `status` and
+  `sites list` still work (they sign in to the default site); every other
+  remote command refuses with exit code `3` and tells you what to do.
+- **`datus tableau sites list`** returns `id`, `name`, `content_url`, `state`
+  and `default` for each site so you (or the agent, on your behalf) can pick
+  one. Tableau only lets *Server Administrators* list sites; other accounts get
+  an explicit message asking them to obtain the content URL from an admin.
+- **`--site CONTENT_URL`** on any remote command targets that site for the one
+  invocation — use it to switch between sites without editing the profile.
+  `--site ""` selects the default site.
+- To make the choice permanent, save `site_content_url` in the profile (the
+  `tableau-setup` skill does this for you).
+
+`status` reports `site_configured` so the agent can tell which state you are in.
+
+## Command reference
+
+Permission levels follow the manifest: *allow* runs without confirmation under
+both the `normal` and `auto` profiles; *ask* requires the user's approval.
+
+| Command | Permission | Needs site | What it does |
+|---|:---:|:---:|---|
+| `status` | allow | no | Authentication, REST version, Metadata availability, `site_configured` |
+| `sites list` | allow | no | List sites to choose or switch `site_content_url` (Server Administrator) |
+| `projects list` | allow | yes | Projects in the site |
+| `workbooks list [--project-id]` / `workbooks get ID` | allow | yes | Workbooks and their connections |
+| `dashboards list [--project-id]` / `dashboards get ID` | allow | yes | Dashboards (scoped `dashboard:<workbook>:<name>` IDs) and their native definition |
+| `datasources list [--project-id]` / `datasources get ID` | allow | yes | Published data sources |
+| `flows list [--project-id]` / `flows get ID` | allow | yes | Prep flows |
+| `sync run --dashboard-id\|--project-id\|--all` | ask | yes | Snapshot source definitions, SQL and ETL dependencies into a checksummed bundle under `bi_sources/tableau/` |
+| `sync inspect BUNDLE [--summary]` | allow | offline | Verify a bundle's checksums and schema without credentials |
+| `context export-dashboard DASHBOARD_ID` | ask | yes | Snapshot one dashboard's reviewable sources under `reference_sql/tableau/` (the shared BI-plugin project-context convention) |
+| `plan --flow FLOW --output DIR` | ask | offline | Derive reviewable SELECT models from a downloaded native Prep flow |
+| `rebuild --bundle --bindings --metric-catalog` | allow | offline | Read-only DOSI binding preflight; prints proposed artifact tool calls |
+| `api call PATH [--param K=V]` | ask | yes | Read-only, same-origin REST `GET` for resources the typed commands do not cover |
+
+Nothing here writes to Tableau: there is no publish, delete, flow run or
+extract refresh, and `api call` only issues `GET`.
+
+The bundled skills (`tableau`, `tableau-setup`, `tableau-sync`,
+`tableau-rebuild`) make the agent ask rather than guess: it lists sites when
+none is configured, lists projects and then dashboards when you have not named
+one, and only uses `sync run --all` when you explicitly ask for the whole site.
 
 Offline processing uses the same managed CLI as server reads. `datus tableau plan`
 writes derived processing artifacts from a downloaded native flow, and
@@ -274,3 +348,22 @@ Metadata and ordinary physical tables retain their coverage gaps. Source input
 bindings and processing validation remain required; `upstream_flow` describes
 dependency and does not claim a direct producing output node. Installed 0.1.2
 artifacts require replacement with a fresh 0.1.3 artifact for this behavior.
+
+Version 0.1.5 aligns the command surface with the other Datus BI plugins:
+`context export-dashboard` snapshots one dashboard into `reference_sql/tableau/`
+through the same verified `sync` machinery, `api call` is a read-only same-origin
+REST escape hatch, and every command renders `json`, `yaml` or `table`.
+(0.1.4 was an interim build without these commands.)
+
+Version 0.1.6 makes the site an explicit choice. `site_content_url` is optional:
+unset means "not chosen yet" and site-scoped commands refuse with guidance,
+while `status` and the new `sites list` sign in to the default site so the site
+can be discovered and picked. `--site CONTENT_URL` targets or switches a site per
+command. The config schema rejects unknown keys, documents `auth_type` as a strict
+`pat`/`password` choice and orders fields by the setup flow. Skills now walk the
+user through choosing the site, then the project and dashboard(s). A trial
+`serving-target` command and `serving_*` profile fields were removed: a Tableau
+site fronts many sources and rebuilds map datasources per asset through source
+bindings, so a profile-level serving datasource had no consumer. Profiles that
+relied on an omitted `site_content_url` meaning the default site must now set
+`site_content_url: ""` explicitly.

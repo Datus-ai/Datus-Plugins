@@ -30,7 +30,7 @@
 
 插件命名：目录/发行包 `datus-tableau-plugin`，导入包 `datus_tableau_plugin`，唯一入口 `tableau = "datus_tableau_plugin"`，CLI 为 `main(argv, profile) -> int`，初始版本 `0.1.0`，Python ≥3.12。
 
-配置位于 `agent.plugins.tableau.<profile>`：`server_url` 必填，`site_content_url` 默认空字符串，`auth_type` 默认 `pat`；PAT 模式必填 `token_name/token_secret`，密码模式必填 `username/password`；另有 `api_version=auto`、`verify_ssl=true`、可选 `ca_bundle`、`timeout=60` 秒。秘密使用环境变量引用并标记 `x-secret: true`。SDK 使用官方 `tableauserverclient`；XML 使用禁用实体解析的解析器，ZIP 仅读取所需定义，不整体解压。
+配置位于 `agent.plugins.tableau.<profile>`：`server_url` 必填；`site_content_url` 可不配置（未配置视为"尚未选择"，站点作用域命令会拒绝执行并提示先用 `sites list` 发现站点，再以 `--site` 指定或写入 profile；空字符串表示默认站点）；`auth_type` 默认 `pat`，与 `password` 严格二选一；PAT 模式必填 `token_name/token_secret`，密码模式必填 `username/password`；另有 `api_version=auto`、`verify_ssl=true`、可选 `ca_bundle`、`timeout=60` 秒。秘密使用环境变量引用并标记 `x-secret: true`。SDK 使用官方 `tableauserverclient`；XML 使用禁用实体解析的解析器，ZIP 仅读取所需定义，不整体解压。
 
 公开 CLI：
 
