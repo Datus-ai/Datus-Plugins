@@ -6,9 +6,10 @@ import importlib
 from pathlib import Path
 from tempfile import TemporaryDirectory
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 from .config import Settings
-from .errors import MetadataError, MissingDependency, PluginError
+from .errors import MetadataError, MissingDependency, PluginError, UsageError
 
 # Each nested relationship has its own cursor: a top-level pager cannot page nested lists.
 RELATION_FIELDS = {
@@ -133,6 +134,47 @@ class TableauClient:
         if not isinstance(data, dict):
             raise MetadataError("Metadata API returned no data object")
         return data
+
+    def rest_get(self, path: str, params: dict[str, str] | None = None) -> Any:
+        """Read-only same-origin GET against the signed-in Tableau REST API.
+
+        Only GET is exposed: this escape hatch reads untyped REST resources the
+        typed commands do not cover, and never mutates server state. The path is
+        resolved against the versioned REST base and must not escape that origin.
+        """
+        if not self._signed_in:
+            raise PluginError("a Tableau session is required for api call")
+        parts = urlsplit(path)
+        if parts.scheme or parts.netloc:
+            raise UsageError(
+                "path must be relative to the Tableau REST API, without scheme or host"
+            )
+        base = self.server.baseurl.rstrip("/") + "/"
+        url = urljoin(base, path.lstrip("/"))
+        if not url.startswith(base):
+            raise UsageError("path escapes the Tableau REST API base")
+        response = self.server._session.get(
+            url,
+            headers={
+                "X-Tableau-Auth": self.server.auth_token,
+                "Accept": "application/json",
+            },
+            params=params or None,
+            verify=self.settings.ca_bundle or self.settings.verify_ssl,
+            timeout=self.settings.timeout,
+        )
+        response.raise_for_status()
+        content = response.content
+        if len(content) > 16 * 1024 * 1024:
+            raise PluginError("REST response exceeds 16 MiB read limit")
+        try:
+            return response.json()
+        except ValueError:
+            return {
+                "status_code": response.status_code,
+                "content_type": response.headers.get("Content-Type"),
+                "text": content.decode("utf-8", "replace")[:65536],
+            }
 
     def status(self) -> dict:
         self.metadata("query DatusMetadataStatus { __typename }")

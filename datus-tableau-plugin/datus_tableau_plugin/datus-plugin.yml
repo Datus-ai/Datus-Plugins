@@ -50,6 +50,14 @@ config_schema:
       type: number
       exclusiveMinimum: 0
       default: 60
+    serving_datasource:
+      type: string
+      default: ''
+      description: Optional Datus datasource name served by this Tableau Server
+    serving_database_name:
+      type: string
+      default: ''
+      description: Optional warehouse database name
   allOf:
   - if:
       properties:
@@ -147,6 +155,29 @@ commands:
     required: true
   - name: --metric-catalog
     required: true
+- name: serving-target
+  description: Show the Datus datasource bound to this Tableau Server
+- name: context
+  description: Export dashboard sources into project context files
+  subcommands:
+  - name: export-dashboard
+    description: Snapshot one dashboard's reviewable sources into the project workspace; does not execute ETL
+    args:
+    - name: dashboard_id
+      required: true
+    - name: --output-root
+    - name: --overwrite
+    - name: --external-source
+    - name: --source-bindings
+    - name: --dialect
+- name: api
+  description: Read-only guarded access to additional Tableau REST endpoints
+  subcommands:
+  - name: call
+    args:
+    - name: path
+      required: true
+    - name: --param
 permissions:
   normal:
     allow:
@@ -163,9 +194,12 @@ permissions:
     - flows get:*
     - sync inspect:*
     - rebuild:*
+    - serving-target:*
     ask:
     - sync run:*
     - plan:*
+    - context export-dashboard:*
+    - api call:*
   auto:
     allow:
     - status
@@ -181,6 +215,9 @@ permissions:
     - flows get:*
     - sync inspect:*
     - rebuild:*
+    - serving-target:*
     ask:
     - sync run:*
     - plan:*
+    - context export-dashboard:*
+    - api call:*

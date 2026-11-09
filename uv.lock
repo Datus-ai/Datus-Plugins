@@ -1244,7 +1244,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-tableau-plugin"
-version = "0.1.3"
+version = "0.1.4"
 source = { editable = "datus-tableau-plugin" }
 dependencies = [
     { name = "defusedxml" },
@@ -1255,8 +1255,8 @@ dependencies = [
 
 [package.optional-dependencies]
 dev = [
-    { name = "duckdb" },
     { name = "build" },
+    { name = "duckdb" },
     { name = "jinja2" },
     { name = "pytest" },
     { name = "pyyaml" },

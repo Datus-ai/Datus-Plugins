@@ -12,6 +12,13 @@ SELECT models and reports; `datus tableau rebuild --bundle ... --bindings ...
 require Tableau authentication. Target metric SQL/results still require actual
 DOSI discovery and successful artifact-tool trial queries.
 
+`datus tableau serving-target` reports the Datus datasource bound to this server.
+`datus tableau context export-dashboard DASHBOARD_ID` snapshots one dashboard's
+reviewable sources into the project workspace (under `reference_sql/tableau`),
+mirroring the other BI plugins. `datus tableau api call PATH --param KEY=VALUE`
+is a read-only, same-origin escape hatch for untyped REST resources the typed
+commands do not cover; it never mutates server state.
+
 {% if profiles %}
 Configured environments:
 {% for name, cfg in profiles.items() %}

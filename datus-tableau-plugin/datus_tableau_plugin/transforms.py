@@ -18,6 +18,61 @@ MAX_MODEL_ANCESTORS = 64
 MAX_MODEL_SQL_BYTES = 256 * 1024
 MAX_TOTAL_MODEL_SQL_BYTES = 8 * 1024 * 1024
 
+# Friendly aliases for common dialect spellings mapped to sqlglot's canonical
+# names. The generated models are never executed; this only accepts unambiguous
+# human input variants so a harmless spelling does not surface as an opaque
+# error. Only exact, semantically safe equivalences are listed here; names that
+# have no faithful sqlglot dialect (for example vertica, db2, greenplum) are
+# deliberately left to fail with a clear message rather than silently mapped to
+# an approximate dialect.
+_DIALECT_ALIASES = {
+    # PostgreSQL spellings
+    "postgresql": "postgres",
+    "pg": "postgres",
+    "psql": "postgres",
+    "pgsql": "postgres",
+    # MySQL family (MariaDB is wire/SQL compatible with MySQL in sqlglot)
+    "mariadb": "mysql",
+    # Microsoft SQL Server / Azure (all T-SQL based)
+    "mssql": "tsql",
+    "sqlserver": "tsql",
+    "sql-server": "tsql",
+    "t-sql": "tsql",
+    "transactsql": "tsql",
+    "azuresql": "tsql",
+    "synapse": "tsql",
+    # BigQuery spellings
+    "bq": "bigquery",
+    "gbq": "bigquery",
+    # Spark / SQLite / Oracle minor spellings
+    "spark3": "spark",
+    "sqlite3": "sqlite",
+    "ora": "oracle",
+}
+
+
+def normalize_dialect(dialect: str) -> str:
+    """Resolve a user-supplied dialect name to a sqlglot canonical dialect.
+
+    Accepts common aliases (for example ``postgresql`` for ``postgres``) and
+    validates the result against sqlglot so an unknown dialect fails early with
+    a clear, actionable message instead of a generic parser error later.
+    """
+
+    from sqlglot.dialects.dialect import Dialects
+
+    if not isinstance(dialect, str) or not dialect.strip():
+        raise ValueError("dialect must be a non-empty string")
+    key = dialect.strip().lower()
+    canonical = _DIALECT_ALIASES.get(key, key)
+    known = {value.value for value in Dialects if value.value}
+    if canonical not in known:
+        raise ValueError(
+            f"unknown SQL dialect {dialect!r}; supported values include "
+            "duckdb, postgres, mysql, snowflake, bigquery, redshift, tsql"
+        )
+    return canonical
+
 
 def _name(asset_id: str) -> str:
     return "node_" + hashlib.sha256(asset_id.encode()).hexdigest()[:16]

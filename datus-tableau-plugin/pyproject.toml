@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-tableau-plugin"
-version = "0.1.3"
+version = "0.1.4"
 description = "Synchronize Tableau dashboard sources and processing dependencies for DOSI-driven dashboard rebuilding"
 readme = "README.md"
 requires-python = ">=3.12"

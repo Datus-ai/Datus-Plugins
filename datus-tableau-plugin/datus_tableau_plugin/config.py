@@ -25,6 +25,8 @@ class Settings:
     verify_ssl: bool = True
     ca_bundle: str | None = None
     timeout: float = 60
+    serving_datasource: str = ""
+    serving_database_name: str = ""
     profile_name: str | None = None
 
     @classmethod
@@ -87,6 +89,12 @@ class Settings:
             raise ConfigError(
                 "site_content_url must be a string (empty for the default site)"
             )
+        serving_datasource = value("serving_datasource", "")
+        serving_database_name = value("serving_database_name", "")
+        if not isinstance(serving_datasource, str) or not isinstance(
+            serving_database_name, str
+        ):
+            raise ConfigError("serving_datasource and serving_database_name must be strings")
         return cls(
             server_url=base.rstrip("/"),
             site_content_url=site,
@@ -99,5 +107,7 @@ class Settings:
             verify_ssl=verify,
             ca_bundle=ca,
             timeout=timeout,
+            serving_datasource=serving_datasource,
+            serving_database_name=serving_database_name,
             profile_name=profile.get("name"),
         )
