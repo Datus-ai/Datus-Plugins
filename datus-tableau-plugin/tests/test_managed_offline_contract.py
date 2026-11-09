@@ -352,7 +352,6 @@ def test_version_manifest_flags_and_offline_permissions_match_managed_interface(
             "api call:*",
         ]
         assert "rebuild:*" in permissions["allow"]
-        assert "serving-target:*" in permissions["allow"]
         assert "sync inspect:*" in permissions["allow"]
         assert "plan:*" not in permissions["allow"]
         assert ":*" not in permissions["allow"]

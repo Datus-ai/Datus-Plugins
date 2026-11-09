@@ -1,4 +1,4 @@
-"""Behavior contracts for serving-target, context export-dashboard and api call."""
+"""Behavior contracts for context export-dashboard, api call and yaml output."""
 
 from __future__ import annotations
 
@@ -25,54 +25,9 @@ PROFILE = {
     "token_secret": "never-print",
     "api_version": "3.21",
 }
-SERVING_PROFILE = {
-    **PROFILE,
-    "serving_datasource": "warehouse",
-    "serving_database_name": "analytics",
-}
 
 
-# --- serving-target -------------------------------------------------------
-
-
-def test_serving_target_is_offline_and_reports_configured_datasource(
-    monkeypatch, capsys
-):
-    monkeypatch.setattr(
-        cli, "TableauClient", lambda settings: pytest.fail("serving-target connected")
-    )
-    assert main(["serving-target"], SERVING_PROFILE) == 0
-    captured = capsys.readouterr()
-    assert json.loads(captured.out) == {
-        "platform": "tableau",
-        "serving_datasource": "warehouse",
-        "serving_database_name": "analytics",
-    }
-    assert captured.err == ""
-
-
-def test_serving_target_defaults_to_empty_binding(monkeypatch, capsys):
-    monkeypatch.setattr(
-        cli, "TableauClient", lambda settings: pytest.fail("serving-target connected")
-    )
-    assert main(["serving-target"], PROFILE) == 0
-    assert json.loads(capsys.readouterr().out) == {
-        "platform": "tableau",
-        "serving_datasource": "",
-        "serving_database_name": "",
-    }
-
-
-def test_serving_target_supports_yaml_output(monkeypatch, capsys):
-    monkeypatch.setattr(
-        cli, "TableauClient", lambda settings: pytest.fail("serving-target connected")
-    )
-    assert main(["serving-target", "-o", "yaml"], SERVING_PROFILE) == 0
-    assert yaml.safe_load(capsys.readouterr().out) == {
-        "platform": "tableau",
-        "serving_datasource": "warehouse",
-        "serving_database_name": "analytics",
-    }
+# --- output formats -------------------------------------------------------
 
 
 def test_yaml_render_round_trips_tabular_and_scalar_payloads():

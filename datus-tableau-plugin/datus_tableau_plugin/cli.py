@@ -162,10 +162,6 @@ def build_parser() -> argparse.ArgumentParser:
     rebuild.add_argument("--bundle", required=True)
     rebuild.add_argument("--bindings", required=True)
     rebuild.add_argument("--metric-catalog", required=True)
-    serving = commands.add_parser(
-        "serving-target", help="show the Datus datasource bound to this Tableau Server"
-    )
-    _output(serving)
     context = commands.add_parser(
         "context", help="export dashboard sources into project context files"
     )
@@ -293,19 +289,6 @@ def main(argv: list[str], profile: dict) -> int:
                 else inspect_bundle(ns.bundle_path)
             )
             print(render(result, ns.output))
-            return 0
-        if ns.group == "serving-target":
-            settings = Settings.from_profile(profile)
-            print(
-                render(
-                    {
-                        "platform": "tableau",
-                        "serving_datasource": settings.serving_datasource,
-                        "serving_database_name": settings.serving_database_name,
-                    },
-                    ns.output,
-                )
-            )
             return 0
         snapshots = (ns.group == "sync" and ns.command == "run") or (
             ns.group == "context" and ns.command == "export-dashboard"

@@ -53,14 +53,6 @@ config_schema:
       type: number
       exclusiveMinimum: 0
       default: 60
-    serving_datasource:
-      type: string
-      default: ''
-      description: Optional Datus datasource name served by this Tableau Server
-    serving_database_name:
-      type: string
-      default: ''
-      description: Optional warehouse database name
   allOf:
   - if:
       properties:
@@ -166,8 +158,6 @@ commands:
     required: true
   - name: --metric-catalog
     required: true
-- name: serving-target
-  description: Show the Datus datasource bound to this Tableau Server
 - name: context
   description: Export dashboard sources into project context files
   subcommands:
@@ -206,7 +196,6 @@ permissions:
     - flows get:*
     - sync inspect:*
     - rebuild:*
-    - serving-target:*
     ask:
     - sync run:*
     - plan:*
@@ -228,7 +217,6 @@ permissions:
     - flows get:*
     - sync inspect:*
     - rebuild:*
-    - serving-target:*
     ask:
     - sync run:*
     - plan:*
