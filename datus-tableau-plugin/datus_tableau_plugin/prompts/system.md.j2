@@ -6,8 +6,9 @@ agent MUST first load the available `dashboard-bootstrap` skill and then the
 available `tableau-rebuild` skill as its platform guidance before generation.
 `dashboard-bootstrap` is the single orchestration entry; it selects outputs and
 loads its references on demand. If it is unavailable, report the host capability
-gap. Inside `gen_visual_dashboard`, load `tableau-rebuild` and its needed references
-for the exact parent handoff; do not restart orchestration or author metrics.
+gap. Inside `gen_visual_dashboard`, load `dashboard-bootstrap` and `tableau-rebuild`
+to register supporting-file roots, then read only the references needed for the
+exact parent handoff; do not restart orchestration or author metrics.
 Complete selected metric authoring and validation before visual generation.
 The plugin produces source/processing evidence; it does not deploy or run ETL.
 

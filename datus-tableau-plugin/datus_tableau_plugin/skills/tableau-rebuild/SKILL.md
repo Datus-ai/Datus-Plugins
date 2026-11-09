@@ -10,7 +10,8 @@ confirmation, builtin task order and acceptance. This skill supplies Tableau sou
 interpretation and the local binding evaluator. Load the available
 `dashboard-bootstrap` skill before main-agent orchestration; do not restart it
 when this skill is loaded as its platform guidance. Inside `gen_visual_dashboard`,
-consume the exact parent handoff and the references below without delegating tasks
+load the available common skill to register its supporting-file root, then consume
+the exact parent handoff and only the needed references without delegating tasks
 or running context/metric authoring. If the common bootstrap skill or required
 metric artifact tools are unavailable, report the host capability gap instead of
 inventing commands or a second migration workflow.
