@@ -202,8 +202,15 @@ datus-<name>-plugin/            # directory & PyPI distribution name
 
 ```bash
 datus plugin install src:./datus-<name>-plugin   # installs into ~/.datus/plugins/<name>/
-datus plugin pack -o ./dist                       # build a distributable wheelhouse .zip
+./pack-plugin.sh ./datus-tableau-plugin           # ZIP with dependencies, in plugin-build/
+./pack-all-plugins.sh                            # all plugins, with dependencies
 ```
+
+The packaging scripts include dependency wheels by default for offline
+installation. Use `--without-deps` explicitly for a smaller plugin-only ZIP that
+downloads dependencies during installation. `pack-plugin.sh` also accepts
+`-o <directory>`. Dependency wheels target the build machine's OS, CPU, and Python
+version: build in the matching Linux environment for a Linux server release.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full workspace setup, the manifest
 reference, and the release process.

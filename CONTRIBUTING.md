@@ -168,9 +168,16 @@ the oracle.
 
 ```bash
 datus plugin install src:./datus-<name>-plugin   # installs into ~/.datus/plugins/<name>/
-datus plugin pack -o ./dist                       # distributable wheelhouse .zip (--with-deps for offline)
+./pack-plugin.sh ./datus-<name>-plugin             # offline ZIP, including dependencies
+./pack-all-plugins.sh                             # offline ZIPs for every plugin
 datus plugin export <name>                        # re-materialize a .zip from an installed plugin
 ```
+
+Run the packaging scripts from the repository root. They include dependency
+wheels by default; `--without-deps` explicitly creates plugin-only ZIPs that need
+network access during installation. Dependency wheels target the build machine's
+OS, CPU, and Python version, so server release bundles must be built in an
+environment matching the deployment target.
 
 `datus plugin install` also accepts `pip:<requirement>`, `whl:<wheel>`,
 `git:<url>`, and `zip:<bundle>` sources. For a tight edit-run loop,
