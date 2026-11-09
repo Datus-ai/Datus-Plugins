@@ -386,3 +386,7 @@ discovery, without asking users to name skills or repeat a clear conversion requ
 skill on the host. Standalone discovery/synchronization and the offline evaluator
 retain their CLI behavior. Deploy one release consistently for commands, prompts
 and skills; an observed mismatch is reported instead of combining contracts.
+
+Version 0.1.9 packages the merged dashboard-bootstrap conversion workflow,
+including native SQL qualification and rebuild guidance that preserves Tableau
+date-part grouping and uses only source-declared units.

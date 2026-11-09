@@ -5,20 +5,22 @@ set -o pipefail
 
 usage() {
     cat <<'EOF'
-Usage: ./pack-all-plugins.sh [--with-deps]
+Usage: ./pack-all-plugins.sh [--without-deps]
 
 Pack every Datus plugin in this repository into plugin-build/.
 
 Options:
-  --with-deps  Include all dependency wheels for offline installation.
-  -h, --help   Show this help message.
+  --with-deps     Include all dependency wheels (the default).
+  --without-deps  Build plugin-only ZIPs; installation requires network access.
+  -h, --help      Show this help message.
 EOF
 }
 
-with_deps=false
+dependency_flag=--with-deps
 case "${1:-}" in
     "") ;;
-    --with-deps) with_deps=true ;;
+    --with-deps) ;;
+    --without-deps) dependency_flag=--without-deps ;;
     -h|--help)
         usage
         exit 0
@@ -69,11 +71,7 @@ failed=()
 for plugin_dir in "${plugin_dirs[@]}"; do
     relative_dir="${plugin_dir#"$repo_root"/}"
     echo "==> Packing ${relative_dir}"
-    if [[ "$with_deps" == true ]]; then
-        datus plugin pack "$plugin_dir" -o "$output_dir" --with-deps
-    else
-        datus plugin pack "$plugin_dir" -o "$output_dir"
-    fi
+    "$repo_root/pack-plugin.sh" "$plugin_dir" -o "$output_dir" "$dependency_flag"
     if (( $? != 0 )); then
         failed+=("$relative_dir")
     fi
