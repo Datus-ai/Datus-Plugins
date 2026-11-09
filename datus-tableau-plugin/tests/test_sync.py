@@ -472,7 +472,11 @@ def test_custom_sql_coverage_blocks_only_charts_in_its_consuming_workbook(
     for chart_id in ("chart:book1:Revenue", "chart:book1:Trend"):
         row = rows[chart_id]
         assert row["status"] == "blocked"
-        assert any("custom_sql_coverage" in reason for reason in row["reasons"])
+        assert any(
+            ("custom_sql_lineage_incomplete" if query_text else "custom_sql_coverage")
+            in reason
+            for reason in row["reasons"]
+        )
         assert row["tool_calls"] == []
         assert any(
             edge["from"] == chart_id
@@ -559,3 +563,114 @@ def test_unresolved_custom_sql_coverage_only_attaches_to_selected_charts(workspa
         asset["id"] in {"chart:book1:Trend", "chart:book2:Trend"}
         for asset in bundle["assets"]
     )
+
+
+def lineage_gap_bundle(workspace):
+    """Synchronize complete native SQL with an explicitly partial Catalog lineage."""
+    client = Client()
+    client.workbook_custom_sql = lambda identifier: [
+        {
+            "id": "lineage-query",
+            "name": "Custom SQL",
+            "query": "SELECT SUM(amount) AS revenue FROM sales",
+            "isUnsupportedCustomSql": True,
+            "database": {
+                "__typename": "DatabaseServer",
+                "id": "database-one",
+                "connectionType": "postgres",
+                "name": "analytics",
+                "hostName": "warehouse.example.test",
+                "port": 5432,
+            },
+        }
+    ]
+    result = sync_sources(client, dashboard_ids=["dashboard:book1:Overview"])
+    return result, assess_synced_bundle(result["output_dir"])
+
+
+def test_catalog_lineage_gap_uses_exact_native_sql_and_keeps_source_partial(workspace):
+    """Independent SQL and connection evidence cover only the Catalog lineage gap."""
+    result, (bundle, report) = lineage_gap_bundle(workspace)
+    assert result["status"] == "partial"
+    assert any(
+        issue["code"] == "custom_sql_lineage_incomplete" for issue in bundle["coverage"]
+    )
+    assert report["source_status"] == "partial"
+    assert report["summary"] == {"total": 1, "ready": 1, "blocked": 0}
+    evidence = report["charts"][0]["native_sql_evidence"][0]
+    assert evidence["source_status"] == "catalog_lineage_incomplete"
+    assert evidence["physical_identity"] == {
+        "type": "postgres",
+        "host": "warehouse.example.test",
+        "port": "5432",
+        "database": "analytics",
+    }
+    assert evidence["target_validation"] == "pending_metric_engine_trial"
+    assert report["validation"]["metric_engine_executed"] is False
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "sql",
+        "host",
+        "database",
+        "no_identity",
+        "native_sql_missing",
+        "second_connection",
+        "extra_gap",
+        "different_workbook",
+        "native_partial",
+        "write_sql",
+    ],
+)
+def test_catalog_lineage_gap_never_covers_missing_or_conflicting_evidence(
+    workspace, change
+):
+    """Incomplete lineage can proceed only with independent, exact native evidence."""
+    _, (bundle, _) = lineage_gap_bundle(workspace)
+    query = next(asset for asset in bundle["assets"] if asset["kind"] == "query")
+    dataset = next(asset for asset in bundle["assets"] if asset["kind"] == "dataset")
+    native = next(
+        record for record in bundle["queries"] if record["asset_id"] == dataset["id"]
+    )
+    if change == "sql":
+        native["text"] = "SELECT 42 AS revenue"
+    elif change == "host":
+        query["source"]["database"]["hostName"] = "other.example.test"
+    elif change == "database":
+        query["source"]["database"]["name"] = "other_database"
+    elif change == "no_identity":
+        query["source"]["database"] = {}
+    elif change == "native_sql_missing":
+        bundle["queries"].remove(native)
+    elif change == "second_connection":
+        dataset["definition"]["connections"].append(
+            {"class": "postgres", "server": "other.example.test", "dbname": "analytics"}
+        )
+    elif change == "extra_gap":
+        bundle["coverage"].append(
+            {
+                "asset_id": query["id"],
+                "code": "custom_sql_coverage",
+                "status": "partial",
+            }
+        )
+    elif change == "different_workbook":
+        dataset["source"]["workbook_luid"] = "book2"
+    elif change == "native_partial":
+        native["status"] = "partial"
+    elif change == "write_sql":
+        for record in bundle["queries"]:
+            record["text"] = "DELETE FROM sales"
+    chart_binding = binding()
+    chart_binding["charts"][0]["chart_id"] = "chart:book1:Revenue"
+    report = assess_rebuild(
+        bundle,
+        bindings=chart_binding,
+        metric_catalog=catalog(),
+        source_manifest_sha256="a" * 64,
+    )
+    assert report["status"] == "blocked"
+    assert report["charts"][0]["tool_calls"] == []
+    assert report["charts"][0]["native_sql_evidence"] == []

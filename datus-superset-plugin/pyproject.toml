@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "datus-superset-plugin"
-version = "0.1.0"
+version = "0.1.1"
 description = "Datus plugin for Apache Superset dashboards, charts, datasets, SQL Lab, governance, migration, and query export"
 readme = "README.md"
 requires-python = ">=3.12"

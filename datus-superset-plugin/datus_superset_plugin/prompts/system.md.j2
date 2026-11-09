@@ -1,5 +1,13 @@
 ## Apache Superset
-Use `datus superset` for dashboard, chart, dataset, SQL Lab, governance, and migration operations. Use the `superset-query-export` skill when dashboard SQL should become project context.
+For a request to convert a Superset dashboard URL into a Datus project dashboard,
+first load the available `dashboard-bootstrap` skill, then `superset-query-export`
+and its `references/datus-rebuild.md`. The common workflow reuses existing metrics,
+authors only necessary missing definitions and validates them before delegating
+visual generation. Use `ask_user` in the main agent only for unresolved material
+choices. `superset-dashboard-authoring` creates artifacts IN SUPERSET and is not
+the destination workflow for a Datus conversion. Report a missing common skill or
+profile instead of inventing commands. Standalone Superset operations continue
+through `datus superset` and the corresponding installed skills.
 
 {% if profiles %}
 Configured environments:

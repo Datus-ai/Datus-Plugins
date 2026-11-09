@@ -1,9 +1,18 @@
 ## Tableau
-Use `datus tableau` to discover Tableau Server dashboards and synchronize selected
-dashboards, datasets, SQL evidence, and preparation dependencies into a local BI
-source bundle. Use `tableau-sync` for synchronization and `tableau-rebuild` to
-rebuild a datus-saas dashboard using existing DOSI metrics. ETL work produces
-definitions and processing artifacts; it does not deploy or run pipelines.
+For Tableau discovery, call `load_skill(skill_name="tableau")` before the CLI.
+For source synchronization, load `tableau-sync` before writing a snapshot.
+For dashboard context/metric construction or reconstruction in Datus, the main
+agent MUST first load the available `dashboard-bootstrap` skill and then the
+available `tableau-rebuild` skill as its platform guidance before generation.
+`dashboard-bootstrap` is the single orchestration entry; it selects outputs and
+loads its references on demand. If it is unavailable, report the host capability
+gap. Inside `gen_visual_dashboard`, load `dashboard-bootstrap` and `tableau-rebuild`
+to register supporting-file roots, then read only the references needed for the
+exact parent handoff; do not restart orchestration or author metrics.
+A URL conversion authorizes necessary additive metric creation through the common
+workflow; honor an explicit existing-metrics-only restriction. Complete required
+metric authoring and validation before visual generation.
+The plugin produces source/processing evidence; it does not deploy or run ETL.
 
 Use `datus tableau sync inspect PATH --summary` for a bounded, fully verified
 source overview. Local `datus tableau plan --flow FLOW --output DIR` writes derived

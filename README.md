@@ -24,7 +24,7 @@ command surface and config schema may still change; see
 |---|---|:---:|---|:---:|
 | `datus airflow` | `datus-airflow-plugin` | `0.3.0` | Drive remote Apache Airflow 2.x/3.x over REST API v1/v2, with DAG deploy to S3 or a dags folder and per-profile DAG/command scoping | [↗](datus-airflow-plugin/README.md) |
 | `datus statsig` | `datus-statsig-plugin` | `0.1.0` | Read Statsig metrics & experiment results, author warehouse-native metric SQL, drive ETL ingestion (Console API) | [↗](datus-statsig-plugin/README.md) |
-| `datus tableau` | `datus-tableau-plugin` | `0.1.7` | Discover sites and dashboards, synchronize Tableau Server dashboards, datasets, source SQL and Prep dependencies into verified bundles; plan a DOSI-based datus-saas rebuild | [↗](datus-tableau-plugin/README.md) |
+| `datus tableau` | `datus-tableau-plugin` | `0.1.8` | Discover sites and dashboards, synchronize Tableau Server dashboards, datasets, source SQL and Prep dependencies into verified bundles; plan a DOSI-based datus-saas rebuild | [↗](datus-tableau-plugin/README.md) |
 | `datus eks` | `datus-eks-plugin` | `0.1.0` | Inspect Amazon EKS and authenticate `datus k8s` without the AWS CLI | [↗](datus-aws-plugins/datus-eks-plugin/README.md) |
 | `datus s3` | `datus-s3-plugin` | `0.1.0` | Browse and move S3 data (ls/stat/cat/cp/sync/rm/presign) and run S3 Select SQL | [↗](datus-aws-plugins/datus-s3-plugin/README.md) |
 | `datus glue` | `datus-glue-plugin` | `0.1.0` | Browse the Glue Data Catalog and run/monitor Glue crawlers and ETL jobs (with logs) | [↗](datus-aws-plugins/datus-glue-plugin/README.md) |

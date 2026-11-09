@@ -33,9 +33,13 @@ datus tableau sync inspect bi_sources/tableau/BUNDLE --summary
 ```
 
 Use exactly one selection mode. Repeat the ID flag for multiple selections.
-Inspect `sync run --help` for output and existing-bundle options. Default output
-is beneath `bi_sources/tableau/` in the project; an existing snapshot must not
-be replaced without an explicit `--overwrite` decision.
+Use `--output-root DIR` to select a workspace output root (default
+`bi_sources/tableau/`). `--overwrite` replaces an existing snapshot only when
+that replacement is authorized. Optional `--external-source FILE` is repeatable;
+`--source-bindings FILE` and `--dialect DIALECT` supply offline processing inputs.
+For a Datus conversion, follow the loaded `dashboard-bootstrap` manifest gate
+before synchronization. These examples and options provide the invocation
+contract; do not probe `sync run --help` before emitting that manifest.
 
 Read the command's returned output directory rather than guessing its slug.
 Inspect that bundle offline with `sync inspect` before consuming any files.
@@ -82,6 +86,9 @@ execute downloaded scripts, apply DDL or run pipeline jobs.
 
 Report successful, partial and failed objects separately, including unsupported
 semantics and remaining ETL dependencies. Source packages include definitions,
-not business extracts. Use `tableau-rebuild` for DOSI mapping, SQL-first processing
-artifacts and datus-saas dashboard generation. Synchronization does not by itself
+not business extracts. For requested reference SQL/metrics or Datus dashboard output, return the
+verified selection to `dashboard-bootstrap`, loading `tableau-rebuild` as platform
+guidance. The common workflow owns metric-before-visual ordering; the plugin owns
+DOSI binding/preflight and SQL-first processing contracts. A standalone sync stops
+after its source report. Synchronization does not by itself
 prove numerical correctness or completed SaaS migration.

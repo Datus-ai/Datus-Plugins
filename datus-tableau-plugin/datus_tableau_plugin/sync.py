@@ -307,6 +307,7 @@ def sync_sources(
                         "name": row.get("name") or str(row["id"]),
                         "source": {
                             "metadata_id": row["id"],
+                            "database": redact(row.get("database") or {}),
                         },
                         "definition": {"is_unsupported_custom_sql": unsupported},
                         "status": "ok" if usable and not unsupported else "partial",
@@ -334,8 +335,12 @@ def sync_sources(
                 if unsupported or not usable:
                     issue(
                         query_id,
-                        "custom_sql_coverage",
-                        "Custom SQL text is hidden or has unsupported lineage semantics",
+                        "custom_sql_lineage_incomplete"
+                        if usable
+                        else "custom_sql_coverage",
+                        "Tableau Catalog cannot fully resolve Custom SQL lineage; verify the exact native SQL and physical connection"
+                        if usable
+                        else "Custom SQL text is hidden or unavailable",
                         status="partial",
                     )
         except Exception:
