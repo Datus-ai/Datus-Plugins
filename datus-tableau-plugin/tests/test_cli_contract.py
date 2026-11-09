@@ -144,7 +144,7 @@ def test_sdk_exception_does_not_echo_credentials(monkeypatch, capsys):
     assert "private-value" not in capsys.readouterr().err
 
 
-def test_prompt_and_single_file_skills():
+def test_prompt_and_bundled_skills():
     manifest = yaml.safe_load((PKG / "datus-plugin.yml").read_text())
     env = Environment(loader=FileSystemLoader(PKG), undefined=StrictUndefined)
     template = env.get_template(manifest["system_prompt"])
@@ -174,10 +174,11 @@ def test_prompt_and_single_file_skills():
         "tableau-sync",
         "tableau-rebuild",
     }
-    assert all(
-        [p.name for p in directory.iterdir()] == ["SKILL.md"]
-        for directory in skill_dirs
-    )
+    assert all((directory / "SKILL.md").is_file() for directory in skill_dirs)
+    rebuild = PKG / "skills/tableau-rebuild"
+    for name in ("source-evidence.md", "dosi-rebuild.md"):
+        assert (rebuild / "references" / name).is_file()
+        assert f"references/{name}" in (rebuild / "SKILL.md").read_text()
     assert (
         "requires_mutable_config: true"
         in (PKG / "skills/tableau-setup/SKILL.md").read_text()

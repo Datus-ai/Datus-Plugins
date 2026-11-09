@@ -355,8 +355,7 @@ def test_version_manifest_flags_and_offline_permissions_match_managed_interface(
         assert "sync inspect:*" in permissions["allow"]
         assert "plan:*" not in permissions["allow"]
         assert ":*" not in permissions["allow"]
-    assert (
-        tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
-        == "0.1.6"
-    )
-    assert __version__ == "0.1.6"
+    declared_version = tomllib.loads((root / "pyproject.toml").read_text())["project"][
+        "version"
+    ]
+    assert declared_version == __version__

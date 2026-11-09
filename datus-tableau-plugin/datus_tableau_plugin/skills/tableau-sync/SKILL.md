@@ -82,6 +82,9 @@ execute downloaded scripts, apply DDL or run pipeline jobs.
 
 Report successful, partial and failed objects separately, including unsupported
 semantics and remaining ETL dependencies. Source packages include definitions,
-not business extracts. Use `tableau-rebuild` for DOSI mapping, SQL-first processing
-artifacts and datus-saas dashboard generation. Synchronization does not by itself
+not business extracts. For requested reference SQL/metrics or Datus dashboard output, return the
+verified selection to `dashboard-bootstrap`, loading `tableau-rebuild` as platform
+guidance. The common workflow owns metric-before-visual ordering; the plugin owns
+DOSI binding/preflight and SQL-first processing contracts. A standalone sync stops
+after its source report. Synchronization does not by itself
 prove numerical correctness or completed SaaS migration.
