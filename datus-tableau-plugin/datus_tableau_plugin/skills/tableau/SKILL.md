@@ -36,8 +36,12 @@ read-only. Use the server discovery steps below when remote definitions are need
    default to `--all`: list the projects, then the dashboards in the chosen
    project, present them and ask the user to pick. Use identifiers returned by
    discovery, not guessed names or Metadata IDs substituted for REST LUIDs.
-5. Load `tableau-rebuild` when the target is datus-saas. Existing DOSI definitions
-   govern target metrics; source calculations and SQL are evidence for a mapping.
+5. For context/metric generation or a datus-saas target, load the available
+   `dashboard-bootstrap` first, then `tableau-rebuild` as its Tableau guidance.
+   The common bootstrap owns requested outputs and the order of metric validation
+   before visual generation. Existing DOSI definitions govern target metrics;
+   source calculations and SQL are evidence. Inside the visual child, consume
+   the parent handoff without restarting main-agent orchestration.
 
 The plugin performs remote reads. Synchronization writes local files and uses
 the plugin's permission rules. It does not publish to Tableau or trigger ETL.

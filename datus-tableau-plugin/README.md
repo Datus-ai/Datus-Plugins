@@ -113,7 +113,7 @@ The plugin reads metadata and native definitions. It never publishes to Tableau,
 
 Metadata API must be enabled and accessible. Native download permissions are needed for complete layouts, calculations and processing definitions. Downloads exclude extracts where the API supports that option; packaged flow data is discarded during definition parsing. Unsupported transformations, hidden lineage and failed downloads are reported explicitly. A source bundle is not proof of complete runtime SQL recovery or numerical equivalence.
 
-Use the bundled `tableau-rebuild` skill to map source chart intent to existing DOSI metrics and generate a SaaS dashboard using the existing Datus artifact tools. Source SQL is evidence; it is never a silent fallback for an unmatched metric. Missing metrics, ambiguous source identity and unsupported calculations remain blocked in the mapping report.
+Use the common `dashboard-bootstrap` skill for requested context/metrics and Datus dashboard output. Load the bundled `tableau-rebuild` as platform guidance; its references keep Tableau source semantics and DOSI binding/preflight details with the plugin. The common workflow reuses existing metrics, or completes explicitly requested missing-metric authoring and validation before visual generation. Source SQL is evidence; it is never a silent fallback for an unmatched metric. Missing metrics, ambiguous source identity and unsupported calculations remain blocked in the mapping report.
 
 Native worksheet checks follow exact datasource-qualified field and column-instance
 bindings through used calculation dependencies, including worksheet-local fields.
@@ -256,9 +256,11 @@ formulas, chart layouts or row data are returned in the summary.
 
 ## DOSI-based SaaS rebuilding
 
-The `tableau-rebuild` skill guides source-chart interpretation, existing DOSI
-metric discovery, differences and missing dependencies, real metric-tool trial
-queries, render generation and the existing SaaS publishing workflow.
+The common `dashboard-bootstrap` owns output selection, metric-before-visual
+execution order and acceptance. The `tableau-rebuild` skill and plugin-local
+references supply native source interpretation, coverage rules and the DOSI
+binding/preflight contract. The existing visual agent owns metric-tool trials,
+render generation and finalization; publication uses the existing SaaS flow.
 
 Run its deterministic, read-only preflight through the managed CLI:
 
@@ -275,8 +277,8 @@ dashboard artifact. A catalogue must come from actual DOSI discovery with its
 real model revision; a project without that model remains blocked until a valid
 catalogue and target binding are provided.
 
-The skill includes complete input examples. Bindings pin the source manifest
-SHA256 and the discovered DOSI metric's full subject identity, datasource and
+The skill links `references/dosi-rebuild.md` for complete input examples. Bindings
+pin the source manifest SHA256 and the discovered DOSI metric's full subject identity, datasource and
 model revision. The helper prints proposed `save_metric_query_template` calls;
 the real Datus artifact tool owns compilation, query execution and captured
 model snapshots. `ready_for_metric_validation` means preflight passed, not that
@@ -373,3 +375,12 @@ Version 0.1.7 renames `auth_type` to `auth_mode` with the values `token`
 plugin, and makes it required. Existing profiles must replace `auth_type: pat`
 with `auth_mode: token` and `auth_type: password` with `auth_mode: login`;
 the credential field names are unchanged.
+
+Version 0.1.8 routes context/metric construction and Datus visual reconstruction
+through the host's single `dashboard-bootstrap` workflow. Tableau-specific source
+interpretation, coverage and evaluator input examples now load from plugin-local
+references. Explicit missing-metric generation completes before visual authoring;
+existing metric definitions are preserved. This requires the updated bootstrap
+skill on the host. Standalone discovery/synchronization and the offline evaluator
+retain their CLI behavior. Deploy one release consistently for commands, prompts
+and skills; an observed mismatch is reported instead of combining contracts.
