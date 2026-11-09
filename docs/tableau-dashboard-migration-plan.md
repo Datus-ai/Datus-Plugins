@@ -101,7 +101,7 @@ SQL 先做语法、方言、字段和依赖校验；有可用连接且运行环�
 ## 5. 实施顺序与验证
 
 1. 固定来源包契约与复杂 fixtures，覆盖 Tableau 工作簿、嵌入/发布数据源、Prep Flow、外部 SQL 加工及共享依赖；增加 schema/支持矩阵。
-2. 实现 Tableau 插件的认证、发现、同步和原生定义解析，以及 manifest、提示模板和技能。技能为 `tableau`、`tableau-setup`、`tableau-sync`、`tableau-rebuild`，setup 声明可变配置要求，其余技能只编排对应职责。
+2. 实现 Tableau 插件的认证、发现、同步和原生定义解析，以及 manifest、提示模板和技能。技能收敛为 `tableau`、`tableau-setup` 两个入口。setup 声明可变配置要求；同步、重建和语义指引放在 `tableau/references/` 下按需加载，通用编排交给 `dashboard-bootstrap`。
 3. 扩展 agent 的来源包消费、DOSI 映射、加工产物生成与 visual dashboard 重建；保持既有 Superset 导出流程兼容，为后续来源准备相同消费入口。
 4. 验证并补齐 backend/SaaS 对目标 artifact 的消费、模型快照、筛选和发布兼容性；已有功能直接复用，不新增第二套 dashboard 服务。
 5. 更新插件文档、安装说明与 lockfile，进行逐包测试和 wheel 资源检查；完成真实目标环境验收后才声明对应版本生产可用。
@@ -179,3 +179,15 @@ generatedInputs 的 loader actions 与 selectedFields 在 union 前生效，文�
 词法已丢失而明确阻断，不尝试恢复猜测精度。正式 dev 依赖声明 `duckdb>=1.4,<2`，本轮锁定并验证
 1.5.6；Ruff、format 与 diff whitespace 检查均通过。上述 25 个模型的合成执行与全量测试均使用
 同一正式项目环境，不包含真实业务数据验证或远端执行。
+
+## 2026-11-09：Tableau 技能入口收敛
+
+首版的四个技能收敛为两个：`tableau` 负责发现与平台适配，`tableau-setup`
+保持独立并保留 `requires_mutable_config: true`。原 `tableau-sync` 和
+`tableau-rebuild` 的操作指引迁入 `tableau/references/sync.md`、`rebuild.md`；
+`source-evidence.md`、`dosi-rebuild.md` 一并迁入同一已注册技能目录，按需读取。
+
+`dashboard-bootstrap` 继续负责输出选择、数据源匹配、指标策略、任务顺序和验收。
+Visual 子 Agent 加载 `tableau` 后只消费父任务交接和必要 references，不重新编排。
+插件 CLI、配置字段和权限规则保持不变。自定义节点若显式列出旧技能名，
+需替换为 `tableau`；覆盖 `tableau` 的通配模式无需调整。

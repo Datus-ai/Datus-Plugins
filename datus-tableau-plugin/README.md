@@ -98,10 +98,17 @@ both the `normal` and `auto` profiles; *ask* requires the user's approval.
 Nothing here writes to Tableau: there is no publish, delete, flow run or
 extract refresh, and `api call` only issues `GET`.
 
-The bundled skills (`tableau`, `tableau-setup`, `tableau-sync`,
-`tableau-rebuild`) make the agent ask rather than guess: it lists sites when
+The two bundled skills are `tableau` (discovery, synchronization and platform
+guidance) and `tableau-setup` (mutable profile configuration). The agent lists sites when
 none is configured, lists projects and then dashboards when you have not named
 one, and only uses `sync run --all` when you explicitly ask for the whole site.
+
+`tableau` loads its `references/sync.md`, `references/rebuild.md`,
+`references/source-evidence.md` and `references/dosi-rebuild.md` only as needed.
+The former `tableau-sync` and `tableau-rebuild` skill entry points are now these
+supporting references. Custom node skill lists naming either retired entry must
+use `tableau` instead; wildcard patterns covering `tableau` continue to work.
+`tableau-setup` retains its `requires_mutable_config: true` boundary.
 
 Offline processing uses the same managed CLI as server reads. `datus tableau plan`
 writes derived processing artifacts from a downloaded native flow, and
@@ -113,7 +120,7 @@ The plugin reads metadata and native definitions. It never publishes to Tableau,
 
 Metadata API must be enabled and accessible. Native download permissions are needed for complete layouts, calculations and processing definitions. Downloads exclude extracts where the API supports that option; packaged flow data is discarded during definition parsing. Unsupported transformations, hidden lineage and failed downloads are reported explicitly. A source bundle is not proof of complete runtime SQL recovery or numerical equivalence.
 
-Use the common `dashboard-bootstrap` skill for requested context/metrics and Datus dashboard output. Load the bundled `tableau-rebuild` as platform guidance; its references keep Tableau source semantics and DOSI binding/preflight details with the plugin. An explicit dashboard-URL conversion request enters the common workflow automatically, reuses existing metrics and completes necessary additive metric authoring and validation before visual generation. Source SQL is evidence; it is never a silent fallback for an unmatched metric. An existing-metrics-only request preserves that restriction; unresolved source identity, conflicting definitions and unsupported calculations remain visible in the mapping report.
+Use the common `dashboard-bootstrap` skill for requested context/metrics and Datus dashboard output. Load the bundled `tableau` skill and read its `references/rebuild.md` as platform guidance; its references keep Tableau source semantics and DOSI binding/preflight details with the plugin. An explicit dashboard-URL conversion request enters the common workflow automatically, reuses existing metrics and completes necessary additive metric authoring and validation before visual generation. Source SQL is evidence; it is never a silent fallback for an unmatched metric. An existing-metrics-only request preserves that restriction; unresolved source identity, conflicting definitions and unsupported calculations remain visible in the mapping report.
 
 Native worksheet checks follow exact datasource-qualified field and column-instance
 bindings through used calculation dependencies, including worksheet-local fields.
@@ -257,8 +264,8 @@ formulas, chart layouts or row data are returned in the summary.
 ## DOSI-based SaaS rebuilding
 
 The common `dashboard-bootstrap` owns output selection, metric-before-visual
-execution order and acceptance. The `tableau-rebuild` skill and plugin-local
-references supply native source interpretation, coverage rules and the DOSI
+execution order and acceptance. The `tableau` skill and its plugin-local
+rebuild references supply native source interpretation, coverage rules and the DOSI
 binding/preflight contract. The existing visual agent owns metric-tool trials,
 render generation and finalization; publication uses the existing SaaS flow.
 

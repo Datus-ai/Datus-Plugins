@@ -1,8 +1,3 @@
----
-name: tableau-sync
-description: Synchronize selected or all Tableau dashboards with chart metadata, dataset definitions, source SQL and ETL dependencies into a checked local source bundle
----
-
 # Synchronize Tableau Assets
 
 First confirm the site: `datus tableau status` must report `site_configured`
@@ -87,8 +82,8 @@ execute downloaded scripts, apply DDL or run pipeline jobs.
 Report successful, partial and failed objects separately, including unsupported
 semantics and remaining ETL dependencies. Source packages include definitions,
 not business extracts. For requested reference SQL/metrics or Datus dashboard output, return the
-verified selection to `dashboard-bootstrap`, loading `tableau-rebuild` as platform
-guidance. The common workflow owns metric-before-visual ordering; the plugin owns
+verified selection to `dashboard-bootstrap`, reading [rebuild.md](rebuild.md)
+for platform guidance. The common workflow owns metric-before-visual ordering; the plugin owns
 DOSI binding/preflight and SQL-first processing contracts. A standalone sync stops
 after its source report. Synchronization does not by itself
 prove numerical correctness or completed SaaS migration.

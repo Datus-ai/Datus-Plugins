@@ -173,15 +173,40 @@ def test_prompt_and_bundled_skills():
     assert {p.name for p in skill_dirs} == {
         "tableau",
         "tableau-setup",
-        "tableau-sync",
-        "tableau-rebuild",
     }
     assert all((directory / "SKILL.md").is_file() for directory in skill_dirs)
-    rebuild = PKG / "skills/tableau-rebuild"
-    for name in ("source-evidence.md", "dosi-rebuild.md"):
-        assert (rebuild / "references" / name).is_file()
-        assert f"references/{name}" in (rebuild / "SKILL.md").read_text()
-    assert (
-        "requires_mutable_config: true"
-        in (PKG / "skills/tableau-setup/SKILL.md").read_text()
-    )
+    for directory in skill_dirs:
+        metadata = yaml.safe_load(
+            (directory / "SKILL.md").read_text().split("---", 2)[1]
+        )
+        assert metadata["name"] == directory.name
+        assert bool(metadata.get("requires_mutable_config")) == (
+            directory.name == "tableau-setup"
+        )
+
+
+def test_tableau_supporting_references_are_reachable_within_one_skill_root():
+    """All platform guidance must be readable under the single registered root."""
+    root = (PKG / "skills/tableau").resolve()
+    entry = root / "SKILL.md"
+    pending = [entry]
+    visited = set()
+    while pending:
+        path = pending.pop()
+        if path in visited:
+            continue
+        visited.add(path)
+        for link in re.findall(r"\[[^\]]+\]\(([^)]+)\)", path.read_text()):
+            if "://" in link or link.startswith("#"):
+                continue
+            target = (path.parent / link.split("#", 1)[0]).resolve()
+            assert target.is_relative_to(root), (path, link)
+            assert target.is_file(), (path, link)
+            pending.append(target)
+    assert visited == {entry, *root.glob("references/*.md")}
+    assert {p.name for p in visited - {entry}} == {
+        "sync.md",
+        "rebuild.md",
+        "source-evidence.md",
+        "dosi-rebuild.md",
+    }
