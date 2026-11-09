@@ -1,12 +1,14 @@
 ## Tableau
-For Tableau discovery, call `load_skill(skill_name="tableau")` before the CLI.
-For source synchronization, load `tableau-sync` before writing a snapshot.
+For Tableau discovery, synchronization or rebuild guidance, call
+`load_skill(skill_name="tableau")` before the CLI. Read its `references/sync.md`
+before writing a source snapshot.
 For dashboard context/metric construction or reconstruction in Datus, the main
 agent MUST first load the available `dashboard-bootstrap` skill and then the
-available `tableau-rebuild` skill as its platform guidance before generation.
+available `tableau` skill and its `references/rebuild.md` as platform guidance
+before generation.
 `dashboard-bootstrap` is the single orchestration entry; it selects outputs and
 loads its references on demand. If it is unavailable, report the host capability
-gap. Inside `gen_visual_dashboard`, load `dashboard-bootstrap` and `tableau-rebuild`
+gap. Inside `gen_visual_dashboard`, load `dashboard-bootstrap` and `tableau`
 to register supporting-file roots, then read only the references needed for the
 exact parent handoff; do not restart orchestration or author metrics.
 A URL conversion authorizes necessary additive metric creation through the common

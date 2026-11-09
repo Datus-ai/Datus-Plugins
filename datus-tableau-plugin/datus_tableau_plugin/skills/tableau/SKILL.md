@@ -1,6 +1,6 @@
 ---
 name: tableau
-description: Discover Tableau Server dashboards, datasets and Prep flows, inspect local BI source bundles, and choose the Tableau synchronization or DOSI rebuild workflow
+description: Discover and synchronize Tableau dashboards and source bundles, and interpret Tableau semantics and DOSI bindings for dashboard-bootstrap conversions into Datus dashboards
 ---
 
 # Tableau Server
@@ -8,6 +8,33 @@ description: Discover Tableau Server dashboards, datasets and Prep flows, inspec
 Use the configured Tableau profile from the Plugins section. Datus consumes
 `--profile` before the first subcommand: `datus tableau --profile prod status`.
 Do not place credentials in command arguments or echo resolved profile secrets.
+
+## Select the requested work
+
+- For source synchronization or export, read [references/sync.md](references/sync.md)
+  before writing a snapshot. A standalone synchronization ends with its source report.
+- For context/metric construction or conversion into Datus, the main agent first
+  loads the available `dashboard-bootstrap`, then reads
+  [references/rebuild.md](references/rebuild.md) for Tableau guidance. The common
+  workflow owns output selection, confirmation, metric policy and task order.
+  Resolve a supplied URL using [references/source-evidence.md](references/source-evidence.md)
+  before asking for choices already encoded in it. A bounded conversion authorizes
+  necessary additive metrics; honor an explicit existing-metrics-only restriction.
+- For native evidence interpretation, read
+  [references/source-evidence.md](references/source-evidence.md). For a visual
+  destination, also read [references/dosi-rebuild.md](references/dosi-rebuild.md)
+  for concrete catalogue/binding formats and the read-only rebuild preflight.
+- Inside `gen_visual_dashboard`, load `tableau` and the available common skill to
+  register their supporting-file roots. Read only the references needed for the
+  exact parent handoff at the returned skill_locations. Do not restart main-agent
+  orchestration or author metrics. Return blockers to the parent for clarification.
+
+Use only the references needed for the selected work. For Datus context or visual
+output, report a missing common workflow or required target tool as a capability
+gap. For profile configuration, use `tableau-setup` only when mutable configuration
+is available.
+
+## Local sources and server discovery
 
 For existing local sources, run `datus tableau sync inspect PATH --summary`,
 `datus tableau plan --flow FLOW --output DIR`, or `datus tableau rebuild` through
@@ -31,17 +58,18 @@ read-only. Use the server discovery steps below when remote definitions are need
    `datasources list`, and `flows list`. Use their `get` commands for details and
    `--help` for supported filters. A workbook can contain several dashboards;
    a worksheet or generic view is not automatically a dashboard.
-4. Load `tableau-sync` for a selected dashboard, project, or whole-site snapshot.
+4. Read [references/sync.md](references/sync.md) for a selected dashboard,
+   project, or whole-site snapshot.
    When the user has not named a project or dashboard, do not guess and do not
    default to `--all`: list the projects, then the dashboards in the chosen
    project, present them and ask the user to pick. Use identifiers returned by
    discovery, not guessed names or Metadata IDs substituted for REST LUIDs.
-5. For context/metric generation or a datus-saas target, load the available
-   `dashboard-bootstrap` first, then `tableau-rebuild` as its Tableau guidance.
-   The common bootstrap owns requested outputs and the order of metric validation
-   before visual generation. Existing DOSI definitions govern target metrics;
-   source calculations and SQL are evidence. Inside the visual child, consume
-   the parent handoff without restarting main-agent orchestration.
+
+Do not repeat choices already supplied or uniquely resolved from the URL.
+For context/metric generation or a Datus target, follow the common bootstrap's
+manifest gate before synchronization and finish required metric validation before
+visual generation. Existing DOSI definitions govern target metrics; source
+calculations and SQL are evidence.
 
 The plugin performs remote reads. Synchronization writes local files and uses
 the plugin's permission rules. It does not publish to Tableau or trigger ETL.

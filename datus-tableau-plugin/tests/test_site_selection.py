@@ -315,8 +315,8 @@ def test_skills_require_user_choice_for_site_project_and_dashboard():
     entry = (PKG / "skills/tableau/SKILL.md").read_text()
     assert "sites list" in entry and "--site" in entry
     assert "ask the user to pick" in entry
-    sync = (PKG / "skills/tableau-sync/SKILL.md").read_text()
+    sync = (PKG / "skills/tableau/references/sync.md").read_text()
     assert "projects list" in sync and "dashboards list --project-id" in sync
     assert "Only use `--all` when the user explicitly asks" in sync
-    rebuild = (PKG / "skills/tableau-rebuild/SKILL.md").read_text()
+    rebuild = (PKG / "skills/tableau/references/rebuild.md").read_text()
     assert "present the choices and ask" in rebuild
