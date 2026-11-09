@@ -20,6 +20,27 @@ not establish the query. LOD, table/window calculations, cross-source relations,
 filter order and row-security semantics need supported evidence; keep unsupported
 or unresolved semantics as blockers instead of approximating them.
 
+Inspect `definition.worksheet` for the actual `column-instance` mappings and
+pane axis bindings when the projected rows/columns are insufficient. A bounded
+projection of the selected JSON/XML tree is preferable to repeated full reads
+or regex guesses about XML structure. Preserve these distinctions explicitly:
+
+- A discrete/ordinal `Month` date-part instance (for example `mn:order_date:ok`)
+  groups January across years unless a separate year field also participates.
+  It is not a year-month date value or `metric_time` with month truncation.
+  Record the exact calendar-part projection and required numeric ordering;
+  have `semantic_modeling` author a supported month-of-year dimension when
+  missing. Do not replace it with year-month buckets, even when totals agree.
+  Carry calendar/week-start/timezone evidence for other date parts; unresolved
+  fiscal or week semantics remain blockers. See [Tableau date levels](https://help.tableau.com/current/pro/desktop/en-us/dates_levels.htm).
+- A shelf expression containing `+` is not by itself evidence of an arithmetic
+  metric. Inspect the worksheet's panes and their `y-axis-name` references: two
+  separately bound aggregate axes retain their individual measures. Do not
+  manufacture a sales-plus-profit metric from shelf concatenation.
+- Preserve declared units; when no currency code/unit is evidenced, mark it
+  unknown and omit unsupported currency metadata/formatting. Do not infer USD
+  from sales/profit labels, a sample model, locale or a currency symbol.
+
 Generated geographical fields are visualization metadata, not physical warehouse
 columns. A proposed map-to-bars redesign or sum-to-independent-series change is a
 reported difference subject to the common scope/semantic policy. Do not create
