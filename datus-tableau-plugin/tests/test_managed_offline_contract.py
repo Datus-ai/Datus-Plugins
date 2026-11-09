@@ -358,6 +358,6 @@ def test_version_manifest_flags_and_offline_permissions_match_managed_interface(
         assert ":*" not in permissions["allow"]
     assert (
         tomllib.loads((root / "pyproject.toml").read_text())["project"]["version"]
-        == "0.1.4"
+        == "0.1.5"
     )
-    assert __version__ == "0.1.4"
+    assert __version__ == "0.1.5"

@@ -1,3 +1,3 @@
 """Independent Tableau source plugin. Importing it performs no I/O."""
 
-__version__ = "0.1.4"
+__version__ = "0.1.5"
