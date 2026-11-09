@@ -13,11 +13,6 @@ config_schema:
     server_url:
       type: string
       description: Tableau Server origin, e.g. https://tableau.example.test
-    site_content_url:
-      type: string
-      description: Site content URL as shown in Tableau URLs (not the name or REST LUID).
-        Empty string = the default site. Leave unset to discover sites with `sites list`
-        and choose one, or override per command with --site.
     auth_type:
       type: string
       enum:
@@ -39,6 +34,11 @@ config_schema:
       type: string
       x-secret: true
       description: ${TABLEAU_PASSWORD}
+    site_content_url:
+      type: string
+      description: Site content URL as shown in Tableau URLs (not the name or REST LUID).
+        Empty string = the default site. Leave unset to discover sites with `sites list`
+        and choose one, or override per command with --site.
     api_version:
       type: string
       default: auto
