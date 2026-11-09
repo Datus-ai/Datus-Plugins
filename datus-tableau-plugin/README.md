@@ -397,3 +397,8 @@ and skills; an observed mismatch is reported instead of combining contracts.
 Version 0.1.9 packages the merged dashboard-bootstrap conversion workflow,
 including native SQL qualification and rebuild guidance that preserves Tableau
 date-part grouping and uses only source-declared units.
+
+Version 0.1.10 consolidates the bundled skills into `tableau` and `tableau-setup`.
+Synchronization and rebuild guidance now load on demand from `tableau/references/`.
+Custom node skill lists that name `tableau-sync` or `tableau-rebuild` must use
+`tableau` instead; the setup skill retains its mutable-configuration boundary.
