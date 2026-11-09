@@ -1,0 +1,225 @@
+manifest_version: 1
+description: Synchronize Tableau dashboards, datasets, SQL and ETL definitions for
+  DOSI-driven SaaS rebuilding
+cli: datus_tableau_plugin.cli:main
+system_prompt: prompts/system.md.j2
+skills: skills
+config_schema:
+  type: object
+  required:
+  - server_url
+  - auth_mode
+  additionalProperties: false
+  properties:
+    server_url:
+      type: string
+      description: Tableau Server origin, e.g. https://tableau.example.test
+    auth_mode:
+      type: string
+      enum:
+      - token
+      - login
+      default: token
+      description: token (Personal Access Token) or login (username/password); Tableau Cloud and MFA accept only token
+    token_name:
+      type: string
+      description: PAT name, required when auth_mode is token
+    token_secret:
+      type: string
+      x-secret: true
+      description: ${TABLEAU_TOKEN_SECRET}
+    username:
+      type: string
+      description: Server account, required when auth_mode is login
+    password:
+      type: string
+      x-secret: true
+      description: ${TABLEAU_PASSWORD}
+    site_content_url:
+      type: string
+      description: Site content URL as shown in Tableau URLs (not the name or REST LUID).
+        Empty string = the default site. Leave unset to discover sites with `sites list`
+        and choose one, or override per command with --site.
+    api_version:
+      type: string
+      default: auto
+      pattern: ^(auto|\d+\.\d+)$
+    verify_ssl:
+      type: boolean
+      default: true
+    ca_bundle:
+      type: string
+      description: Optional CA bundle certificate file path
+    timeout:
+      type: number
+      exclusiveMinimum: 0
+      default: 60
+  allOf:
+  - if:
+      properties:
+        auth_mode:
+          const: login
+      required:
+      - auth_mode
+    then:
+      required:
+      - username
+      - password
+    else:
+      required:
+      - token_name
+      - token_secret
+commands:
+- name: status
+  description: Check authentication, API version, Metadata availability and whether a site is configured
+  args:
+  - name: --site
+- name: sites
+  description: Discover sites to choose or switch site_content_url
+  subcommands:
+  - name: list
+    description: List sites visible to this account; requires Server Administrator
+    args: []
+- name: projects
+  subcommands:
+  - name: list
+    args: []
+- name: workbooks
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: dashboards
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: datasources
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: flows
+  subcommands:
+  - name: list
+    args:
+    - name: --project-id
+  - name: get
+    args:
+    - name: id
+      required: true
+- name: sync
+  subcommands:
+  - name: run
+    description: Synchronize selected definitions and processing artifacts; does not
+      execute ETL
+    args:
+    - name: --dashboard-id
+    - name: --project-id
+    - name: --all
+    - name: --output-root
+    - name: --overwrite
+    - name: --external-source
+    - name: --dialect
+    - name: --source-bindings
+  - name: inspect
+    description: Verify source bundle checksums and schema offline
+    args:
+    - name: bundle_path
+      required: true
+    - name: --summary
+- name: plan
+  description: Generate offline native-flow derived SELECT models and checked artifacts; no login or execution
+  args:
+  - name: --flow
+    required: true
+  - name: --flow-id
+  - name: --source-bindings
+  - name: --output
+    required: true
+  - name: --dialect
+- name: rebuild
+  description: Read-only source-to-DOSI binding preflight; prints proposed artifact tool calls without executing them
+  args:
+  - name: --bundle
+    required: true
+  - name: --bindings
+    required: true
+  - name: --metric-catalog
+    required: true
+- name: context
+  description: Export dashboard sources into project context files
+  subcommands:
+  - name: export-dashboard
+    description: Snapshot one dashboard's reviewable sources into the project workspace; does not execute ETL
+    args:
+    - name: dashboard_id
+      required: true
+    - name: --output-root
+    - name: --overwrite
+    - name: --external-source
+    - name: --source-bindings
+    - name: --dialect
+- name: api
+  description: Read-only guarded access to additional Tableau REST endpoints
+  subcommands:
+  - name: call
+    args:
+    - name: path
+      required: true
+    - name: --param
+permissions:
+  normal:
+    allow:
+    - status
+    - status:*
+    - sites list:*
+    - projects list:*
+    - workbooks list:*
+    - workbooks get:*
+    - dashboards list:*
+    - dashboards get:*
+    - datasources list:*
+    - datasources get:*
+    - flows list:*
+    - flows get:*
+    - sync inspect:*
+    - rebuild:*
+    ask:
+    - sync run:*
+    - plan:*
+    - context export-dashboard:*
+    - api call:*
+  auto:
+    allow:
+    - status
+    - status:*
+    - sites list:*
+    - projects list:*
+    - workbooks list:*
+    - workbooks get:*
+    - dashboards list:*
+    - dashboards get:*
+    - datasources list:*
+    - datasources get:*
+    - flows list:*
+    - flows get:*
+    - sync inspect:*
+    - rebuild:*
+    ask:
+    - sync run:*
+    - plan:*
+    - context export-dashboard:*
+    - api call:*

@@ -1,0 +1,29 @@
+{
+  "datasources": [
+    {
+      "id": "edfdad13-e6cd-12e7-ba05-c011f5b52741",
+      "luid": "3c19424e-f418-441e-b634-1ae535e25996",
+      "name": "Datus_E2E_Disposable_Prep_Output_20261107"
+    }
+  ],
+  "flows": [
+    {
+      "id": "c58bad47-3010-d050-1574-8b2a9a5b6008",
+      "luid": "1b7d9207-23ef-42ff-823f-20041d19a348",
+      "name": "Datus_E2E_Disposable_Prep_20261107"
+    }
+  ],
+  "tables": [
+    {
+      "connectionType": "hyper",
+      "fullName": "[Extract].[Extract]",
+      "id": "f4e38a26-e9e0-25bc-39b5-0b33ea7b8d2e",
+      "name": "Extract"
+    }
+  ],
+  "workbook": {
+    "id": "4fcaceb0-95d2-c893-e1b3-47e47f1dec1a",
+    "luid": "0ca853bf-bc1f-481c-aad9-a78b2f91e9f8",
+    "name": "Datus_E2E_012_Prep_Workbook_20261107"
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "type": "object",
+  "required": ["assets", "dependencies", "queries", "coverage"],
+  "$defs": {
+    "status": {"enum": ["ok", "partial", "error", "unsupported"]},
+    "id": {"type": "string", "minLength": 1}
+  },
+  "properties": {
+    "assets": {"type": "array", "items": {"type": "object", "required": ["id", "kind", "name", "source", "definition", "status"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "kind": {"enum": ["workbook", "dashboard", "chart", "dataset", "transform", "query", "external_source"]},
+      "name": {"type": "string"}, "source": {"type": "object"}, "definition": {"type": "object"}, "status": {"$ref": "#/$defs/status"}
+    }}},
+    "dependencies": {"type": "array", "items": {"type": "object", "required": ["from", "to", "relation"], "properties": {
+      "from": {"$ref": "#/$defs/id"}, "to": {"$ref": "#/$defs/id"}, "relation": {"type": "string"}
+    }}},
+    "queries": {"type": "array", "items": {"type": "object", "required": ["id", "asset_id", "origin", "language", "text", "status"], "properties": {
+      "id": {"$ref": "#/$defs/id"}, "asset_id": {"$ref": "#/$defs/id"}, "origin": {"enum": ["source", "derived", "target"]},
+      "language": {"type": "string"}, "text": {"type": "string"}, "file": {"type": "string"}, "status": {"$ref": "#/$defs/status"}
+    }}},
+    "coverage": {"type": "array", "items": {"type": "object", "required": ["asset_id", "status", "code", "message"], "properties": {
+      "asset_id": {"$ref": "#/$defs/id"}, "status": {"$ref": "#/$defs/status"}, "code": {"type": "string"}, "message": {"type": "string"}
+    }}}
+  }
+}

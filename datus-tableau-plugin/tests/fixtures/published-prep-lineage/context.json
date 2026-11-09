@@ -1,0 +1,118 @@
+{
+  "source": {
+    "server_url": "https://prod-apsoutheast-b.online.tableau.com",
+    "site_content_url": "louisliu-6562d45ba2"
+  },
+  "selection": {
+    "all": false,
+    "dashboard_ids": [],
+    "project_ids": [
+      "9a740325-9694-4c4d-9bed-ce224f9b7fc3"
+    ]
+  },
+  "rest": {
+    "28f38d5c-cc2e-4717-a203-effb2f2ec5d6": {
+      "id": "28f38d5c-cc2e-4717-a203-effb2f2ec5d6",
+      "content_url": "Datus_E2E_Disposable_CustomSQL_Extract_20261107",
+      "connections": [
+        {
+          "connection_type": "mysql",
+          "datasource_id": "28f38d5c-cc2e-4717-a203-effb2f2ec5d6",
+          "id": "929511f3-219a-480e-bf8d-6d8fadaaeca9",
+          "server_address": "ensembldb.ensembl.org",
+          "server_port": "3306"
+        }
+      ]
+    },
+    "3c19424e-f418-441e-b634-1ae535e25996": {
+      "id": "3c19424e-f418-441e-b634-1ae535e25996",
+      "content_url": "Datus_E2E_Disposable_Prep_Output_20261107",
+      "connections": [
+        {
+          "connection_type": "hyper",
+          "datasource_id": "3c19424e-f418-441e-b634-1ae535e25996",
+          "id": "beb6d6c5-1381-4065-b8d3-b7766f0d69e3",
+          "server_address": ""
+        }
+      ]
+    },
+    "1b7d9207-23ef-42ff-823f-20041d19a348": {
+      "id": "1b7d9207-23ef-42ff-823f-20041d19a348",
+      "content_url": null,
+      "connections": [
+        {
+          "connection_type": "tableau-server-site",
+          "id": "2f87bfae-e8be-41d3-af3d-b5e9e35161c9",
+          "server_address": "https://prod-apsoutheast-b.online.tableau.com/#/site/louisliu-6562d45ba2"
+        },
+        {
+          "connection_type": "textscan",
+          "id": "ea23fce3-19ea-4628-af23-75349d220ffb",
+          "server_address": ""
+        },
+        {
+          "connection_type": "textscan",
+          "id": "6403d989-1014-4a98-8a69-8510a685285a",
+          "server_address": ""
+        }
+      ]
+    }
+  },
+  "bindings": {
+    "transform:1b7d9207-23ef-42ff-823f-20041d19a348:98d1432e-1201-4953-86b6-872a0a660bd6": {
+      "table": "demo_regions",
+      "columns": [
+        "Region",
+        "Market"
+      ]
+    },
+    "transform:1b7d9207-23ef-42ff-823f-20041d19a348:e31f721a-0392-47de-baeb-5d3789cca327": {
+      "table": "demo_orders",
+      "columns": [
+        "OrderId",
+        "Region",
+        "Amount",
+        "Cost",
+        "Quantity",
+        "Status",
+        "OrderDate"
+      ]
+    }
+  },
+  "original_coverage": [
+    {
+      "asset_id": "external_source:table:f4e38a26-e9e0-25bc-39b5-0b33ea7b8d2e",
+      "code": "external_definition_required",
+      "message": "Physical table identity is known; its producing ETL definition has not been supplied",
+      "status": "partial"
+    },
+    {
+      "asset_id": "external:528121ee2b2b1704afcf",
+      "code": "external_etl_unresolved",
+      "message": "Physical table identity is known; its upstream ETL definition has not been supplied.",
+      "status": "partial"
+    },
+    {
+      "asset_id": "workbook:0ca853bf-bc1f-481c-aad9-a78b2f91e9f8",
+      "code": "lineage_binding_unresolved",
+      "message": "Upstream flows is known at workbook level but its selected chart/dataset binding needs explicit resolution",
+      "status": "partial"
+    },
+    {
+      "asset_id": "chart:0ca853bf-bc1f-481c-aad9-a78b2f91e9f8:Sheet 1",
+      "code": "lineage_binding_unresolved",
+      "message": "Upstream flows is known at workbook level but its selected chart/dataset binding needs explicit resolution",
+      "status": "partial"
+    }
+  ],
+  "original_manifest_sha256": "bf23f88b4487fdb49138f8c69ca77d5fe7d5de461978662937a2764a7a63986d",
+  "native_and_metadata_sha256": {
+    "metadata/84ec1af82c5579101b523c3c.json": "96bf16d6d4ca80e44489799fa5f4598c43c701dc639b0c49083423123ac90815",
+    "metadata/a081623cfccb7cb34091b169.json": "a73655764f46b66828a6865e24d43e9caf101831c0564dc7d6c9f1be8e31ba6d",
+    "native/56882102fb59515d679e0f27.xml": "e51f0a680ce5a8ef2b5fa0f12ef3edb08b66a1864b5fe27600d0b4f0dffcb6d3",
+    "native/7291cb570101a8fd1a113a6e.xml": "fcc3d846508ff1283f713fdcb8b7fc26b83e2d73c8028dbb1cedd8da3155bca3",
+    "native/9bae0927ab6123a141ca3ad8.xml": "c2faf2b45d4a917083608ada6b159b345628fde4ba2a7c66c669dcb876fe7a10",
+    "native/c45d47fdab2542f158f184a5.xml": "c93983da586aaf3f6097ce0302f4b4d7a6857781893a6a28ad36d241a9fbc3e5",
+    "native/ea287d338b5ec4437a0f1016.xml": "bed812f433acc59d6b9ebc3224c6ce65112a65b9321be57f1ed85fc49717546f"
+  }
+}

@@ -1,0 +1,42 @@
+## Tableau
+Use `datus tableau` to discover Tableau Server dashboards and synchronize selected
+dashboards, datasets, SQL evidence, and preparation dependencies into a local BI
+source bundle. Use `tableau-sync` for synchronization and `tableau-rebuild` to
+rebuild a datus-saas dashboard using existing DOSI metrics. ETL work produces
+definitions and processing artifacts; it does not deploy or run pipelines.
+
+Use `datus tableau sync inspect PATH --summary` for a bounded, fully verified
+source overview. Local `datus tableau plan --flow FLOW --output DIR` writes derived
+SELECT models and reports; `datus tableau rebuild --bundle ... --bindings ...
+--metric-catalog ...` prints a DOSI preflight. These managed offline commands do not
+require Tableau authentication. Target metric SQL/results still require actual
+DOSI discovery and successful artifact-tool trial queries.
+
+`datus tableau context export-dashboard DASHBOARD_ID` snapshots one dashboard's
+reviewable sources into the project workspace (under `reference_sql/tableau`),
+mirroring the other BI plugins. `datus tableau api call PATH --param KEY=VALUE`
+is a read-only, same-origin escape hatch for untyped REST resources the typed
+commands do not cover; it never mutates server state.
+
+{% if profiles %}
+Configured environments:
+{% for name, cfg in profiles.items() %}
+- {{ name }}: {{ cfg.get("server_url", "?") }}; site={% if cfg.get("site_content_url") is none %}NOT CONFIGURED{% else %}{{ cfg.get("site_content_url") or "default" }}{% endif %}; auth={{ cfg.get("auth_mode", "?") }}; api={{ cfg.get("api_version", "auto") }}
+{% endfor %}
+If a profile's site is NOT CONFIGURED, site-scoped commands refuse to run. First run
+`datus tableau sites list`, present the sites to the user and let them choose; then
+pass `--site CONTENT_URL` on each command or save `site_content_url` in the profile
+(an empty string means the default site). The user may switch sites at any time
+with `--site`.
+Metadata and download permissions determine coverage. Inspect the bundle before
+using it; incomplete lineage, unsupported calculations, and missing upstream ETL
+must remain explicit. Never invent source SQL or silently reuse it as a DOSI query.
+{% else %}
+Installed but not configured.
+{% if config_mutable %}
+Run `tableau-setup` to configure a Tableau Server profile.
+{% else %}
+Configuration is managed by the deployment administrator; ask them to configure
+the Tableau Server profile.
+{% endif %}
+{% endif %}

@@ -1,0 +1,26 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "datus-tableau-plugin"
+version = "0.1.7"
+description = "Synchronize Tableau dashboard sources and processing dependencies for DOSI-driven dashboard rebuilding"
+readme = "README.md"
+requires-python = ">=3.12"
+license = "Apache-2.0"
+authors = [{name = "Datus"}]
+dependencies = ["tableauserverclient>=0.38,<1", "defusedxml>=0.7", "jsonschema>=4", "sqlglot>=26,<31"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "Jinja2>=3.1", "PyYAML>=6", "build>=1.2", "duckdb>=1.4,<2"]
+
+[project.entry-points."datus.plugins"]
+tableau = "datus_tableau_plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["datus_tableau_plugin"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
