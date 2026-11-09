@@ -16,6 +16,15 @@ or running context/metric authoring. If the common bootstrap skill or required
 metric artifact tools are unavailable, report the host capability gap instead of
 inventing commands or a second migration workflow.
 
+## Natural-language URL conversion
+
+A request to convert a Tableau dashboard URL into a Datus project dashboard is
+sufficient output intent: load the common bootstrap and follow its bounded
+execution authorization. Resolve the URL with
+[references/source-evidence.md](references/source-evidence.md) before asking for
+project/dashboard choices already encoded in it. Clarify only remaining material
+ambiguities through main-agent `ask_user`; a child returns blockers to its parent.
+
 ## Source selection and verification
 
 - For unsynchronized sources, load `tableau-sync`. Honor the supplied profile,
@@ -37,9 +46,9 @@ inventing commands or a second migration workflow.
 
 Follow the selected `dashboard-bootstrap` outputs. A source-only request does not
 create a Datus dashboard; a rebuild request does not automatically index SQL or
-create metrics. Default to existing DOSI definitions for visual reconstruction.
-When the user explicitly requests metrics, the common workflow may run
-`semantic_modeling` to inspect/reuse and create missing selected metrics. Complete
+create metrics. Conversion into Datus defaults to `create_missing`: reuse existing definitions
+and let the common workflow run `semantic_modeling` only for necessary missing
+selected metrics. An explicit existing-metrics-only request keeps `reuse_only`. Complete
 that task's validation/reconciliation before destination authoring. Existing
 conflicting definitions cannot be overwritten without explicit edit scope.
 Source SQL remains evidence, never an automatic target-query fallback.

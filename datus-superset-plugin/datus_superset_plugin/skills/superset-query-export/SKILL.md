@@ -1,11 +1,18 @@
 ---
 name: superset-query-export
-description: Export the compiled SQL behind every Superset dashboard chart into project-local reference files and a manifest for project context
+description: Resolve Superset dashboard URLs and export chart SQL/source evidence for project context or dashboard-bootstrap reconstruction as Datus dashboards
 ---
 
 # Superset Query Export
 
-Run:
+For conversion into a Datus project dashboard, load the available
+`dashboard-bootstrap` in the main agent before export, then read
+[references/datus-rebuild.md](references/datus-rebuild.md). It owns output scope,
+necessary additive metric authoring, clarification, task order and completion.
+In a visual child, load the skill only for supporting references; do not restart
+orchestration. Standalone source export remains available.
+
+Run after source selection and the common workflow's execution gate:
 
 ```bash
 datus superset context export-dashboard <dashboard-id>

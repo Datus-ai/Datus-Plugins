@@ -28,7 +28,7 @@ def test_distribution_contract_and_independence():
         assert "datus_grafana_plugin" not in text
 
 
-def test_manifest_prompt_and_single_file_skills():
+def test_manifest_prompt_and_bundled_skills():
     data = _manifest()
     assert data["manifest_version"] == 1
     assert data["cli"] == "datus_superset_plugin.cli:main"
@@ -37,7 +37,13 @@ def test_manifest_prompt_and_single_file_skills():
     assert {p.name for p in skill_dirs} == {
         "superset", "superset-setup", "superset-dashboard-authoring", "superset-query-export"
     }
-    assert all([p.name for p in directory.iterdir()] == ["SKILL.md"] for directory in skill_dirs)
+    for directory in skill_dirs:
+        assert (directory / "SKILL.md").is_file()
+        allowed = {"SKILL.md", "references"} if directory.name == "superset-query-export" else {"SKILL.md"}
+        assert {p.name for p in directory.iterdir()} == allowed
+    for markdown in (PKG / "skills").rglob("*.md"):
+        for target in re.findall(r"\]\(([^)]+\.md)\)", markdown.read_text()):
+            assert (markdown.parent / target).is_file(), (markdown, target)
     assert "requires_mutable_config: true" in (PKG / "skills/superset-setup/SKILL.md").read_text()
     schema = data["config_schema"]
     assert schema["properties"]["password"]["x-secret"] is True

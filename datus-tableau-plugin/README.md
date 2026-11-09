@@ -113,7 +113,7 @@ The plugin reads metadata and native definitions. It never publishes to Tableau,
 
 Metadata API must be enabled and accessible. Native download permissions are needed for complete layouts, calculations and processing definitions. Downloads exclude extracts where the API supports that option; packaged flow data is discarded during definition parsing. Unsupported transformations, hidden lineage and failed downloads are reported explicitly. A source bundle is not proof of complete runtime SQL recovery or numerical equivalence.
 
-Use the common `dashboard-bootstrap` skill for requested context/metrics and Datus dashboard output. Load the bundled `tableau-rebuild` as platform guidance; its references keep Tableau source semantics and DOSI binding/preflight details with the plugin. The common workflow reuses existing metrics, or completes explicitly requested missing-metric authoring and validation before visual generation. Source SQL is evidence; it is never a silent fallback for an unmatched metric. Missing metrics, ambiguous source identity and unsupported calculations remain blocked in the mapping report.
+Use the common `dashboard-bootstrap` skill for requested context/metrics and Datus dashboard output. Load the bundled `tableau-rebuild` as platform guidance; its references keep Tableau source semantics and DOSI binding/preflight details with the plugin. An explicit dashboard-URL conversion request enters the common workflow automatically, reuses existing metrics and completes necessary additive metric authoring and validation before visual generation. Source SQL is evidence; it is never a silent fallback for an unmatched metric. An existing-metrics-only request preserves that restriction; unresolved source identity, conflicting definitions and unsupported calculations remain visible in the mapping report.
 
 Native worksheet checks follow exact datasource-qualified field and column-instance
 bindings through used calculation dependencies, including worksheet-local fields.
@@ -379,8 +379,10 @@ the credential field names are unchanged.
 Version 0.1.8 routes context/metric construction and Datus visual reconstruction
 through the host's single `dashboard-bootstrap` workflow. Tableau-specific source
 interpretation, coverage and evaluator input examples now load from plugin-local
-references. Explicit missing-metric generation completes before visual authoring;
-existing metric definitions are preserved. This requires the updated bootstrap
+references. Natural-language URL conversion authorizes necessary additive metrics
+before visual authoring; existing conflicting definitions require clarification.
+The main agent uses `ask_user` for unresolved material choices after read-only
+discovery, without asking users to name skills or repeat a clear conversion request. This requires the updated bootstrap
 skill on the host. Standalone discovery/synchronization and the offline evaluator
 retain their CLI behavior. Deploy one release consistently for commands, prompts
 and skills; an observed mismatch is reported instead of combining contracts.

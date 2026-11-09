@@ -17,4 +17,8 @@ Use this skill for analysis and BI delivery on a configured Superset instance.
 
 Use `datus superset <group> -h` and `datus superset <group> <command> -h` for exact arguments. Prefer typed commands. Use `api call METHOD /api/v1/...` only for official endpoints that lack a typed command; absolute URLs and `..` paths are rejected.
 
-For reusable project SQL context, load `superset-query-export`. For dashboard construction, load `superset-dashboard-authoring`.
+For a Datus project dashboard conversion (including a source URL), first load
+`dashboard-bootstrap`, then `superset-query-export` and its Datus rebuild reference.
+Do not create the destination on Superset or delegate before required metrics
+exist. For reusable project SQL context, load `superset-query-export`. Only when
+the requested destination is Superset, load `superset-dashboard-authoring`.
