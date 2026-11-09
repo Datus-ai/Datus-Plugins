@@ -16,6 +16,7 @@ from pathlib import Path
 from typing import Any
 
 from .errors import PluginError
+from .custom_sql import native_sql_evidence
 
 _REQUEST_KEYS = {
     "metric",
@@ -268,7 +269,9 @@ def assess_rebuild(
         if issue.get("status") not in {"ok", "complete", "supported"}:
             coverage[issue.get("asset_id", "")].append(issue)
 
-    def blockers(asset_id: str, resolutions: set[tuple[str, str]]) -> list[str]:
+    def blockers(
+        asset_id: str, resolutions: set[tuple[str, str]], native_evidence: dict
+    ) -> list[str]:
         reasons = []
         active, visited = set(), set()
         pending = [(asset_id, 0, False)]
@@ -299,8 +302,10 @@ def assess_rebuild(
                 and bool(issues)
                 and all((current, issue.get("code")) in resolutions for issue in issues)
             )
+            catalog_lineage_only = current in native_evidence
             if asset.get("status") != "ok" and not (
-                asset.get("status") == "partial" and historical_only
+                asset.get("status") == "partial"
+                and (historical_only or catalog_lineage_only)
             ):
                 reasons.append(
                     f"source asset {current} is {asset.get('status', 'unknown')}"
@@ -309,6 +314,10 @@ def assess_rebuild(
                 f"{current}: {issue.get('code', 'coverage_gap')}"
                 for issue in issues
                 if (current, issue.get("code")) not in resolutions
+                and not (
+                    catalog_lineage_only
+                    and issue.get("code") == "custom_sql_lineage_incomplete"
+                )
                 and not (asset["kind"] == "dataset" and issue.get("field_id"))
             ]
             pending.extend(
@@ -399,7 +408,12 @@ def assess_rebuild(
                         "target_validation": "pending_metric_engine_trial",
                     }
                 )
-        reasons += blockers(chart_id, resolutions)
+        native_evidence = {
+            query_id: evidence
+            for query_id in dependencies[chart_id]
+            if (evidence := native_sql_evidence(bundle, chart_id, query_id)) is not None
+        }
+        reasons += blockers(chart_id, resolutions, native_evidence)
         reasons = sorted(set(reasons))
         results.append(
             {
@@ -410,6 +424,7 @@ def assess_rebuild(
                 "differences": differences,
                 "metric_bindings": identities,
                 "source_gap_resolutions": resolution_notes,
+                "native_sql_evidence": list(native_evidence.values()),
                 "tool_calls": []
                 if reasons
                 else [

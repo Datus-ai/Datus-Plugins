@@ -33,9 +33,13 @@ datus tableau sync inspect bi_sources/tableau/BUNDLE --summary
 ```
 
 Use exactly one selection mode. Repeat the ID flag for multiple selections.
-Inspect `sync run --help` for output and existing-bundle options. Default output
-is beneath `bi_sources/tableau/` in the project; an existing snapshot must not
-be replaced without an explicit `--overwrite` decision.
+Use `--output-root DIR` to select a workspace output root (default
+`bi_sources/tableau/`). `--overwrite` replaces an existing snapshot only when
+that replacement is authorized. Optional `--external-source FILE` is repeatable;
+`--source-bindings FILE` and `--dialect DIALECT` supply offline processing inputs.
+For a Datus conversion, follow the loaded `dashboard-bootstrap` manifest gate
+before synchronization. These examples and options provide the invocation
+contract; do not probe `sync run --help` before emitting that manifest.
 
 Read the command's returned output directory rather than guessing its slug.
 Inspect that bundle offline with `sync inspect` before consuming any files.

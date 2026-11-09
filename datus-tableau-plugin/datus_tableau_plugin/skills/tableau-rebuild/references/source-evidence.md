@@ -52,10 +52,28 @@ native transform IDs to verified target tables, not a whole BI profile to a DB.
 Propagate coverage findings along each selected chart's real dependencies.
 Metadata API hidden/partial results, unsupported formulas, unresolved published
 sources/Prep lineage, external definitions and required unbuilt processing stay
-visible. Retrieved SQL in another record does not by itself resolve a
-`custom_sql_coverage` issue. Do not replace checksums or edit coverage to proceed.
+visible. `custom_sql_coverage` means SQL text is missing and remains blocking.
+`custom_sql_lineage_incomplete` means Tableau Catalog cannot parse the retrieved
+SQL's lineage; it does not establish that PostgreSQL cannot execute that SQL.
+Only the evaluator's exact native-SQL qualification below can cover this specific
+lineage gap. Do not replace checksums or edit coverage to proceed.
 
-Only the existing evaluator's documented historical external-ETL exception may
+For this qualification, verify the complete Metadata SQL is byte-identical
+(ignoring outer whitespace) to every native SQL record of the chart's one
+consumed, healthy native dataset. Its single PostgreSQL connection must match
+the Metadata DatabaseServer's actual host, port and database, within the same
+workbook. The SQL must parse as one SELECT/query without INTO. Missing physical
+identity, mixed connections, differing relations or any other unresolved source
+semantics remain blockers. Read the exact query, dataset connection and chart
+records rather than infer these facts from a summary. Compare that proven source
+identity with `get_datasource_identity` before authoring. Once DOSI bindings exist,
+`datus tableau rebuild` independently checks the qualification and records
+`native_sql_evidence`; metric-engine trials and source-result comparisons are
+still required. Keep the original partial source status and lineage warning in
+the handoff and final report. Never claim recovered runtime chart SQL or complete
+Catalog lineage.
+
+Separately, the existing evaluator's documented historical external-ETL exception may
 resolve a chart against an independently complete existing DOSI target; its
 source status stays partial. See [dosi-rebuild.md](dosi-rebuild.md) for exact
 binding evidence. Unknown transformations, security, LOD or metadata/download

@@ -365,7 +365,12 @@ class TableauClient:
         for table_id in sorted(identifiers):
             response = self.metadata(
                 """query DatusCustomSQL($id: ID!) {
-              customSQLTables(filter: {id: $id}) { id name query isUnsupportedCustomSql }
+              customSQLTables(filter: {id: $id}) {
+                id name query isUnsupportedCustomSql
+                database { __typename id name connectionType
+                  ... on DatabaseServer { hostName port }
+                }
+              }
             }""",
                 {"id": table_id},
             )
