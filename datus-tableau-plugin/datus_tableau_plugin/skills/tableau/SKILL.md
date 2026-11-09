@@ -15,17 +15,28 @@ the managed plugin runtime. These paths work without Tableau authentication;
 `plan` writes new derived artifacts, while inspection and rebuild preflight are
 read-only. Use the server discovery steps below when remote definitions are needed.
 
-1. Run `datus tableau status` to inspect the Server/API version and Metadata
-   availability. Server 2023.3+ is the design baseline; report the actual version
-   and any unverified compatibility. Do not enable Metadata services yourself.
-2. Discover with `projects list`, `workbooks list`, `dashboards list`,
+1. Run `datus tableau status` to inspect the Server/API version, Metadata
+   availability and `site_configured`. Server 2023.3+ is the design baseline;
+   report the actual version and any unverified compatibility. Do not enable
+   Metadata services yourself.
+2. Choose the site. If `site_configured` is false (the system prompt shows the
+   profile's site as NOT CONFIGURED), site-scoped commands refuse to run. Run
+   `datus tableau sites list`, show the user the sites (`name`, `content_url`,
+   `default`) and ask which one to use; never pick one silently. Then pass
+   `--site CONTENT_URL` on each command (empty string = default site) or offer
+   to save it with `tableau-setup`. The user may switch sites at any time by
+   asking; use `--site` for that. If listing sites is denied (not a Server
+   Administrator), ask the user for the content URL.
+3. Discover with `projects list`, `workbooks list`, `dashboards list`,
    `datasources list`, and `flows list`. Use their `get` commands for details and
    `--help` for supported filters. A workbook can contain several dashboards;
    a worksheet or generic view is not automatically a dashboard.
-3. Load `tableau-sync` for a selected dashboard, project, or whole-site snapshot.
-   Use identifiers returned by discovery, not guessed names or Metadata IDs
-   substituted for REST LUIDs.
-4. Load `tableau-rebuild` when the target is datus-saas. Existing DOSI definitions
+4. Load `tableau-sync` for a selected dashboard, project, or whole-site snapshot.
+   When the user has not named a project or dashboard, do not guess and do not
+   default to `--all`: list the projects, then the dashboards in the chosen
+   project, present them and ask the user to pick. Use identifiers returned by
+   discovery, not guessed names or Metadata IDs substituted for REST LUIDs.
+5. Load `tableau-rebuild` when the target is datus-saas. Existing DOSI definitions
    govern target metrics; source calculations and SQL are evidence for a mapping.
 
 The plugin performs remote reads. Synchronization writes local files and uses

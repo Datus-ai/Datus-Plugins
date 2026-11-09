@@ -12,6 +12,7 @@ from test_sync import Client, workbook
 
 PROFILE = {
     "server_url": "https://tableau.example.test",
+    "site_content_url": "",
     "token_name": "synthetic-unused",
     "token_secret": "synthetic-unused",
 }

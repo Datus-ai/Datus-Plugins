@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlsplit
@@ -15,7 +15,9 @@ from .errors import ConfigError
 @dataclass(frozen=True)
 class Settings:
     server_url: str
-    site_content_url: str = ""
+    # None: not configured (operator must pick a site via ``sites list`` or
+    # ``--site``). "": the default site, chosen explicitly.
+    site_content_url: str | None = None
     auth_type: str = "pat"
     token_name: str = field(default="", repr=False)
     token_secret: str = field(default="", repr=False)
@@ -84,8 +86,8 @@ class Settings:
         ca = value("ca_bundle", None)
         if ca is not None and (not isinstance(ca, str) or not Path(ca).is_file()):
             raise ConfigError("ca_bundle must name an existing certificate file")
-        site = value("site_content_url", "")
-        if not isinstance(site, str):
+        site = value("site_content_url", None)
+        if site is not None and not isinstance(site, str):
             raise ConfigError(
                 "site_content_url must be a string (empty for the default site)"
             )
@@ -111,3 +113,18 @@ class Settings:
             serving_database_name=serving_database_name,
             profile_name=profile.get("name"),
         )
+
+    def with_site(self, site_content_url: str | None) -> Settings:
+        """Return a copy targeting ``site_content_url`` when an override is given."""
+        if site_content_url is None:
+            return self
+        return replace(self, site_content_url=site_content_url)
+
+    def require_site(self) -> None:
+        """Fail with guidance when a site-scoped command has no site to target."""
+        if self.site_content_url is None:
+            raise ConfigError(
+                "site_content_url is not configured; run `datus tableau sites list` "
+                "to discover sites, then pass --site CONTENT_URL or save it in the "
+                "profile (use an empty value for the default site)"
+            )

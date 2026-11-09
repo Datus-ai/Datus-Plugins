@@ -46,14 +46,15 @@ class TableauClient:
 
     def __enter__(self):
         cfg = self.settings
+        # An unconfigured site signs in to the default site: that is the only
+        # entry point from which ``sites list`` can enumerate the server.
+        site = cfg.site_content_url or ""
         auth = (
             self.sdk.PersonalAccessTokenAuth(
-                cfg.token_name, cfg.token_secret, site_id=cfg.site_content_url
+                cfg.token_name, cfg.token_secret, site_id=site
             )
             if cfg.auth_type == "pat"
-            else self.sdk.TableauAuth(
-                cfg.username, cfg.password, site_id=cfg.site_content_url
-            )
+            else self.sdk.TableauAuth(cfg.username, cfg.password, site_id=site)
         )
         self.server.auth.sign_in(auth)
         self._signed_in = True
@@ -96,6 +97,35 @@ class TableauClient:
             row
             for row in rows
             if project_id is None or row.get("project_id") == project_id
+        ]
+
+    def list_sites(self) -> list[dict]:
+        """Enumerate sites so an operator can choose ``site_content_url``.
+
+        Tableau only lets Server Administrators list sites; everyone else can
+        see nothing but their own. Report that limit as guidance rather than a
+        masked transport failure.
+        """
+        try:
+            items = list(self.sdk.Pager(self.server.sites))
+        except self.sdk.ServerResponseError as exc:
+            code = str(getattr(exc, "code", ""))
+            if code.startswith(("401", "403")):
+                raise PluginError(
+                    "listing sites requires a Server Administrator account; "
+                    "ask your Tableau admin for the site content URL and pass "
+                    "--site CONTENT_URL or save site_content_url in the profile"
+                ) from None
+            raise
+        return [
+            {
+                "id": item.id,
+                "name": item.name,
+                "content_url": item.content_url or "",
+                "state": getattr(item, "state", None),
+                "default": not item.content_url,
+            }
+            for item in items
         ]
 
     def get_resource(self, group: str, identifier: str) -> dict:
@@ -181,6 +211,7 @@ class TableauClient:
         return {
             "server_url": self.settings.server_url,
             "site_content_url": self.settings.site_content_url,
+            "site_configured": self.settings.site_content_url is not None,
             "api_version": str(self.server.version),
             "site_luid": self.server.site_id,
             "metadata": "available",

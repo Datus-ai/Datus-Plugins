@@ -8,20 +8,23 @@ config_schema:
   type: object
   required:
   - server_url
+  additionalProperties: false
   properties:
     server_url:
       type: string
       description: Tableau Server origin, e.g. https://tableau.example.test
     site_content_url:
       type: string
-      default: ''
-      description: Site content URL; empty for the default site (not REST LUID)
+      description: Site content URL as shown in Tableau URLs (not the name or REST LUID).
+        Empty string = the default site. Leave unset to discover sites with `sites list`
+        and choose one, or override per command with --site.
     auth_type:
       type: string
       enum:
       - pat
       - password
       default: pat
+      description: Choose one credential mode; pat is required for Tableau Cloud and MFA
     token_name:
       type: string
       description: PAT name, required in pat mode
@@ -75,7 +78,15 @@ config_schema:
       - token_secret
 commands:
 - name: status
-  description: Check authentication, API version and Metadata availability
+  description: Check authentication, API version, Metadata availability and whether a site is configured
+  args:
+  - name: --site
+- name: sites
+  description: Discover sites to choose or switch site_content_url
+  subcommands:
+  - name: list
+    description: List sites visible to this account; requires Server Administrator
+    args: []
 - name: projects
   subcommands:
   - name: list
@@ -183,6 +194,7 @@ permissions:
     allow:
     - status
     - status:*
+    - sites list:*
     - projects list:*
     - workbooks list:*
     - workbooks get:*
@@ -204,6 +216,7 @@ permissions:
     allow:
     - status
     - status:*
+    - sites list:*
     - projects list:*
     - workbooks list:*
     - workbooks get:*

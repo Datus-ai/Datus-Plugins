@@ -5,9 +5,23 @@ description: Synchronize selected or all Tableau dashboards with chart metadata,
 
 # Synchronize Tableau Assets
 
-First discover the configured profile and dashboard identifiers using
-`datus tableau dashboards list`. Confirm the user's intended selection from
-their request; do not widen a single dashboard to a site-wide export.
+First confirm the site: `datus tableau status` must report `site_configured`
+true, or every command below needs `--site CONTENT_URL` (see the `tableau`
+skill for choosing a site with `sites list`).
+
+Then resolve the selection. If the user already named a dashboard or project,
+confirm it against discovery output. If they did not, walk them through a
+choice instead of guessing:
+
+1. `datus tableau projects list` — present `name` and `id` and ask which
+   project.
+2. `datus tableau dashboards list --project-id PROJECT_ID` — present each
+   dashboard's `name`, `id` and `workbook_id` and ask which dashboard(s), or
+   whether they want the whole project.
+3. Only use `--all` when the user explicitly asks for the entire site.
+
+Do not widen a single dashboard to a project or site-wide export, and do not
+start `sync run` before the user has confirmed the selection.
 
 ### Commands
 

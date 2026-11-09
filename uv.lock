@@ -1244,7 +1244,7 @@ provides-extras = ["dev"]
 
 [[package]]
 name = "datus-tableau-plugin"
-version = "0.1.5"
+version = "0.1.6"
 source = { editable = "datus-tableau-plugin" }
 dependencies = [
     { name = "defusedxml" },

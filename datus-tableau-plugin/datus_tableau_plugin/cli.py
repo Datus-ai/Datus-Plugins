@@ -89,7 +89,15 @@ def build_parser() -> argparse.ArgumentParser:
     status = commands.add_parser(
         "status", help="check authentication, API and Metadata availability"
     )
-    _output(status)
+    _remote(status)
+    sites = commands.add_parser(
+        "sites", help="discover sites to choose or switch site_content_url"
+    )
+    sites_sub = sites.add_subparsers(dest="command", required=True)
+    sites_list = sites_sub.add_parser(
+        "list", help="list sites visible to this account (Server Administrator)"
+    )
+    _remote(sites_list)
     for name, operations in GROUPS.items():
         group = commands.add_parser(name)
         subs = group.add_subparsers(dest="command", required=True)
@@ -99,7 +107,7 @@ def build_parser() -> argparse.ArgumentParser:
                 command.add_argument("id")
             elif name != "projects":
                 command.add_argument("--project-id")
-            _output(command)
+            _remote(command)
     sync = commands.add_parser(
         "sync", help="source definition snapshots; no ETL execution"
     )
@@ -126,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
         default="duckdb",
         help="target SQL dialect for reviewable processing models",
     )
-    _output(run)
+    _remote(run)
     inspect = subs.add_parser("inspect")
     inspect.add_argument("bundle_path")
     inspect.add_argument(
@@ -177,7 +185,7 @@ def build_parser() -> argparse.ArgumentParser:
     )
     export.add_argument("--source-bindings")
     export.add_argument("--dialect", default="duckdb")
-    _output(export)
+    _remote(export)
     api = commands.add_parser(
         "api", help="read-only same-origin escape hatch for untyped REST resources"
     )
@@ -191,12 +199,28 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="KEY=VALUE",
         help="query parameter (repeatable)",
     )
-    _output(call)
+    _remote(call)
     return parser
 
 
 def _output(parser):
     parser.add_argument("-o", "--output", choices=FORMATS, default="json")
+
+
+def _remote(parser):
+    """Options shared by every command that signs in to Tableau Server."""
+    _output(parser)
+    parser.add_argument(
+        "--site",
+        metavar="CONTENT_URL",
+        help="target this site instead of the profile's site_content_url "
+        "(empty string selects the default site)",
+    )
+
+
+# Commands that work before a site is chosen: they sign in to the default
+# site so an operator can discover and pick one.
+_SITE_OPTIONAL = {"status", "sites"}
 
 
 def _params(values: list[str]) -> dict[str, str]:
@@ -298,9 +322,14 @@ def main(argv: list[str], profile: dict) -> int:
             if snapshots and ns.source_bindings
             else None
         )
-        with TableauClient(Settings.from_profile(profile)) as client:
+        settings = Settings.from_profile(profile).with_site(getattr(ns, "site", None))
+        if ns.group not in _SITE_OPTIONAL:
+            settings.require_site()
+        with TableauClient(settings) as client:
             if ns.group == "status":
                 result = client.status()
+            elif ns.group == "sites":
+                result = client.list_sites()
             elif ns.group == "sync":
                 result = sync_sources(
                     client,

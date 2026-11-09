@@ -103,6 +103,7 @@ def test_sync_then_inspect_is_offline_and_tampering_returns_error(
     monkeypatch.setattr(cli, "TableauClient", lambda settings: source)
     profile = {
         "server_url": "https://tableau.example.test",
+        "site_content_url": "",
         "token_name": "automation",
         "token_secret": "never-print",
     }

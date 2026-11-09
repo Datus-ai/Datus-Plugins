@@ -14,8 +14,12 @@ it is never an automatic fallback execution path.
 
 1. Load `tableau-sync` if the requested dashboards have not been synchronized.
    Honor the user's dashboard/profile selection; do not expand it to every
-   dashboard. Run `datus tableau sync inspect <bundle-path> -o json` before
-   consuming any local source. Inspection is offline and does not require login.
+   dashboard. If the user has not said which dashboard to rebuild, do not pick
+   one: list the local bundles under `bi_sources/tableau/` (and, when nothing is
+   synchronized yet, the server's projects and dashboards via `tableau-sync`),
+   present the choices and ask. Run `datus tableau sync inspect <bundle-path>
+   -o json` before consuming any local source. Inspection is offline and does
+   not require login.
 2. Read the bundle's `assets.json`, `dependencies.json`, `coverage.json`, SQL
    metadata and sanitized source definitions. Use stable entity identities,
    never display-name matching across workbooks. Dependency edges run from the
