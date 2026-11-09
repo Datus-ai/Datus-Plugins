@@ -53,7 +53,7 @@ class TableauClient:
             self.sdk.PersonalAccessTokenAuth(
                 cfg.token_name, cfg.token_secret, site_id=site
             )
-            if cfg.auth_type == "pat"
+            if cfg.auth_mode == "token"
             else self.sdk.TableauAuth(cfg.username, cfg.password, site_id=site)
         )
         self.server.auth.sign_in(auth)

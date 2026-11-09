@@ -104,6 +104,7 @@ def test_sync_then_inspect_is_offline_and_tampering_returns_error(
     profile = {
         "server_url": "https://tableau.example.test",
         "site_content_url": "",
+        "auth_mode": "token",
         "token_name": "automation",
         "token_secret": "never-print",
     }
@@ -135,6 +136,7 @@ def test_sdk_exception_does_not_echo_credentials(monkeypatch, capsys):
             ["status"],
             {
                 "server_url": "https://tableau.example.test",
+                "auth_mode": "token",
                 "token_name": "n",
                 "token_secret": "private-value",
             },
@@ -153,8 +155,7 @@ def test_prompt_and_single_file_skills():
             "prod": {
                 "server_url": "https://tableau.example.test",
                 "site_content_url": "Sales",
-                "auth_type": "pat",
-            }
+                            }
         },
         plugin_name="tableau",
         config_path=None,

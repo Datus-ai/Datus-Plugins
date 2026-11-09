@@ -8,28 +8,29 @@ config_schema:
   type: object
   required:
   - server_url
+  - auth_mode
   additionalProperties: false
   properties:
     server_url:
       type: string
       description: Tableau Server origin, e.g. https://tableau.example.test
-    auth_type:
+    auth_mode:
       type: string
       enum:
-      - pat
-      - password
-      default: pat
-      description: Choose one credential mode; pat is required for Tableau Cloud and MFA
+      - token
+      - login
+      default: token
+      description: token (Personal Access Token) or login (username/password); Tableau Cloud and MFA accept only token
     token_name:
       type: string
-      description: PAT name, required in pat mode
+      description: PAT name, required when auth_mode is token
     token_secret:
       type: string
       x-secret: true
       description: ${TABLEAU_TOKEN_SECRET}
     username:
       type: string
-      description: Server account, required in password mode
+      description: Server account, required when auth_mode is login
     password:
       type: string
       x-secret: true
@@ -56,10 +57,10 @@ config_schema:
   allOf:
   - if:
       properties:
-        auth_type:
-          const: password
+        auth_mode:
+          const: login
       required:
-      - auth_type
+      - auth_mode
     then:
       required:
       - username

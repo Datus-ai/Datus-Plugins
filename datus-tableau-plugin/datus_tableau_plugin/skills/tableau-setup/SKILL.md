@@ -10,9 +10,11 @@ Use this skill to configure an installed Tableau plugin or add an environment.
 If the current deployment cannot edit its configuration, refer the user to the
 administrator; do not suggest editing a server file from a read-only deployment.
 
-Collect the server URL and the authentication choice. `auth_type` is one of
-`pat` or `password`; configure exactly one credential pair. Prefer PAT for
-automation; Tableau Cloud and MFA-enabled servers accept only PAT. Ask which
+Collect the server URL and the authentication choice. `auth_mode` is required
+and is one of `token` (Personal Access Token: `token_name` + `token_secret`)
+or `login` (`username` + `password`); configure exactly one credential pair.
+Prefer `token` for automation; Tableau Cloud and MFA-enabled servers accept
+only `token`. Ask which
 environment variables hold secrets; the user supplies them outside chat. Never
 ask the user to paste secret values.
 
@@ -40,20 +42,21 @@ agent:
       prod:
         default: true
         server_url: https://tableau.example.test
-        site_content_url: ""   # omit the key to choose later with `sites list`
-        auth_type: pat
+        auth_mode: token
         token_name: datus-automation
         token_secret: ${TABLEAU_TOKEN_SECRET}
+        site_content_url: ""   # omit the key to choose later with `sites list`
         api_version: auto
         verify_ssl: true
         timeout: 60
 ```
 
-For password authentication replace `auth_type`, `token_name` and `token_secret`
-with the following fields; never leave a mixed pair of credential modes:
+For username/password authentication replace `auth_mode`, `token_name` and
+`token_secret` with the following fields; never leave a mixed pair of
+credential modes:
 
 ```yaml
-auth_type: password
+auth_mode: login
 username: ${TABLEAU_USERNAME}
 password: ${TABLEAU_PASSWORD}
 ```

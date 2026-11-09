@@ -18,7 +18,9 @@ class Settings:
     # None: not configured (operator must pick a site via ``sites list`` or
     # ``--site``). "": the default site, chosen explicitly.
     site_content_url: str | None = None
-    auth_type: str = "pat"
+    # "token": Personal Access Token (token_name/token_secret); "login":
+    # username/password. Same vocabulary as the Superset plugin's auth_mode.
+    auth_mode: str = "token"
     token_name: str = field(default="", repr=False)
     token_secret: str = field(default="", repr=False)
     username: str = field(default="", repr=False)
@@ -52,17 +54,20 @@ class Settings:
             raise ConfigError(
                 "server_url must be an HTTP(S) URL without credentials, query or fragment"
             )
-        auth = value("auth_type", "pat")
-        if auth not in {"pat", "password"}:
-            raise ConfigError("auth_type must be pat or password")
+        raw_auth = value("auth_mode", None)
+        if raw_auth is None:
+            raise ConfigError("auth_mode is required: login or token")
+        auth = str(raw_auth).strip().lower()
+        if auth not in {"login", "token"}:
+            raise ConfigError("auth_mode must be login or token")
         keys = (
             ("token_name", "token_secret")
-            if auth == "pat"
+            if auth == "token"
             else ("username", "password")
         )
         for key in keys:
             if not isinstance(value(key), str) or not value(key).strip():
-                raise ConfigError(f"{key} is required for {auth} authentication")
+                raise ConfigError(f"{auth} auth_mode requires {key}")
         verify = value("verify_ssl", True)
         if isinstance(verify, str):
             if verify.lower() not in {"true", "false"}:
@@ -92,7 +97,7 @@ class Settings:
         return cls(
             server_url=base.rstrip("/"),
             site_content_url=site,
-            auth_type=auth,
+            auth_mode=auth,
             token_name=value("token_name"),
             token_secret=value("token_secret"),
             username=value("username"),

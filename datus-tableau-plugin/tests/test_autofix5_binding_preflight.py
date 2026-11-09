@@ -4,6 +4,7 @@ from datus_tableau_plugin import cli
 PROFILE = {
     "server_url": "https://tableau.example.test",
     "site_content_url": "",
+    "auth_mode": "token",
     "token_name": "synthetic",
     "token_secret": "synthetic-unused",
 }

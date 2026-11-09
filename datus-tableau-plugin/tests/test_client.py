@@ -15,6 +15,7 @@ from datus_tableau_plugin.errors import ConfigError, MetadataError
 
 PROFILE = {
     "server_url": "https://tableau.example.test",
+    "auth_mode": "token",
     "token_name": "automation",
     "token_secret": "secret",
     "api_version": "3.21",
@@ -98,7 +99,7 @@ def test_http_options_before_version_negotiation_and_password_signout():
     sdk = SimpleNamespace(Server=Server, TableauAuth=lambda *args, **kw: (args, kw))
     profile = {
         "server_url": "https://tableau.example.test",
-        "auth_type": "password",
+        "auth_mode": "login",
         "username": "analyst",
         "password": "private",
     }
@@ -121,7 +122,7 @@ def test_http_options_before_version_negotiation_and_password_signout():
         {"timeout": 0},
         {"timeout": "nan"},
         {"verify_ssl": "maybe"},
-        {"auth_type": "sso"},
+        {"auth_mode": "sso"},
         {"api_version": "latest"},
     ],
 )

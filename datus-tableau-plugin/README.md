@@ -30,7 +30,7 @@ agent:
       prod:
         default: true
         server_url: https://tableau.example.test
-        auth_type: pat                       # pat | password (exactly one credential pair)
+        auth_mode: token                     # token (PAT) | login (username/password)
         token_name: ${TABLEAU_TOKEN_NAME}
         token_secret: ${TABLEAU_TOKEN_SECRET}
         site_content_url: ""                 # "" = default site; omit to choose later
@@ -39,9 +39,9 @@ agent:
 | Field | Required | Default | Notes |
 |---|:---:|:---:|---|
 | `server_url` | yes | — | HTTP(S) origin without credentials, query or fragment |
-| `auth_type` | no | `pat` | `pat` or `password`. Tableau Cloud and MFA-enabled servers accept only `pat` |
-| `token_name`, `token_secret` | with `pat` | — | Personal Access Token; `token_secret` is a secret (`x-secret`) |
-| `username`, `password` | with `password` | — | Server account; `password` is a secret |
+| `auth_mode` | yes | `token` | `token` (Personal Access Token) or `login` (username/password), the same vocabulary as the Superset plugin. Tableau Cloud and MFA-enabled servers accept only `token` |
+| `token_name`, `token_secret` | with `token` | — | Personal Access Token; `token_secret` is a secret (`x-secret`) |
+| `username`, `password` | with `login` | — | Server account; `password` is a secret |
 | `site_content_url` | no | *unset* | Site content URL as shown in Tableau URLs (`/#/site/<content_url>/`), not the display name or REST LUID. `""` is the default site. Unset means "not chosen yet" — see [Choosing a site](#choosing-a-site) |
 | `api_version` | no | `auto` | Negotiate, or pin a REST version such as `3.21` |
 | `verify_ssl` | no | `true` | Keep enabled; use `ca_bundle` for private CAs |
@@ -50,7 +50,7 @@ agent:
 
 Secrets must be environment-variable references. Unknown keys are rejected
 (`additionalProperties: false`), and the credential pair for the other
-`auth_type` must not be present. One CLI invocation owns one session; use
+`auth_mode` must not be present. One CLI invocation owns one session; use
 separate PATs for simultaneous automation, because a second sign-in with the
 same PAT can end the first session.
 
@@ -359,11 +359,17 @@ Version 0.1.6 makes the site an explicit choice. `site_content_url` is optional:
 unset means "not chosen yet" and site-scoped commands refuse with guidance,
 while `status` and the new `sites list` sign in to the default site so the site
 can be discovered and picked. `--site CONTENT_URL` targets or switches a site per
-command. The config schema rejects unknown keys, documents `auth_type` as a strict
-`pat`/`password` choice and orders fields by the setup flow. Skills now walk the
+command. The config schema rejects unknown keys, documents the credential mode as
+a strict two-way choice and orders fields by the setup flow. Skills now walk the
 user through choosing the site, then the project and dashboard(s). A trial
 `serving-target` command and `serving_*` profile fields were removed: a Tableau
 site fronts many sources and rebuilds map datasources per asset through source
 bindings, so a profile-level serving datasource had no consumer. Profiles that
 relied on an omitted `site_content_url` meaning the default site must now set
 `site_content_url: ""` explicitly.
+
+Version 0.1.7 renames `auth_type` to `auth_mode` with the values `token`
+(Personal Access Token) and `login` (username/password), matching the Superset
+plugin, and makes it required. Existing profiles must replace `auth_type: pat`
+with `auth_mode: token` and `auth_type: password` with `auth_mode: login`;
+the credential field names are unchanged.

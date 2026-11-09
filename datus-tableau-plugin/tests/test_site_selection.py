@@ -20,6 +20,7 @@ from test_cli_contract import PKG
 
 NO_SITE = {
     "server_url": "https://tableau.example.test",
+    "auth_mode": "token",
     "token_name": "automation",
     "token_secret": "never-print",
     "api_version": "3.21",
@@ -247,13 +248,46 @@ def test_list_sites_forbidden_maps_to_guidance(monkeypatch):
 def test_manifest_makes_site_optional_and_sites_list_allowed():
     manifest = yaml.safe_load((PKG / "datus-plugin.yml").read_text())
     schema = manifest["config_schema"]
-    assert schema["required"] == ["server_url"]
+    assert schema["required"] == ["server_url", "auth_mode"]
     assert schema["additionalProperties"] is False
     assert "default" not in schema["properties"]["site_content_url"]
-    assert schema["properties"]["auth_type"]["enum"] == ["pat", "password"]
-    assert schema["properties"]["auth_type"]["default"] == "pat"
+    assert "auth_type" not in schema["properties"]
+    assert schema["properties"]["auth_mode"]["enum"] == ["token", "login"]
+    assert schema["properties"]["auth_mode"]["default"] == "token"
+    # the conditional credential requirement follows the login/token vocabulary
+    branch = schema["allOf"][0]
+    assert branch["if"]["properties"]["auth_mode"] == {"const": "login"}
+    assert branch["then"]["required"] == ["username", "password"]
+    assert branch["else"]["required"] == ["token_name", "token_secret"]
+    # same key and values as the Superset plugin
+    superset = yaml.safe_load(
+        (PKG.parents[1] / "datus-superset-plugin/datus_superset_plugin/datus-plugin.yml").read_text()
+    )
+    assert set(superset["config_schema"]["properties"]["auth_mode"]["enum"]) == {"login", "token"}
     for mode in ("normal", "auto"):
         assert "sites list:*" in manifest["permissions"][mode]["allow"]
+
+
+@pytest.mark.parametrize(
+    "profile,message",
+    [
+        ({"server_url": "https://t.example.test", "token_name": "n", "token_secret": "s"}, "auth_mode is required"),
+        ({"server_url": "https://t.example.test", "auth_mode": "pat", "token_name": "n", "token_secret": "s"}, "login or token"),
+        ({"server_url": "https://t.example.test", "auth_mode": "token", "username": "u", "password": "p"}, "token auth_mode requires token_name"),
+        ({"server_url": "https://t.example.test", "auth_mode": "login", "token_name": "n", "token_secret": "s"}, "login auth_mode requires username"),
+    ],
+)
+def test_auth_mode_is_required_and_drives_credential_requirements(profile, message):
+    with pytest.raises(ConfigError, match=message):
+        Settings.from_profile(profile)
+
+
+def test_auth_mode_is_normalized_and_selects_the_sdk_auth():
+    assert Settings.from_profile({**NO_SITE, "auth_mode": " Token "}).auth_mode == "token"
+    login = Settings.from_profile(
+        {"server_url": "https://t.example.test", "auth_mode": "LOGIN", "username": "u", "password": "p"}
+    )
+    assert login.auth_mode == "login"
 
 
 def test_prompt_flags_unconfigured_site_and_points_to_sites_list():
@@ -277,7 +311,7 @@ def test_prompt_flags_unconfigured_site_and_points_to_sites_list():
 def test_skills_require_user_choice_for_site_project_and_dashboard():
     setup = (PKG / "skills/tableau-setup/SKILL.md").read_text()
     assert "sites list" in setup and "Server Administrator" in setup
-    assert "`pat` or `password`" in setup
+    assert "`auth_mode` is required" in setup and "`token`" in setup and "`login`" in setup
     entry = (PKG / "skills/tableau/SKILL.md").read_text()
     assert "sites list" in entry and "--site" in entry
     assert "ask the user to pick" in entry
